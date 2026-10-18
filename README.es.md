@@ -39,8 +39,45 @@ solo proceso y con un mismo aspecto.
   morgan no funciona con un `hyprland.conf`.
 - GTK 4.22 o más nuevo y `gtk4-layer-shell`.
 
-Las herramientas opcionales (fondos, luz nocturna, capturas, portapapeles, calculadora…) las
-listan el paquete e `install.sh`, cada una con para qué sirve. morgan funciona sin ellas.
+## Sobre qué está hecho
+
+morgan no reinventa lo que otros programas ya hacen bien: los maneja y les da una sola cara.
+Todo lo que sigue es opcional: morgan funciona sin eso, y la parte que lo necesita falta.
+**Son los programas con los que se construyó y se probó.** Con una alternativa lo básico
+suele andar, pero ahí puede haber faltantes o errores. Para quien recién llega a Hyprland,
+la lista es además un buen punto de partida.
+
+**Servicios del sistema**, que la mayoría de las instalaciones de Arch ya tienen:
+
+| Servicio | Para qué lo usa morgan |
+|---|---|
+| PipeWire con `pipewire-pulse` y WirePlumber | Volumen, audio por app, micrófono, el indicador de privacidad |
+| NetworkManager | La tarjeta de red (iwd o systemd-networkd solos no aparecen) |
+| BlueZ | La tarjeta de Bluetooth |
+| power-profiles-daemon | La tarjeta de energía |
+| systemd-logind | Bloquear, suspender, apagar |
+
+**Herramientas**:
+
+| Programa | Qué hace en morgan |
+|---|---|
+| `matugen` | Los temas: todos, los incluidos y los del fondo, pasan por él |
+| `awww` | Los fondos (morgan no maneja hyprpaper ni swaybg) |
+| `libvips` | Las miniaturas del selector de fondos |
+| `hyprsunset` | La luz nocturna |
+| `ddcutil` | El brillo de monitores externos (DDC/CI) |
+| `hyprshot` | Las capturas (`Print`), configuradas desde el menú de sistema |
+| GPU Screen Recorder (`gpu-screen-recorder-ui`) | La grabación de pantalla: la barra muestra el tiempo y la corta con un clic. Otros grabadores no tienen ese contador |
+| `cliphist` (con `wl-clipboard`) | El historial del portapapeles en el launcher |
+| `libqalculate` | La calculadora |
+| `wtype` y `rofimoji` | Escribir símbolos y emoji desde el launcher, y sus nombres |
+| `libcanberra` y un tema de sonidos | Los sonidos del sistema |
+| Íconos Papirus y `papirus-folders` | El color de las carpetas, que sigue al tema |
+| `uwsm` | Lanzar las apps como unidades de systemd (sin él, morgan usa un scope propio) |
+
+**Apps que siguen al tema**: morgan trae plantillas para kitty, GTK, Qt, btop, yazi,
+starship, Vesktop (Discord) y Obsidian. Cuáles aplica se elige en Apariencia. Los juegos
+lanzados desde Steam prenden el modo juego solos.
 
 ## Antes de instalar: parar lo que morgan reemplaza
 

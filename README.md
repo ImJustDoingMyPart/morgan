@@ -35,8 +35,45 @@ shares one look.
   morgan does not work with a `hyprland.conf`.
 - GTK 4.22 or newer and `gtk4-layer-shell`.
 
-Optional tools (wallpapers, night light, screenshots, clipboard, calculator…) are listed
-by the package and by `install.sh`, each with what it's for. morgan runs without them.
+## What morgan is built around
+
+morgan doesn't reinvent what other programs already do well: it drives them and gives them
+one face. Everything below is optional: morgan runs without it, and the part that needs it
+is missing. **These are the programs it was built and tested with.** Using an alternative
+usually works for the basics, but expect gaps or bugs there. If you're new to Hyprland, this
+list is also a good set of tools to start from.
+
+**System services**, which most Arch setups already have:
+
+| Service | What morgan uses it for |
+|---|---|
+| PipeWire with `pipewire-pulse` and WirePlumber | Volume, per-app audio, microphone, the privacy indicator |
+| NetworkManager | The network card (iwd or systemd-networkd on their own won't show up) |
+| BlueZ | The Bluetooth card |
+| power-profiles-daemon | The power card |
+| systemd-logind | Locking, suspend, power off |
+
+**Tools**:
+
+| Program | What it does in morgan |
+|---|---|
+| `matugen` | Themes: every theme, built-in or from the wallpaper, is rendered through it |
+| `awww` | Wallpapers (hyprpaper and swaybg aren't driven by morgan) |
+| `libvips` | Thumbnails in the wallpaper picker |
+| `hyprsunset` | Night light |
+| `ddcutil` | Brightness of external monitors (DDC/CI) |
+| `hyprshot` | Screenshots (`Print`), configured from the system menu |
+| GPU Screen Recorder (`gpu-screen-recorder-ui`) | Screen recording: the bar shows the time and stops it with a click. Other recorders don't get that counter |
+| `cliphist` (with `wl-clipboard`) | Clipboard history in the launcher |
+| `libqalculate` | The calculator |
+| `wtype` and `rofimoji` | Typing symbols and emoji from the launcher, and their names |
+| `libcanberra` and a sound theme | System sounds |
+| Papirus icons and `papirus-folders` | Folder colors that follow the theme |
+| `uwsm` | Launching apps as systemd units (without it, morgan uses a scope of its own) |
+
+**Apps that follow the theme**: morgan ships templates for kitty, GTK, Qt, btop, yazi,
+starship, Vesktop (Discord) and Obsidian. You choose which ones it applies in Appearance.
+Games launched from Steam turn on game mode by themselves.
 
 ## Before you install: stop what morgan replaces
 
