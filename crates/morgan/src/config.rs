@@ -173,6 +173,21 @@ pub struct Atajos {
     pub multimedia: bool,
     #[serde(rename = "custom")]
     pub propios: Vec<AtajoPropio>,
+    /// Submaps de Hyprland: una tecla entra y adentro valen otros atajos.
+    #[serde(rename = "modes")]
+    pub modos: Vec<Modo>,
+}
+
+/// Un modo creado desde el menú (Atajos › Modos): su tecla entra, Escape sale.
+#[derive(Debug, Clone, PartialEq, Default, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Modo {
+    pub name: String,
+    #[serde(deserialize_with = "tecla")]
+    pub key: String,
+    /// Sale solo después de usar un atajo: un modo de una tecla.
+    pub once: bool,
+    pub binds: Vec<AtajoPropio>,
 }
 
 impl Default for Atajos {
@@ -196,6 +211,7 @@ impl Default for Atajos {
             rescate: t("SUPER + ALT + SHIFT + L"),
             multimedia: true,
             propios: Vec::new(),
+            modos: Vec::new(),
         }
     }
 }
@@ -217,10 +233,22 @@ impl Atajos {
             "session" => &mut self.sesion,
             "lock" => &mut self.bloquear,
             "rescue" => &mut self.rescate,
-            // Los propios, por su lugar en la lista.
+            // Los propios y los modos, por su lugar en la lista: `custom:<n>`, `mode:<m>` y
+            // `mode:<m>:<n>` (un atajo adentro del modo).
             otro => {
-                let n: usize = otro.strip_prefix(PROPIO)?.parse().ok()?;
-                &mut self.propios.get_mut(n)?.key
+                if let Some(n) = otro.strip_prefix(PROPIO) {
+                    return Some(&mut self.propios.get_mut(n.parse::<usize>().ok()?)?.key);
+                }
+                let resto = otro.strip_prefix(MODO)?;
+                let (m, n) = match resto.split_once(':') {
+                    Some((m, n)) => (m, Some(n)),
+                    None => (resto, None),
+                };
+                let modo = self.modos.get_mut(m.parse::<usize>().ok()?)?;
+                match n {
+                    Some(n) => &mut modo.binds.get_mut(n.parse::<usize>().ok()?)?.key,
+                    None => &mut modo.key,
+                }
             }
         })
     }
@@ -504,6 +532,8 @@ impl Default for Shell {
 /// la entiende, `--verify-config` la rechaza y queda el archivo de antes.
 /// El id de un atajo propio para `Atajos::tecla_mut`: `custom:<n>`.
 pub const PROPIO: &str = "custom:";
+/// El de un modo (`mode:<m>`) o de un atajo adentro de él (`mode:<m>:<n>`).
+pub const MODO: &str = "mode:";
 
 fn workspace<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
     let v = u32::deserialize(d)?;
@@ -853,6 +883,19 @@ mod tests {
             when: Cuando::LongPress,
             ..Default::default()
         });
+        c.atajos.modos.push(Modo {
+            name: "Ventanas".into(),
+            key: "SUPER + R".into(),
+            once: true,
+            binds: vec![AtajoPropio {
+                key: "H".into(),
+                command: "algo".into(),
+                ..Default::default()
+            }],
+        });
+        assert_eq!(c.atajos.tecla("mode:0").as_deref(), Some("SUPER + R"));
+        assert_eq!(c.atajos.tecla("mode:0:0").as_deref(), Some("H"));
+        assert_eq!(c.atajos.tecla("mode:1"), None);
         c.reglas.push(ReglaApp {
             app: "mpv.desktop".into(),
             workspace: 3,
@@ -868,6 +911,7 @@ mod tests {
         assert!(parse("[[window_rules]]\napp = \"x\"\nworkspace = 11\n").is_err());
         let mut sin = c.clone();
         sin.atajos.propios.clear();
+        sin.atajos.modos.clear();
         sin.reglas.clear();
         assert_eq!(escribir_sobre(&t, &sin).unwrap().trim(), "");
     }

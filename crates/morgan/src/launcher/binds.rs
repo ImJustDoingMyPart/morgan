@@ -4,7 +4,7 @@
 //! Las cabeceras `-- ─── … ───` son las que agrupan la página de Atajos del menú.
 
 use crate::aplicacion::App;
-use crate::config::{AtajoPropio, Atajos, Capturas, Cuando};
+use crate::config::{AtajoPropio, Atajos, Capturas, Cuando, Modo};
 
 type Accion<'a> = (&'static str, &'a str, &'static str, &'static str, bool);
 
@@ -234,42 +234,85 @@ pub fn nombre_propio(p: &AtajoPropio, app: Option<&App>) -> String {
     }
 }
 
-fn lua_propios(propios: &[AtajoPropio], buscar: &dyn Fn(&str) -> Option<App>) -> String {
+/// La acción, las opciones y la descripción de un atajo propio; `None` si no hace nada (sin
+/// tecla, una app que ya no está, un comando vacío).
+fn partes_propio(p: &AtajoPropio, buscar: &dyn Fn(&str) -> Option<App>) -> Option<(String, Vec<String>)> {
+    if p.key.is_empty() {
+        return None;
+    }
+    let app = (!p.app.is_empty()).then(|| buscar(&p.app)).flatten();
+    let accion = match (&app, p.app.is_empty()) {
+        (Some(a), _) if p.new_window => format!("hl.dsp.exec_cmd({})", cadena(&a.lanzar)), // no-tr
+        (Some(a), _) => format!(
+            "morgan_buscar({{ {} }}, {})", // no-tr
+            a.clases.iter().map(|c| cadena(c)).collect::<Vec<_>>().join(", "),
+            cadena(&a.lanzar)
+        ),
+        (None, false) => return None,
+        (None, true) if p.command.trim().is_empty() => return None,
+        (None, true) => format!("hl.dsp.exec_cmd({})", cadena(&p.command)), // no-tr
+    };
+    let mut o: Vec<String> = Vec::new();
+    match p.when {
+        Cuando::Press if p.repeat => o.push("repeating = true".into()), // no-tr
+        Cuando::Press => {}
+        Cuando::Release => o.push("release = true".into()), // no-tr
+        Cuando::LongPress => o.push("long_press = true".into()), // no-tr
+    }
+    if p.locked {
+        o.push("locked = true".into()); // no-tr
+    }
+    if p.non_consuming {
+        o.push("non_consuming = true".into()); // no-tr
+    }
+    o.push(format!("desc = {}", cadena(&nombre_propio(p, app.as_ref())))); // no-tr
+    Some((accion, o))
+}
+
+/// El submap de un modo: el índice, así renombrarlo no cambia nada.
+pub fn submap_modo(m: usize) -> String {
+    format!("morgan-modo-{m}") // no-tr
+}
+
+/// Los atajos propios y los modos: `morgan_buscar` va una vez para los dos.
+fn lua_propios(propios: &[AtajoPropio], modos: &[Modo], buscar: &dyn Fn(&str) -> Option<App>) -> String {
     let mut out = String::new();
-    for p in propios.iter().filter(|p| !p.key.is_empty()) {
-        let app = (!p.app.is_empty()).then(|| buscar(&p.app)).flatten();
-        let accion = match (&app, p.app.is_empty()) {
-            (Some(a), _) if p.new_window => format!("hl.dsp.exec_cmd({})", cadena(&a.lanzar)), // no-tr
-            (Some(a), _) => format!(
-                "morgan_buscar({{ {} }}, {})", // no-tr
-                a.clases.iter().map(|c| cadena(c)).collect::<Vec<_>>().join(", "),
-                cadena(&a.lanzar)
-            ),
-            // La app ya no está instalada: el atajo no hace nada.
-            (None, false) => continue,
-            (None, true) if p.command.trim().is_empty() => continue,
-            (None, true) => format!("hl.dsp.exec_cmd({})", cadena(&p.command)), // no-tr
-        };
-        let mut o = Vec::new();
-        match p.when {
-            Cuando::Press if p.repeat => o.push("repeating = true"), // no-tr
-            Cuando::Press => {}
-            Cuando::Release => o.push("release = true"), // no-tr
-            Cuando::LongPress => o.push("long_press = true"), // no-tr
-        }
-        if p.locked {
-            o.push("locked = true"); // no-tr
-        }
-        if p.non_consuming {
-            o.push("non_consuming = true"); // no-tr
-        }
-        let desc = format!("desc = {}", cadena(&nombre_propio(p, app.as_ref()))); // no-tr
-        let opciones = o.into_iter().map(str::to_owned).chain([desc]).collect::<Vec<_>>();
+    for p in propios {
+        let Some((accion, o)) = partes_propio(p, buscar) else { continue };
         out.push_str(&format!(
             "atajo({}, {}, {{ {} }})\n", // no-tr
             cadena(&p.key),
             accion,
-            opciones.join(", ")
+            o.join(", ")
+        ));
+    }
+    for (m, modo) in modos.iter().enumerate().filter(|(_, m)| !m.key.is_empty()) {
+        let nombre = submap_modo(m);
+        // Escape siempre sale: un modo sin él dejaría el teclado atrapado.
+        let mut adentro = format!(
+            "    hl.bind(\"Escape\", hl.dsp.submap(\"reset\"), {{ desc = {} }})\n", // no-tr
+            cadena(tr!("Salir del modo"))
+        );
+        for p in &modo.binds {
+            let Some((accion, o)) = partes_propio(p, buscar) else { continue };
+            let accion = if modo.once {
+                format!("function() hl.dispatch({accion}) hl.dispatch(hl.dsp.submap(\"reset\")) end") // no-tr
+            } else {
+                accion
+            };
+            adentro.push_str(&format!(
+                "    hl.bind({}, {}, {{ {} }})\n", // no-tr
+                cadena(&p.key),
+                accion,
+                o.join(", ")
+            ));
+        }
+        out.push_str(&format!(
+            "hl.define_submap({}, function()\n{adentro}end)\natajo({}, hl.dsp.submap({}), {{ desc = {} }})\n", // no-tr
+            cadena(&nombre),
+            cadena(&modo.key),
+            cadena(&nombre),
+            cadena(&trf!("Modo: {}", modo.name))
         ));
     }
     if out.is_empty() {
@@ -350,7 +393,7 @@ pub fn lua_con(
             ));
         }
     }
-    out.push_str(&lua_propios(&a.propios, buscar));
+    out.push_str(&lua_propios(&a.propios, &a.modos, buscar));
     // Uno vacío no se registra («submap doesn't exist»): lleva un bind de relleno en una
     // tecla que nadie aprieta.
     out.push_str(concat!(
@@ -453,6 +496,7 @@ mod tests {
             rescate: String::new(),
             multimedia: false,
             propios: Vec::new(),
+            modos: Vec::new(),
         };
         let lua = lua(&a, &Capturas::default(), false);
         assert!(!lua.contains("atajo(\""), "{lua}");
@@ -539,7 +583,7 @@ mod tests {
             p("SUPER + G", "ya-no.desktop", ""),
             p("SUPER + H", "", "  "),
         ];
-        let l = lua_propios(&propios, &app_de_prueba);
+        let l = lua_propios(&propios, &[], &app_de_prueba);
         assert!(l.contains("local function morgan_buscar(clases, cmd)"), "{l}");
         let binds: Vec<&str> = l.lines().filter(|x| x.starts_with("atajo(")).collect();
         assert_eq!(
@@ -551,6 +595,53 @@ mod tests {
                 r#"atajo("SUPER + R", hl.dsp.exec_cmd("true"), { release = true, non_consuming = true, desc = "true" })"#,
             ]
         );
-        assert_eq!(lua_propios(&[], &app_de_prueba), "");
+        assert_eq!(lua_propios(&[], &[], &app_de_prueba), "");
+    }
+
+    #[test]
+    fn modos_con_escape_y_de_una_tecla() {
+        let p = |key: &str, command: &str| AtajoPropio {
+            key: key.into(),
+            command: command.into(),
+            ..Default::default()
+        };
+        let modos = vec![
+            Modo {
+                name: "Ventanas".into(),
+                key: "SUPER + R".into(),
+                once: false,
+                binds: vec![p("H", "uno"), p("", "sin tecla")],
+            },
+            Modo {
+                name: "Abrir".into(),
+                key: "SUPER + O".into(),
+                once: true,
+                binds: vec![AtajoPropio {
+                    app: "firefox.desktop".into(),
+                    ..p("F", "")
+                }],
+            },
+            // Sin tecla para entrar: no se arma.
+            Modo {
+                name: "Nada".into(),
+                ..Default::default()
+            },
+        ];
+        let l = lua_propios(&[], &modos, &app_de_prueba);
+        let esperado = concat!(
+            "hl.define_submap(\"morgan-modo-0\", function()\n",
+            "    hl.bind(\"Escape\", hl.dsp.submap(\"reset\"), { desc = \"Salir del modo\" })\n",
+            "    hl.bind(\"H\", hl.dsp.exec_cmd(\"uno\"), { desc = \"uno\" })\n",
+            "end)\n",
+            "atajo(\"SUPER + R\", hl.dsp.submap(\"morgan-modo-0\"), { desc = \"Modo: Ventanas\" })\n",
+            "hl.define_submap(\"morgan-modo-1\", function()\n",
+            "    hl.bind(\"Escape\", hl.dsp.submap(\"reset\"), { desc = \"Salir del modo\" })\n",
+            "    hl.bind(\"F\", function() hl.dispatch(morgan_buscar({ \"firefox\" }, \"uwsm app -- 'firefox.desktop'\")) hl.dispatch(hl.dsp.submap(\"reset\")) end, { desc = \"Firefox\" })\n",
+            "end)\n",
+            "atajo(\"SUPER + O\", hl.dsp.submap(\"morgan-modo-1\"), { desc = \"Modo: Abrir\" })\n",
+        );
+        assert!(l.contains(esperado), "{l}");
+        assert!(!l.contains("morgan-modo-2"));
+        assert!(l.contains("local function morgan_buscar"));
     }
 }

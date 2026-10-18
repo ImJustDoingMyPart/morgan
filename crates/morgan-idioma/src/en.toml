@@ -417,3 +417,15 @@
 "Objetos" = "Objects"
 "Banderas" = "Flags"
 "{} emoji" = "{} emoji"
+
+# modos (launcher/binds.rs, menu/atajos.rs)
+"Salir del modo" = "Leave the mode"
+"Modo: {}" = "Mode: {}"
+"Salir después de cada atajo" = "Leave after each shortcut"
+"Quitar el modo" = "Remove the mode"
+"sale después de un atajo o con Escape" = "leaves after a shortcut or with Escape"
+"sale con Escape" = "leaves with Escape"
+"{} atajos" = "{} shortcuts"
+"Nuevo modo" = "New mode"
+"una tecla entra y adentro las teclas hacen otras cosas; Escape sale" = "a key enters it, and inside, keys do other things; Escape leaves"
+"el nombre del modo, como Ventanas" = "the mode's name, like Windows"

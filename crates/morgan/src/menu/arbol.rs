@@ -133,12 +133,14 @@ impl Que {
             Que::Monitor(s, super::monitores::Campo::Apodo(_)) => {
                 Que::Monitor(s.clone(), super::monitores::Campo::Apodo(t.to_owned()))
             }
-            Que::Config(Cambio::NuevoPropio { app, .. }) if app.is_empty() => {
+            Que::Config(Cambio::NuevoPropio { modo, app, .. }) if app.is_empty() => {
                 Que::Config(Cambio::NuevoPropio {
+                    modo: *modo,
                     app: String::new(),
                     comando: t.to_owned(),
                 })
             }
+            Que::Config(Cambio::NuevoModo(_)) => Que::Config(Cambio::NuevoModo(t.to_owned())),
             Que::Hora(super::hora::Cambio::Fecha(_)) => {
                 Que::Hora(super::hora::Cambio::Fecha(t.to_owned()))
             }
@@ -184,14 +186,47 @@ pub enum Cambio {
     NuevaRegla(String),
     QuitarRegla(usize),
     /// Un atajo propio, por su lugar en la lista.
-    Propio(usize, CampoPropio),
+    Propio(Donde, CampoPropio),
     /// Una app (id del `.desktop`) o un comando.
-    NuevoPropio { app: String, comando: String },
-    QuitarPropio(usize),
+    NuevoPropio {
+        /// `None`: suelto; `Some(m)`: adentro del modo `m`.
+        modo: Option<usize>,
+        app: String,
+        comando: String,
+    },
+    QuitarPropio(Donde),
+    NuevoModo(String),
+    /// Si sale solo después de cada atajo.
+    ModoUnaVez(usize, bool),
+    QuitarModo(usize),
     Resumen(bool),
     Apagar(u32),
     Bloquear(u32),
     Suspender(u32),
+}
+
+/// Dónde está un atajo propio: suelto o adentro de un modo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Donde {
+    Suelto(usize),
+    EnModo(usize, usize),
+}
+
+impl Donde {
+    fn lista(self, a: &mut crate::config::Atajos) -> Option<(&mut Vec<crate::config::AtajoPropio>, usize)> {
+        match self {
+            Donde::Suelto(n) => Some((&mut a.propios, n)),
+            Donde::EnModo(m, n) => Some((&mut a.modos.get_mut(m)?.binds, n)),
+        }
+    }
+
+    /// Para `Atajos::tecla_mut`.
+    pub fn id(self) -> String {
+        match self {
+            Donde::Suelto(n) => format!("{}{n}", crate::config::PROPIO),
+            Donde::EnModo(m, n) => format!("{}{m}:{n}", crate::config::MODO),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -334,23 +369,51 @@ impl Cambio {
                     c.reglas.remove(*n);
                 }
             }
-            Cambio::Propio(n, campo) => {
-                if let Some(p) = c.atajos.propios.get_mut(*n) {
+            Cambio::Propio(donde, campo) => {
+                if let Some((v, n)) = donde.lista(&mut c.atajos)
+                    && let Some(p) = v.get_mut(n)
+                {
                     campo.aplicar(p);
                 }
             }
-            Cambio::NuevoPropio { app, comando } => {
-                if !app.is_empty() || !comando.trim().is_empty() {
-                    c.atajos.propios.push(crate::config::AtajoPropio {
+            Cambio::NuevoPropio { modo, app, comando } => {
+                let lista = match modo {
+                    None => Some(&mut c.atajos.propios),
+                    Some(m) => c.atajos.modos.get_mut(*m).map(|m| &mut m.binds),
+                };
+                if let Some(v) = lista
+                    && (!app.is_empty() || !comando.trim().is_empty())
+                {
+                    v.push(crate::config::AtajoPropio {
                         app: app.clone(),
                         command: comando.trim().to_owned(),
                         ..Default::default()
                     });
                 }
             }
-            Cambio::QuitarPropio(n) => {
-                if *n < c.atajos.propios.len() {
-                    c.atajos.propios.remove(*n);
+            Cambio::NuevoModo(nombre) => {
+                if !nombre.trim().is_empty() {
+                    c.atajos.modos.push(crate::config::Modo {
+                        name: nombre.trim().to_owned(),
+                        ..Default::default()
+                    });
+                }
+            }
+            Cambio::ModoUnaVez(m, v) => {
+                if let Some(m) = c.atajos.modos.get_mut(*m) {
+                    m.once = *v;
+                }
+            }
+            Cambio::QuitarModo(m) => {
+                if *m < c.atajos.modos.len() {
+                    c.atajos.modos.remove(*m);
+                }
+            }
+            Cambio::QuitarPropio(donde) => {
+                if let Some((v, n)) = donde.lista(&mut c.atajos)
+                    && n < v.len()
+                {
+                    v.remove(n);
                 }
             }
             Cambio::ModoApp(app, modo) => {

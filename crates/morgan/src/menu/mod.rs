@@ -1516,6 +1516,13 @@ impl Menu {
                     .enumerate()
                     .map(|(n, p)| (format!("{}{n}", crate::config::PROPIO), p.key.clone())),
             )
+            .chain(
+                config
+                    .modos
+                    .iter()
+                    .enumerate()
+                    .map(|(m, modo)| (format!("{}{m}", crate::config::MODO), modo.key.clone())),
+            )
             .find(|(otro, tecla)| *otro != id && binds::normalizar(tecla) == comparable)
             .map(|(otro, _)| otro);
         let quien = if choque.descripcion.is_empty() {
@@ -1567,7 +1574,10 @@ impl Menu {
                     | arbol::Cambio::QuitarRegla(_)
                     | arbol::Cambio::Propio(..)
                     | arbol::Cambio::NuevoPropio { .. }
-                    | arbol::Cambio::QuitarPropio(_) => {
+                    | arbol::Cambio::QuitarPropio(_)
+                    | arbol::Cambio::NuevoModo(_)
+                    | arbol::Cambio::ModoUnaVez(..)
+                    | arbol::Cambio::QuitarModo(_) => {
                         return self.escribir_hypr(None).await;
                     }
                     arbol::Cambio::Animacion(_) => return self.escribir_hypr(None).await,

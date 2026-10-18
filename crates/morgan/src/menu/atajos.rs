@@ -1,8 +1,8 @@
 //! Los binds de la config del usuario se leen nada más: su acción es Lua suyo.
 
 use super::arbol::{self, Cambio, Categoria, Control, Fila, Que, Seccion, ajuste, opcion};
-use super::arbol::CampoPropio;
-use crate::config::{AtajoPropio, Atajos, Cuando, PROPIO};
+use super::arbol::{CampoPropio, Donde};
+use crate::config::{AtajoPropio, Atajos, Cuando, MODO, Modo};
 use crate::launcher::binds;
 use crate::launcher::fuentes::Atajo;
 
@@ -15,13 +15,16 @@ const GRUPOS: &[(&str, &[&str])] = &[
     ("Capturas y grabación", &["captura", "grabaci"]),
     // Los que se crean acá (`[[keybinds.custom]]`): su cabecera en morgan.lua.
     ("Propios", &["propios"]),
+    // Los submaps que se crean acá (`[[keybinds.modes]]`), en la misma cabecera que los propios.
+    ("Modos", &[]),
     ("Sesión y otros", &[]),
 ];
 
 const PROPIOS: usize = 5;
+const MODOS: usize = 6;
 
 pub fn secciones() -> &'static [&'static str] {
-    const T: [&str; 7] = [
+    const T: [&str; 8] = [
         GRUPOS[0].0,
         GRUPOS[1].0,
         GRUPOS[2].0,
@@ -29,6 +32,7 @@ pub fn secciones() -> &'static [&'static str] {
         GRUPOS[4].0,
         GRUPOS[5].0,
         GRUPOS[6].0,
+        GRUPOS[7].0,
     ];
     &T
 }
@@ -136,9 +140,10 @@ fn nombre_propio(p: &AtajoPropio, apps: &[(String, String)]) -> String {
 }
 
 /// Todo lo de un atajo propio en su lista; lo marcado es lo puesto.
-fn fila_propio_usuario(n: usize, p: &AtajoPropio, apps: &[(String, String)]) -> Fila {
-    let id = format!("{PROPIO}{n}");
-    let campo = |c: CampoPropio| Que::Config(Cambio::Propio(n, c));
+/// `prefijo` va delante del nombre: el del modo, para los de adentro.
+fn fila_propio_usuario(donde: Donde, p: &AtajoPropio, apps: &[(String, String)], prefijo: &str) -> Fila {
+    let id = donde.id();
+    let campo = |c: CampoPropio| Que::Config(Cambio::Propio(donde, c));
     let mut o = vec![opcion(tr!("Cambiar la tecla…"), "", Que::GrabarTecla(id.clone()))];
     if !p.key.is_empty() {
         o.push(opcion(tr!("Sin tecla"), "", Que::Config(Cambio::Teclas(vec![(id, String::new())]))));
@@ -174,14 +179,41 @@ fn fila_propio_usuario(n: usize, p: &AtajoPropio, apps: &[(String, String)]) -> 
         )
         .activa(p.non_consuming),
     );
-    o.push(opcion(tr!("Quitar el atajo"), "", Que::Config(Cambio::QuitarPropio(n))));
+    o.push(opcion(tr!("Quitar el atajo"), "", Que::Config(Cambio::QuitarPropio(donde))));
     let mut sub = if p.key.is_empty() { tr!("Sin tecla").to_owned() } else { p.key.clone() };
     if p.app.is_empty() {
         sub.push_str(tr!(" · comando"));
     } else if p.new_window {
         sub.push_str(tr!(" · otra ventana"));
     }
-    ajuste(&nombre_propio(p, apps), &sub, Control::Lista(o))
+    ajuste(&format!("{prefijo}{}", nombre_propio(p, apps)), &sub, Control::Lista(o))
+}
+
+/// «Nuevo atajo para una app» y «… con un comando», sueltos o para un modo.
+fn nuevos(modo: Option<usize>, apps: &[(String, String)], prefijo: &str) -> [Fila; 2] {
+    let nuevo = |app: &str| {
+        Que::Config(Cambio::NuevoPropio {
+            modo,
+            app: app.to_owned(),
+            comando: String::new(),
+        })
+    };
+    [
+        ajuste(
+            &format!("{prefijo}{}", tr!("Nuevo atajo para una app")),
+            tr!("la abre, o va a su ventana si ya está abierta"),
+            Control::Lista(apps.iter().map(|(id, n)| opcion(n, "", nuevo(id))).collect()),
+        ),
+        ajuste(
+            &format!("{prefijo}{}", tr!("Nuevo atajo con un comando")),
+            tr!("lo que se escriba se corre como en una terminal"),
+            Control::Texto {
+                valor: String::new(),
+                pista: tr!("un comando, como kitty -e btop").into(),
+                que: nuevo(""),
+            },
+        ),
+    ]
 }
 
 fn propios_usuario(c: &Atajos, apps: &[(String, String)]) -> Vec<Fila> {
@@ -189,36 +221,57 @@ fn propios_usuario(c: &Atajos, apps: &[(String, String)]) -> Vec<Fila> {
         .propios
         .iter()
         .enumerate()
-        .map(|(n, p)| fila_propio_usuario(n, p, apps))
+        .map(|(n, p)| fila_propio_usuario(Donde::Suelto(n), p, apps, ""))
         .collect();
+    v.extend(nuevos(None, apps, ""));
+    v
+}
+
+fn fila_modo(m: usize, modo: &Modo) -> Fila {
+    let id = format!("{MODO}{m}");
+    let mut o = vec![opcion(tr!("Cambiar la tecla…"), "", Que::GrabarTecla(id.clone()))];
+    if !modo.key.is_empty() {
+        o.push(opcion(tr!("Sin tecla"), "", Que::Config(Cambio::Teclas(vec![(id, String::new())]))));
+    }
+    o.push(
+        opcion(tr!("Salir después de cada atajo"), "", Que::Config(Cambio::ModoUnaVez(m, !modo.once)))
+            .activa(modo.once),
+    );
+    o.push(opcion(tr!("Quitar el modo"), "", Que::Config(Cambio::QuitarModo(m))));
+    let tecla = if modo.key.is_empty() { tr!("Sin tecla").to_owned() } else { modo.key.clone() };
+    let sale = if modo.once {
+        tr!("sale después de un atajo o con Escape")
+    } else {
+        tr!("sale con Escape")
+    };
+    ajuste(
+        &trf!("Modo: {}", modo.name),
+        &format!("{tecla} · {} · {sale}", trf!("{} atajos", modo.binds.len())),
+        Control::Lista(o),
+    )
+}
+
+/// Cada modo, sus atajos y los dos «nuevo»; al final, «Nuevo modo».
+fn modos(c: &Atajos, apps: &[(String, String)]) -> Vec<Fila> {
+    let mut v = Vec::new();
+    for (m, modo) in c.modos.iter().enumerate() {
+        v.push(fila_modo(m, modo));
+        let prefijo = format!("{} › ", modo.name);
+        v.extend(
+            modo.binds
+                .iter()
+                .enumerate()
+                .map(|(n, p)| fila_propio_usuario(Donde::EnModo(m, n), p, apps, &prefijo)),
+        );
+        v.extend(nuevos(Some(m), apps, &prefijo));
+    }
     v.push(ajuste(
-        tr!("Nuevo atajo para una app"),
-        tr!("la abre, o va a su ventana si ya está abierta"),
-        Control::Lista(
-            apps.iter()
-                .map(|(id, n)| {
-                    opcion(
-                        n,
-                        "",
-                        Que::Config(Cambio::NuevoPropio {
-                            app: id.clone(),
-                            comando: String::new(),
-                        }),
-                    )
-                })
-                .collect(),
-        ),
-    ));
-    v.push(ajuste(
-        tr!("Nuevo atajo con un comando"),
-        tr!("lo que se escriba se corre como en una terminal"),
+        tr!("Nuevo modo"),
+        tr!("una tecla entra y adentro las teclas hacen otras cosas; Escape sale"),
         Control::Texto {
             valor: String::new(),
-            pista: tr!("un comando, como kitty -e btop").into(),
-            que: Que::Config(Cambio::NuevoPropio {
-                app: String::new(),
-                comando: String::new(),
-            }),
+            pista: tr!("el nombre del modo, como Ventanas").into(),
+            que: Que::Config(Cambio::NuevoModo(String::new())),
         },
     ));
     v
@@ -240,7 +293,7 @@ pub fn pagina(
         }
         let grupo = grupo_de_desc(&a.descripcion, grupos);
         // Los propios ya tienen su fila editable.
-        if grupo == PROPIOS {
+        if grupo == PROPIOS || grupo == MODOS {
             continue;
         }
         let g = &mut filas[grupo];
@@ -255,6 +308,9 @@ pub fn pagina(
         .map(|(n, g)| {
             if n == PROPIOS {
                 return propios_usuario(c, apps);
+            }
+            if n == MODOS {
+                return modos(c, apps);
             }
             let mut v: Vec<Fila> = propios
                 .iter()
@@ -389,11 +445,11 @@ bind(mod .. " + Z", x, { desc = "Zeta" })
         );
         // "Mover a workspace" no figura en el Lua de prueba: va a la última, igual junta.
         assert_eq!(
-            titulos(6),
+            titulos(7),
             ["Mover a workspace 1 a 4: SUPER + CTRL + 1 … SUPER + CTRL + 4"]
         );
         // Una cabecera desconocida y lo que no figura en binds.lua, a la última.
-        assert_eq!(filas(6).len(), 2);
+        assert_eq!(filas(7).len(), 2);
         // Un grupo sin atajos no queda vacío.
         assert_eq!(filas(1)[0].0, "Ninguno");
     }
