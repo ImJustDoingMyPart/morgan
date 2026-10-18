@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Datos de mentira para grabar o sacar capturas de morgan sin mostrar los propios.
+#
+#   dev/muestra poner         guarda aparte la lista de calendarios, pone uno de muestra
+#                             (eventos desde hoy) y reinicia morgan para que lo lea
+#   dev/muestra avisos        manda notificaciones de muestra, una cada segundo y medio
+#   dev/muestra volver        devuelve la lista de calendarios, borra las notificaciones y
+#                             reinicia morgan
+#
+# Con XDG_CONFIG_HOME de otro lado (el anidado), usa ese.
+set -euo pipefail
+
+config="${XDG_CONFIG_HOME:-$HOME/.config}/morgan"
+lista="$config/calendarios"
+guardada="$config/calendarios.antes-de-la-muestra"
+ics="${XDG_RUNTIME_DIR:?}/morgan-muestra.ics"
+
+# Un evento con hora (hora local, sin zona) o de día entero si no lleva hora.
+evento() { # DIAS_DESDE_HOY "HH:MM"|"" DURACION_MIN TITULO [LUGAR]
+    local dia inicio fin
+    dia=$(date -d "+$1 day" +%Y%m%d)
+    printf 'BEGIN:VEVENT\r\nUID:muestra-%s-%s@morgan\r\nDTSTAMP:%sT000000Z\r\n' "$dia" "${4// /-}" "$(date -u +%Y%m%d)"
+    if [[ -n $2 ]]; then
+        inicio=$(date -d "$dia $2" +%s)
+        fin=$((inicio + $3 * 60))
+        inicio=$(date -d "@$inicio" +%Y%m%dT%H%M%S)
+        fin=$(date -d "@$fin" +%Y%m%dT%H%M%S)
+        printf 'DTSTART:%s\r\nDTEND:%s\r\n' "$inicio" "$fin"
+    else
+        printf 'DTSTART;VALUE=DATE:%s\r\nDTEND;VALUE=DATE:%s\r\n' "$dia" "$(date -d "$dia + 1 day" +%Y%m%d)"
+    fi
+    printf 'SUMMARY:%s\r\n' "$4"
+    [[ -z ${5:-} ]] || printf 'LOCATION:%s\r\n' "$5"
+    printf 'END:VEVENT\r\n'
+}
+
+calendario() {
+    printf 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//morgan//muestra//ES\r\n'
+    evento 0 "18:30" 60 "Clase de guitarra"
+    evento 1 "10:00" 30 "Reunión de equipo"
+    evento 2 "16:00" 45 "Dentista" "Consultorio"
+    evento 3 "" 0 "Cumpleaños de Sofía"
+    evento 5 "21:00" 120 "Partido de fútbol"
+    evento 8 "" 0 "Entrega del proyecto"
+    evento 12 "19:00" 90 "Cena con amigos"
+    printf 'END:VCALENDAR\r\n'
+}
+
+# Con otra config (el anidado) no se toca la unidad de la sesión real.
+reiniciar() {
+    if [[ -n ${XDG_CONFIG_HOME:-} && $XDG_CONFIG_HOME != "$HOME/.config" ]]; then
+        echo "config aparte: reiniciá ese morgan a mano (dev/anidado morgan)"
+        return
+    fi
+    # Al reiniciar, morgan arranca con el historial guardado: las de muestra se borran antes.
+    [[ $1 == volver ]] && morganctl notifications clear
+    systemctl --user restart morgan.service
+    echo "morgan reiniciado"
+}
+
+case "${1:-}" in
+poner)
+    mkdir -p "$config"
+    if [[ -e $lista && ! -e $guardada ]]; then
+        cp -p "$lista" "$guardada"
+        echo "lista de calendarios guardada en $guardada"
+    fi
+    calendario >"$ics"
+    (umask 077; printf 'file://%s\n' "$ics" >"$lista")
+    reiniciar poner
+    ;;
+avisos)
+    a() { notify-send "$@"; sleep 1.5; }
+    a -a "Telegram" -i telegram "Ana" "¿Llegás a la clase de las 18:30?"
+    a -a "Firefox" -i firefox "Descarga completa" "informe-trimestral.pdf"
+    a -a "Spotify" -i spotify "Ahora suena" "Daft Punk · Digital Love"
+    a -a "Steam" -i steam "Un amigo empezó a jugar" "Martín está jugando Portal 2"
+    a -a "Actualizaciones" -i system-software-update -u critical "Hay 12 actualizaciones" "Se instalan al reiniciar"
+    ;;
+volver)
+    if [[ -e $guardada ]]; then
+        mv "$guardada" "$lista"
+        echo "lista de calendarios devuelta"
+    elif [[ -e $lista ]] && grep -q 'morgan-muestra.ics' "$lista"; then
+        rm "$lista"
+        echo "sin lista de antes: se sacó la de muestra"
+    fi
+    rm -f "$ics"
+    reiniciar volver
+    ;;
+*)
+    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+    ;;
+esac
