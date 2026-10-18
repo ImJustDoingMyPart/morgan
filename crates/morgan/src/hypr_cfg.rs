@@ -79,6 +79,12 @@ for ns, regla in pairs({
         ignore_alpha = regla.ignore_alpha,
     })
 end
+
+-- Si morgan-lock se cae con la sesión bloqueada, el que relanza systemd (o el bind de
+-- rescate) vuelve a tomar el bloqueo. Sin esto Hyprland lo rechaza y la pantalla queda en su
+-- aviso rojo hasta un `loginctl unlock-session` desde otra TTY. Quien podría tomarlo así ya
+-- puede desbloquear con loginctl: no abre nada nuevo.
+hl.config({ misc = { allow_session_lock_restore = true } })
 "#;
 
 /// Con uwsm la unidad ya arrancó con la sesión y esto no hace nada; sin uwsm, el gestor de
