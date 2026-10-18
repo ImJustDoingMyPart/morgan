@@ -1,0 +1,54 @@
+# En cada etiqueta vX.Y.Z: compila morgan en Arch y publica el release con el tarball que
+# baja el paquete morgan-bin (dist/arch/morgan-bin/PKGBUILD). El tarball es el árbol de /usr
+# y /etc que arma dist/empaquetar, dentro de morgan-X.Y.Z-x86_64/.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Dependencias
+        run: pacman -Syu --noconfirm --needed git rust gtk4 gtk4-layer-shell libpulse pam github-cli
+
+      - uses: actions/checkout@v4
+
+      - name: La etiqueta coincide con Cargo.toml
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          cargo_version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          if [ "$version" != "$cargo_version" ]; then
+            echo "La etiqueta dice $version y Cargo.toml, $cargo_version" >&2
+            exit 1
+          fi
+          echo "VERSION=$version" >>"$GITHUB_ENV"
+
+      - name: Tests
+        run: cargo test --locked --workspace
+
+      - name: Compilar
+        run: cargo build --locked --release -p morgan -p morganctl -p morgan-lock
+
+      - name: Armar el tarball
+        run: |
+          raiz=morgan-$VERSION-x86_64
+          dist/empaquetar "$raiz" target/release
+          strip "$raiz"/usr/bin/morgan "$raiz"/usr/bin/morganctl "$raiz"/usr/bin/morgan-lock
+          tar --owner=0 --group=0 --sort=name -czf "$raiz.tar.gz" "$raiz"
+          sha256sum "$raiz.tar.gz" >"$raiz.tar.gz.sha256"
+
+      - name: Publicar el release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "morgan $VERSION" \
+            --generate-notes \
+            "morgan-$VERSION-x86_64.tar.gz" "morgan-$VERSION-x86_64.tar.gz.sha256"

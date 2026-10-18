@@ -1,0 +1,33 @@
+#!/bin/sh
+# Arma el árbol de /usr y /etc de morgan en DESTINO, con los binarios ya compilados de
+# BINARIOS. Lo usan los dos paquetes de Arch (morgan-git, en package(); morgan-bin, a través
+# del tarball que arma .github/workflows/release.yml). Se corre desde la raíz del repo.
+#
+#   dist/empaquetar DESTINO [BINARIOS]    (BINARIOS: target/release si no se dice)
+set -eu
+
+destino=${1:?uso: dist/empaquetar DESTINO [BINARIOS]}
+binarios=${2:-target/release}
+[ -f dist/morgan.service ] || { echo 'dist/empaquetar: correrlo desde la raíz del repo' >&2; exit 1; }
+
+install -Dm755 "$binarios/morgan" "$binarios/morganctl" "$binarios/morgan-lock" -t "$destino/usr/bin/"
+install -Dm755 dist/morgan-captura dist/morgan-cuota -t "$destino/usr/bin/"
+
+install -dm755 "$destino/usr/lib/systemd/user"
+for u in morgan.service morgan-lock.service; do
+    sed 's|%h/.local/bin|/usr/bin|g' "dist/$u" >"$destino/usr/lib/systemd/user/$u"
+    chmod 644 "$destino/usr/lib/systemd/user/$u"
+done
+# Con nombre propio: los otros servidores de notificaciones traen el suyo con el mismo Name,
+# y así los archivos no chocan.
+install -Dm644 dist/org.freedesktop.Notifications.service \
+    "$destino/usr/share/dbus-1/services/org.morgan.Notifications.service"
+install -Dm644 dist/pam.d/morgan-lock "$destino/etc/pam.d/morgan-lock"
+# El tema propio y sus plantillas: el motor de temas los busca en /usr/share/morgan.
+install -dm755 "$destino/usr/share/morgan"
+cp -r --no-preserve=ownership dist/share/morgan/. "$destino/usr/share/morgan/"
+find "$destino/usr/share/morgan" -type d -exec chmod 755 {} +
+find "$destino/usr/share/morgan" -type f -exec chmod 644 {} +
+# Las licencias van a nombre de "morgan"; cada PKGBUILD las mueve al de su paquete.
+install -Dm644 LICENSE "$destino/usr/share/licenses/morgan/LICENSE"
+install -Dm644 dist/share/morgan/LICENSE "$destino/usr/share/licenses/morgan/LICENSE-temas"

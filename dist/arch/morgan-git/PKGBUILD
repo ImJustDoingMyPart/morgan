@@ -1,6 +1,9 @@
-# Paquete de Arch de morgan, desde git. Sin paquete: install.sh, en la raíz del repo.
+# Paquete de Arch de morgan, compilado desde la punta de main. El de la última versión ya
+# compilada es morgan-bin (dist/arch/morgan-bin). Sin paquete: install.sh, en la raíz del repo.
 #
 #   makepkg -si
+#
+# El árbol que se instala lo arma dist/empaquetar, el mismo que usa morgan-bin.
 #
 # Lo que el paquete no puede hacer por cada usuario lo hace `morgan setup` (lo dice
 # morgan.install al instalar).
@@ -44,7 +47,7 @@ optdepends=(
     'jq: morgan-cuota (cuotas de Claude Code y Antigravity)'
 )
 provides=('morgan' 'notification-daemon')
-conflicts=('morgan')
+conflicts=('morgan' 'morgan-bin')
 backup=('etc/pam.d/morgan-lock')
 install=morgan.install
 source=("$_nombre::git+$url.git")
@@ -52,7 +55,13 @@ sha256sums=('SKIP')
 
 pkgver() {
     cd "$_nombre"
-    printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+    # Con una etiqueta vX.Y.Z: X.Y.Z.rN.gHASH (ordena después de morgan-bin X.Y.Z); sin
+    # etiquetas, rN.HASH.
+    if git describe --tags --match 'v*' >/dev/null 2>&1; then
+        git describe --long --tags --match 'v*' | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+    else
+        printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+    fi
 }
 
 prepare() {
@@ -70,23 +79,6 @@ build() {
 
 package() {
     cd "$_nombre"
-    install -Dm755 target/release/{morgan,morganctl,morgan-lock} -t "$pkgdir/usr/bin/"
-    install -Dm755 dist/morgan-captura dist/morgan-cuota -t "$pkgdir/usr/bin/"
-
-    install -dm755 "$pkgdir/usr/lib/systemd/user"
-    local u
-    for u in morgan.service morgan-lock.service; do
-        sed 's|%h/.local/bin|/usr/bin|g' "dist/$u" >"$pkgdir/usr/lib/systemd/user/$u"
-    done
-    # Con nombre propio: los otros servidores de notificaciones traen el suyo con el mismo
-    # Name, y así los archivos no chocan.
-    install -Dm644 dist/org.freedesktop.Notifications.service \
-        "$pkgdir/usr/share/dbus-1/services/org.morgan.Notifications.service"
-    install -Dm644 dist/pam.d/morgan-lock "$pkgdir/etc/pam.d/morgan-lock"
-    # El tema propio y sus plantillas: el motor de temas los busca en /usr/share/morgan.
-    install -dm755 "$pkgdir/usr/share/morgan"
-    cp -r --no-preserve=ownership dist/share/morgan/. "$pkgdir/usr/share/morgan/"
-    find "$pkgdir/usr/share/morgan" -type f -exec chmod 644 {} +
-    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-    install -Dm644 dist/share/morgan/LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE-temas"
+    dist/empaquetar "$pkgdir" target/release
+    mv "$pkgdir/usr/share/licenses/morgan" "$pkgdir/usr/share/licenses/$pkgname"
 }

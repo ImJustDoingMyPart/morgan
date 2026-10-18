@@ -1,0 +1,34 @@
+#!/bin/sh
+# Sube morgan-git y/o morgan-bin al AUR desde dist/arch/<paquete>. Necesita la llave SSH de la
+# cuenta del AUR (Host aur.archlinux.org, User aur). Para morgan-bin, el release de la versión
+# del PKGBUILD tiene que estar publicado: se le calculan las sumas antes de subirlo.
+#
+#   dist/arch/publicar-aur morgan-git morgan-bin
+set -eu
+
+aqui=$(cd "$(dirname "$0")" && pwd)
+[ $# -gt 0 ] || set -- morgan-git morgan-bin
+trabajo=$(mktemp -d)
+trap 'rm -rf "$trabajo"' EXIT
+
+for paquete in "$@"; do
+    origen=$aqui/$paquete
+    [ -f "$origen/PKGBUILD" ] || { echo "publicar-aur: no hay $origen/PKGBUILD" >&2; exit 1; }
+    if [ "$paquete" = morgan-bin ]; then
+        (cd "$origen" && updpkgsums && rm -f ./*.tar.gz)
+    fi
+    git clone "ssh://aur@aur.archlinux.org/$paquete.git" "$trabajo/$paquete"
+    cp -L "$origen/PKGBUILD" "$origen/morgan.install" "$trabajo/$paquete/"
+    (
+        cd "$trabajo/$paquete"
+        makepkg --printsrcinfo >.SRCINFO
+        git add PKGBUILD morgan.install .SRCINFO
+        if git diff --cached --quiet; then
+            echo "==> $paquete: sin cambios"
+            exit 0
+        fi
+        version=$(sed -n 's/^\tpkgver = //p' .SRCINFO)-$(sed -n 's/^\tpkgrel = //p' .SRCINFO)
+        git commit -m "$paquete $version"
+        git push origin HEAD:master
+    )
+done
