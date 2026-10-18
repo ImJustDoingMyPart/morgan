@@ -89,7 +89,7 @@ impl Categoria {
             Categoria::Aplicaciones => &[tr_const!("Predeterminadas"), tr_const!("Autoarranque"), tr_const!("Capturas de pantalla")],
             Categoria::Sistema => &[tr_const!("Equipo"), tr_const!("Snapshots"), tr_const!("Privacidad")],
             Categoria::Sonido => &[tr_const!("Volumen"), tr_const!("Salidas"), tr_const!("Tema"), tr_const!("Sonidos del sistema")],
-            Categoria::Pantalla => &[tr_const!("Luz nocturna"), tr_const!("Inactividad")],
+            Categoria::Pantalla => &[tr_const!("Monitores"), tr_const!("Luz nocturna"), tr_const!("Inactividad")],
             Categoria::Notificaciones => &[tr_const!("Generales"), tr_const!("Modo juego"), tr_const!("Por app")],
         }
     }
@@ -112,6 +112,9 @@ pub enum Que {
     Sonar(String),
     EditarNotas(String),
     GrabarTecla(String),
+    Monitor(String, super::monitores::Campo),
+    MantenerMonitores,
+    VolverMonitores,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -496,7 +499,8 @@ pub fn pagina_fija(
             juego(c),
             por_app(apps_historial, c),
         ],
-        Categoria::Pantalla => vec![luz(c), vec![
+        // Los monitores salen de Hyprland: los pone `lectura::monitores`.
+        Categoria::Pantalla => vec![Vec::new(), luz(c), vec![
             ajuste(
                 tr!("Apagar pantallas"),
                 &trf!("sin actividad · {}", minutos(c.idle.apagar)),
@@ -1405,6 +1409,11 @@ mod tests {
         let c = Config::default();
         for cat in Categoria::TODAS {
             let p = match (pagina_fija(cat, &c, &[], &DatosNotas::default()), cat) {
+                // Los monitores los pone la lectura de Hyprland.
+                (Some(mut p), Categoria::Pantalla) => {
+                    p[0].filas = super::super::monitores::filas(&[], &Default::default(), true);
+                    p
+                }
                 (Some(p), _) => p,
                 (None, Categoria::Compositor) => {
                     super::super::compositor::pagina(&Default::default(), &Default::default(), &[])
@@ -1532,9 +1541,9 @@ mod tests {
     fn idle_marca_y_cambia() {
         let mut c = Config::default();
         let p = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
-        assert_eq!(activas(lista(&p, 1, 0)), ["10 minutos"]);
-        assert_eq!(activas(lista(&p, 1, 1)), ["20 minutos"]);
-        let nunca = &lista(&p, 1, 1)[0];
+        assert_eq!(activas(lista(&p, 2, 0)), ["10 minutos"]);
+        assert_eq!(activas(lista(&p, 2, 1)), ["20 minutos"]);
+        let nunca = &lista(&p, 2, 1)[0];
         assert_eq!(nunca.titulo, "nunca");
         let Que::Config(cambio) = &nunca.que else {
             panic!()
@@ -1542,7 +1551,7 @@ mod tests {
         cambio.aplicar(&mut c);
         assert_eq!(c.idle.bloquear, 0);
         let p = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
-        assert_eq!(activas(lista(&p, 1, 1)), ["nunca"]);
+        assert_eq!(activas(lista(&p, 2, 1)), ["nunca"]);
     }
 
     #[test]
@@ -1602,7 +1611,7 @@ mod tests {
         let p = sonido(&c, &[], "freedesktop", &[]);
         assert_eq!(activas(lista(&p, 0, 0)), ["5 %"]);
         let p = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
-        assert_eq!(activas(lista(&p, 1, 2)), ["nunca"]);
+        assert_eq!(activas(lista(&p, 2, 2)), ["nunca"]);
         Cambio::Suspender(60).aplicar(&mut c);
         Cambio::Paso(10).aplicar(&mut c);
         Cambio::Amplificar(true).aplicar(&mut c);
@@ -1610,7 +1619,7 @@ mod tests {
         assert_eq!(c.sonido.tope(), 150.0);
         assert!(!c.sonido.red && c.sonido.bloqueo);
         let p = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
-        assert_eq!(activas(lista(&p, 1, 2)), ["60 minutos"]);
+        assert_eq!(activas(lista(&p, 2, 2)), ["60 minutos"]);
     }
 
     #[test]
@@ -1664,14 +1673,14 @@ mod tests {
     fn luz_nocturna() {
         let mut c = Config::default();
         let p = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
-        assert_eq!(activas(lista(&p, 0, 0)), ["4000 K · la de siempre"]);
+        assert_eq!(activas(lista(&p, 1, 0)), ["4000 K · la de siempre"]);
         // Sin horario no se muestran las horas: temperatura y la casilla.
-        assert_eq!(p[0].filas.len(), 2);
+        assert_eq!(p[1].filas.len(), 2);
         Cambio::Horario(true).aplicar(&mut c);
         Cambio::PrenderLuz("21:30".into()).aplicar(&mut c);
         let p = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
-        assert_eq!(activas(lista(&p, 0, 2)), ["21:30"]);
-        assert_eq!(activas(lista(&p, 0, 3)), ["07:00"]);
+        assert_eq!(activas(lista(&p, 1, 2)), ["21:30"]);
+        assert_eq!(activas(lista(&p, 1, 3)), ["07:00"]);
         assert_eq!(horas(22, 23), ["22:00", "22:30", "23:00"]);
     }
 

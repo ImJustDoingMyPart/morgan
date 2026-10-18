@@ -7,6 +7,7 @@
 pub(crate) mod arbol;
 pub mod atajos;
 pub mod compositor;
+pub mod monitores;
 mod cursores;
 mod lectura;
 mod sistema;
@@ -76,7 +77,12 @@ pub struct Menu {
     inner: Rc<Inner>,
 }
 
+/// Los cambios a prueba (salida y campo) y el temporizador que los deshace.
+type Prueba = (Vec<(String, monitores::Campo)>, glib::SourceId);
+
 struct Inner {
+    /// Los cambios de monitor a prueba y la vuelta automática.
+    prueba: RefCell<Option<Prueba>>,
     al_fondos: RefCell<Option<Rc<dyn Fn()>>>,
     al_launcher: RefCell<Option<AlLauncher>>,
     window: gtk::ApplicationWindow,
@@ -235,6 +241,7 @@ impl Menu {
             indice_abierta: Cell::new(None),
             grabando: RefCell::new(None),
             grabaciones: Cell::new(0),
+            prueba: RefCell::new(None),
         });
         let m = Menu { inner };
         m.conectar();
@@ -710,7 +717,18 @@ impl Menu {
                 } else {
                     arbol::DatosNotas::default()
                 };
-                arbol::pagina_fija(cat, &c, &apps, &notas).unwrap_or_default()
+                let mut p = arbol::pagina_fija(cat, &c, &apps, &notas).unwrap_or_default();
+                if cat == Categoria::Pantalla
+                    && let Some(m) = p.first_mut()
+                {
+                    let salidas = monitores::de_json(&leer(&["hyprctl", "-j", "monitors", "all"]).await);
+                    let reglas = monitores::Reglas::leer(&self.ruta_monitores()).unwrap_or_else(|e| {
+                        eprintln!("morgan: menú: {e}");
+                        Default::default()
+                    });
+                    m.filas = monitores::filas(&salidas, &reglas, self.inner.prueba.borrow().is_some());
+                }
+                p
             }
             Categoria::Apariencia => {
                 let listas = self.inner.listas.borrow().clone();
@@ -733,6 +751,64 @@ impl Menu {
 
     fn dir_notas(&self) -> PathBuf {
         self.inner.s.ruta_config.with_file_name("notas")
+    }
+
+    fn ruta_monitores(&self) -> PathBuf {
+        crate::hypr_cfg::ruta_monitores(&self.inner.s.ruta_config)
+    }
+
+    /// Prueba en vivo: si nadie la mantiene, a los `SEGUNDOS_PRUEBA` vuelve sola, con el menú
+    /// abierto o no. Una segunda prueba se suma a la primera y reinicia la cuenta.
+    async fn probar_monitor(&self, salida: String, campo: monitores::Campo) -> Result<(), String> {
+        comando::salida(&["hyprctl", "eval", &monitores::prueba(&salida, &campo)]).await?;
+        let i = &self.inner;
+        let mut cambios = i.prueba.borrow_mut().take().map(|(c, id)| {
+            id.remove();
+            c
+        });
+        cambios.get_or_insert_with(Vec::new).push((salida, campo));
+        let yo = self.clone();
+        let id = glib::timeout_add_seconds_local_once(monitores::SEGUNDOS_PRUEBA, move || {
+            yo.inner.prueba.borrow_mut().take();
+            glib::MainContext::default().spawn_local(async move {
+                if let Err(e) = yo.volver_monitores().await {
+                    eprintln!("morgan: menú: {e}");
+                }
+                yo.refrescar(Categoria::Pantalla, None).await;
+            });
+        });
+        i.prueba.replace(cambios.map(|c| (c, id)));
+        Ok(())
+    }
+
+    async fn mantener_monitores(&self) -> Result<(), String> {
+        let Some((cambios, id)) = self.inner.prueba.borrow_mut().take() else {
+            return Ok(());
+        };
+        id.remove();
+        let ruta = self.ruta_monitores();
+        let mut r = monitores::Reglas::leer(&ruta)?;
+        for (salida, campo) in &cambios {
+            r.poner(salida, campo);
+        }
+        r.guardar(&ruta)?;
+        self.escribir_hypr(None).await
+    }
+
+    /// Lo de los archivos vuelve con la recarga: la prueba no se guardó en ninguno.
+    async fn volver_monitores(&self) -> Result<(), String> {
+        if let Some((_, id)) = self.inner.prueba.borrow_mut().take() {
+            id.remove();
+        }
+        comando::salida(&["hyprctl", "reload", "config-only"]).await.map(drop)
+    }
+
+    async fn guardar_monitor(&self, salida: &str, campo: &monitores::Campo) -> Result<(), String> {
+        let ruta = self.ruta_monitores();
+        let mut r = monitores::Reglas::leer(&ruta)?;
+        r.poner(salida, campo);
+        r.guardar(&ruta)?;
+        self.escribir_hypr(None).await
     }
 
     fn ruta_cambios_hypr(&self) -> PathBuf {
@@ -1177,7 +1253,12 @@ impl Menu {
             }
             _ => {}
         }
-        let posicion = self.elegibles().iter().position(|e| e == desde);
+        let mut posicion = self.elegibles().iter().position(|e| e == desde);
+        // Tras probar un monitor, lo elegido es «Mantener»: la fila tocada ya no está, y lo que
+        // quedara en su lugar se tocaría con el próximo Enter.
+        if matches!(que, Que::Monitor(_, c) if c.a_prueba()) {
+            posicion = Some(0);
+        }
         // La página que se relee es la de la fila, aunque se cambie de página mientras.
         let cat = i.categoria.get();
         // Lo marcado cambia recién cuando el sistema lo dice.
@@ -1415,6 +1496,10 @@ impl Menu {
                 Ok(())
             }
             Que::Hypr(clave, valor) => self.escribir_hypr(Some((clave, valor))).await,
+            Que::Monitor(salida, campo) if campo.a_prueba() => self.probar_monitor(salida, campo).await,
+            Que::Monitor(salida, campo) => self.guardar_monitor(&salida, &campo).await,
+            Que::MantenerMonitores => self.mantener_monitores().await,
+            Que::VolverMonitores => self.volver_monitores().await,
             Que::Apariencia(c) => crate::apariencia::aplicar(c).await,
             Que::Predeterminada(id, mimes) => {
                 let app = gio_unix::DesktopAppInfo::new(&id).ok_or(format!("no existe {id}"))?;

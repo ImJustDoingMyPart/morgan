@@ -131,7 +131,7 @@ impl Cambios {
     }
 }
 
-fn escribir(ruta: &Path, texto: &str) -> Result<(), String> {
+pub(super) fn escribir(ruta: &Path, texto: &str) -> Result<(), String> {
     if let Some(dir) = ruta.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
