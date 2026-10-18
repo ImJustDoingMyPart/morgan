@@ -96,7 +96,7 @@ fn escala() -> u32 {
         .unwrap_or(1)
 }
 
-pub async fn compositor(cambios: &Path) -> Vec<Seccion> {
+pub async fn compositor(cambios: &Path, reglas: &[crate::config::ReglaApp]) -> Vec<Seccion> {
     let actuales =
         compositor::de_batch(&leer(&["hyprctl", "--batch", &compositor::pedido_batch()]).await);
     let cambios = compositor::Cambios::leer(cambios).unwrap_or_else(|e| {
@@ -104,7 +104,9 @@ pub async fn compositor(cambios: &Path) -> Vec<Seccion> {
         Default::default()
     });
     let evdev = std::fs::read_to_string("/usr/share/X11/xkb/rules/evdev.lst").unwrap_or_default();
-    compositor::pagina(&actuales, &cambios, &compositor::distribuciones(&evdev))
+    let mut p = compositor::pagina(&actuales, &cambios, &compositor::distribuciones(&evdev));
+    p.push(super::reglas::seccion(reglas, &crate::aplicacion::todas()));
+    p
 }
 
 
@@ -124,7 +126,7 @@ pub async fn atajos(c: &crate::config::Atajos) -> Vec<Seccion> {
         .filter_map(|p| std::fs::read_to_string(p).ok())
         .flat_map(|t| atajos::grupos_de_binds_lua(&t))
         .collect();
-    atajos::pagina(&binds, &grupos, c)
+    atajos::pagina(&binds, &grupos, c, &crate::aplicacion::todas())
 }
 
 /// Hasta tres niveles: no se pierde en un symlink que vuelve atrás.

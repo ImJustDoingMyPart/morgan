@@ -45,6 +45,59 @@ pub struct Config {
     pub retirada_notas: Option<toml::Value>,
     #[serde(rename = "lock")]
     pub bloqueo: morgan_ipc::bloqueo::Bloqueo,
+    /// Las reglas por app del menú (Escritorio › Reglas por app); las de la config de
+    /// Hyprland del usuario no se leen.
+    #[serde(rename = "window_rules")]
+    pub reglas: Vec<ReglaApp>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ReglaApp {
+    /// El id del `.desktop`.
+    pub app: String,
+    /// 0: el que toque.
+    #[serde(deserialize_with = "workspace")]
+    pub workspace: u32,
+    #[serde(rename = "float")]
+    pub flotante: bool,
+    /// Porcentaje de la pantalla, para flotante; 0: el que pida la app.
+    #[serde(rename = "size", deserialize_with = "tamano_regla")]
+    pub tamano: u32,
+    /// 0: la de siempre.
+    #[serde(rename = "opacity", deserialize_with = "opacidad_regla")]
+    pub opacidad: f64,
+    #[serde(rename = "no_animation")]
+    pub sin_animacion: bool,
+}
+
+/// Un atajo creado desde el menú (Atajos › Propios): abre una app o corre un comando.
+#[derive(Debug, Clone, PartialEq, Default, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AtajoPropio {
+    #[serde(deserialize_with = "tecla")]
+    pub key: String,
+    /// El id del `.desktop`; vacío si es un comando.
+    pub app: String,
+    pub command: String,
+    /// Con una app: abrir otra ventana siempre, en vez de buscar la que ya está.
+    pub new_window: bool,
+    pub when: Cuando,
+    /// Solo con `when = "press"`: Hyprland no lo acepta con los otros.
+    pub repeat: bool,
+    /// También con la pantalla bloqueada.
+    pub locked: bool,
+    /// La tecla sigue llegando a la ventana.
+    pub non_consuming: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Cuando {
+    #[default]
+    Press,
+    Release,
+    LongPress,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -118,6 +171,8 @@ pub struct Atajos {
     pub rescate: String,
     #[serde(rename = "media_keys")]
     pub multimedia: bool,
+    #[serde(rename = "custom")]
+    pub propios: Vec<AtajoPropio>,
 }
 
 impl Default for Atajos {
@@ -140,6 +195,7 @@ impl Default for Atajos {
             bloquear: t("SUPER + ALT + L"),
             rescate: t("SUPER + ALT + SHIFT + L"),
             multimedia: true,
+            propios: Vec::new(),
         }
     }
 }
@@ -161,7 +217,11 @@ impl Atajos {
             "session" => &mut self.sesion,
             "lock" => &mut self.bloquear,
             "rescue" => &mut self.rescate,
-            _ => return None,
+            // Los propios, por su lugar en la lista.
+            otro => {
+                let n: usize = otro.strip_prefix(PROPIO)?.parse().ok()?;
+                &mut self.propios.get_mut(n)?.key
+            }
         })
     }
 
@@ -442,6 +502,33 @@ impl Default for Shell {
 
 /// Va entre comillas en `morgan.lua`, así que sin comillas, barras ni saltos. Si Hyprland no
 /// la entiende, `--verify-config` la rechaza y queda el archivo de antes.
+/// El id de un atajo propio para `Atajos::tecla_mut`: `custom:<n>`.
+pub const PROPIO: &str = "custom:";
+
+fn workspace<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    let v = u32::deserialize(d)?;
+    if v > 10 {
+        return Err(de::Error::invalid_value(de::Unexpected::Unsigned(v.into()), &"0 to 10"));
+    }
+    Ok(v)
+}
+
+fn tamano_regla<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    let v = u32::deserialize(d)?;
+    if v > 100 {
+        return Err(de::Error::invalid_value(de::Unexpected::Unsigned(v.into()), &"0 to 100"));
+    }
+    Ok(v)
+}
+
+fn opacidad_regla<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
+    let v = f64::deserialize(d)?;
+    if !(0.0..=1.0).contains(&v) {
+        return Err(de::Error::invalid_value(de::Unexpected::Float(v), &"0 to 1"));
+    }
+    Ok(v)
+}
+
 fn tecla<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
     let v = String::deserialize(d)?;
     if v.contains(['"', '\\', '\n', '\r']) {
@@ -756,6 +843,34 @@ fn fundir(doc: &mut toml_edit::Table, nuevo: &toml::Table, defecto: Option<&toml
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn atajos_propios_y_reglas_ida_y_vuelta() {
+        let mut c = Config::default();
+        c.atajos.propios.push(AtajoPropio {
+            key: "SUPER + F".into(),
+            app: "firefox.desktop".into(),
+            when: Cuando::LongPress,
+            ..Default::default()
+        });
+        c.reglas.push(ReglaApp {
+            app: "mpv.desktop".into(),
+            workspace: 3,
+            flotante: true,
+            tamano: 60,
+            opacidad: 0.9,
+            sin_animacion: true,
+        });
+        let t = escribir_sobre("", &c).unwrap();
+        assert_eq!(parse(&t).unwrap(), c, "{t}");
+        assert!(t.contains("long_press"), "{t}");
+        // Fuera de rango: error al cargar.
+        assert!(parse("[[window_rules]]\napp = \"x\"\nworkspace = 11\n").is_err());
+        let mut sin = c.clone();
+        sin.atajos.propios.clear();
+        sin.reglas.clear();
+        assert_eq!(escribir_sobre(&t, &sin).unwrap().trim(), "");
+    }
 
     #[test]
     fn guarda_solo_lo_distinto() {

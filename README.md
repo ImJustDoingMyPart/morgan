@@ -46,7 +46,9 @@ here is what you want, welcome.
   game mode that keeps quiet while you play.
 - **Launcher**: apps, symbols and emoji, clipboard history, calculator and your keybinds.
 - **System menu**: settings for morgan and for Hyprland itself (appearance, input,
-  keybinds…), written back to your config.
+  keybinds, date and time…), written back to your config. It's also where you create your
+  own keybinds (to open an app or run a command) and per-app rules (workspace, floating,
+  size, opacity).
 - **Lock screen and idle** (`morgan-lock`): replaces hyprlock and hypridle. It locks through
   logind, so `loginctl lock-session` works, and it can lock before suspending.
 - **OSD** for volume, brightness and Caps Lock; a **window overview** (`Super+Tab`); a

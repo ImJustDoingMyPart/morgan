@@ -8,6 +8,7 @@ pub(crate) mod arbol;
 pub mod atajos;
 pub mod compositor;
 pub mod monitores;
+pub mod reglas;
 mod cursores;
 mod dibujo;
 mod hora;
@@ -764,7 +765,7 @@ impl Menu {
                 }
                 arbol::apariencia(&lecturas, &c)
             }
-            Categoria::Compositor => lectura::compositor(&self.ruta_cambios_hypr()).await,
+            Categoria::Compositor => lectura::compositor(&self.ruta_cambios_hypr(), &c.reglas).await,
             Categoria::Atajos => lectura::atajos(&c.atajos).await,
             Categoria::Aplicaciones => lectura::aplicaciones(&c.capturas),
             Categoria::Sistema => lectura::sistema().await,
@@ -1507,8 +1508,16 @@ impl Menu {
         // La usa otro: si es de morgan, al reasignar queda sin tecla.
         let libera = binds::propios(&config)
             .into_iter()
-            .find(|p| p.id != id && binds::normalizar(&p.tecla) == comparable)
-            .map(|p| p.id.to_owned());
+            .map(|p| (p.id.to_owned(), p.tecla))
+            .chain(
+                config
+                    .propios
+                    .iter()
+                    .enumerate()
+                    .map(|(n, p)| (format!("{}{n}", crate::config::PROPIO), p.key.clone())),
+            )
+            .find(|(otro, tecla)| *otro != id && binds::normalizar(tecla) == comparable)
+            .map(|(otro, _)| otro);
         let quien = if choque.descripcion.is_empty() {
             "un bind sin descripción".to_owned()
         } else {
@@ -1552,7 +1561,13 @@ impl Menu {
                     arbol::Cambio::Capturas(_)
                     | arbol::Cambio::Sombra(_)
                     | arbol::Cambio::Teclas(_)
-                    | arbol::Cambio::Multimedia(_) => {
+                    | arbol::Cambio::Multimedia(_)
+                    | arbol::Cambio::Regla(..)
+                    | arbol::Cambio::NuevaRegla(_)
+                    | arbol::Cambio::QuitarRegla(_)
+                    | arbol::Cambio::Propio(..)
+                    | arbol::Cambio::NuevoPropio { .. }
+                    | arbol::Cambio::QuitarPropio(_) => {
                         return self.escribir_hypr(None).await;
                     }
                     arbol::Cambio::Animacion(_) => return self.escribir_hypr(None).await,

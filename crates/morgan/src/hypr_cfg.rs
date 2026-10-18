@@ -98,6 +98,7 @@ fn arranque() -> String {
 pub fn lua(c: &Config, cambios: &Cambios, monitores: &Reglas, tema: &Path, hyprshot: bool) -> String {
     let (_, nombre, _, lua_sombra) = sombra(&c.apariencia.sombra);
     let binds = crate::launcher::binds::lua(&c.atajos, &c.capturas, hyprshot);
+    let reglas = crate::menu::reglas::lua(&c.reglas, &crate::aplicacion::buscar);
     format!(
         "-- Lo genera morgan: no se edita a mano, se reescribe entero. Lo guardado está en\n\
          -- morgan/config.toml y en morgan/hyprland.toml; se cambia desde su menú de sistema.\n\n\
@@ -105,7 +106,7 @@ pub fn lua(c: &Config, cambios: &Cambios, monitores: &Reglas, tema: &Path, hyprs
          -- Colores del tema activo (morganctl theme).\n\
          pcall(dofile, {:?})\n\n\
          {CAPAS}\n\
-         {}\n-- Sombra: {nombre}.\n{lua_sombra}\n{}{}{binds}",
+         {}\n-- Sombra: {nombre}.\n{lua_sombra}\n{}{}{binds}{reglas}",
         arranque(),
         tema.to_string_lossy(),
         animaciones::lua(

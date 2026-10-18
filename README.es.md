@@ -47,7 +47,9 @@ lo que ves acá es lo que querés, bienvenido.
 - **Launcher**: aplicaciones, símbolos y emoji, historial del portapapeles, calculadora y
   los atajos de teclado.
 - **Menú de sistema**: los ajustes de morgan y de Hyprland mismo (apariencia, entrada,
-  atajos…), escritos en la config.
+  atajos, fecha y hora…), escritos en la config. Ahí también se crean atajos propios (para
+  abrir una app o correr un comando) y reglas por app (workspace, flotante, tamaño,
+  opacidad).
 - **Pantalla de bloqueo e idle** (`morgan-lock`): reemplaza a hyprlock y a hypridle. Bloquea
   a través de logind, así que `loginctl lock-session` funciona, y puede bloquear antes de
   suspender.

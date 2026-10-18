@@ -88,6 +88,7 @@ impl Categoria {
                 tr_const!("Foco y cursor"),
                 tr_const!("Teclado"),
                 tr_const!("Mouse y touchpad"),
+                tr_const!("Reglas por app"),
             ],
             Categoria::Atajos => super::atajos::secciones(),
             Categoria::Aplicaciones => &[tr_const!("Predeterminadas"), tr_const!("Autoarranque"), tr_const!("Capturas de pantalla")],
@@ -132,6 +133,12 @@ impl Que {
             Que::Monitor(s, super::monitores::Campo::Apodo(_)) => {
                 Que::Monitor(s.clone(), super::monitores::Campo::Apodo(t.to_owned()))
             }
+            Que::Config(Cambio::NuevoPropio { app, .. }) if app.is_empty() => {
+                Que::Config(Cambio::NuevoPropio {
+                    app: String::new(),
+                    comando: t.to_owned(),
+                })
+            }
             Que::Hora(super::hora::Cambio::Fecha(_)) => {
                 Que::Hora(super::hora::Cambio::Fecha(t.to_owned()))
             }
@@ -172,10 +179,46 @@ pub enum Cambio {
     /// De una vez: reasignar una tecla de otro bind de morgan lo deja sin ella.
     Teclas(Vec<(String, String)>),
     Multimedia(bool),
+    /// Una regla por app, por su lugar en la lista.
+    Regla(usize, super::reglas::Campo),
+    NuevaRegla(String),
+    QuitarRegla(usize),
+    /// Un atajo propio, por su lugar en la lista.
+    Propio(usize, CampoPropio),
+    /// Una app (id del `.desktop`) o un comando.
+    NuevoPropio { app: String, comando: String },
+    QuitarPropio(usize),
     Resumen(bool),
     Apagar(u32),
     Bloquear(u32),
     Suspender(u32),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CampoPropio {
+    NuevaVentana(bool),
+    Cuando(crate::config::Cuando),
+    Repetir(bool),
+    Bloqueada(bool),
+    SinConsumir(bool),
+}
+
+impl CampoPropio {
+    fn aplicar(self, p: &mut crate::config::AtajoPropio) {
+        match self {
+            CampoPropio::NuevaVentana(v) => p.new_window = v,
+            CampoPropio::Cuando(v) => {
+                p.when = v;
+                // Hyprland no acepta repetir con soltar ni con mantener.
+                if v != crate::config::Cuando::Press {
+                    p.repeat = false;
+                }
+            }
+            CampoPropio::Repetir(v) => p.repeat = v,
+            CampoPropio::Bloqueada(v) => p.locked = v,
+            CampoPropio::SinConsumir(v) => p.non_consuming = v,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -273,6 +316,43 @@ impl Cambio {
                 }
             }
             Cambio::Multimedia(v) => c.atajos.multimedia = *v,
+            Cambio::Regla(n, campo) => {
+                if let Some(r) = c.reglas.get_mut(*n) {
+                    campo.aplicar(r);
+                }
+            }
+            Cambio::NuevaRegla(app) => {
+                if !c.reglas.iter().any(|r| &r.app == app) {
+                    c.reglas.push(crate::config::ReglaApp {
+                        app: app.clone(),
+                        ..Default::default()
+                    });
+                }
+            }
+            Cambio::QuitarRegla(n) => {
+                if *n < c.reglas.len() {
+                    c.reglas.remove(*n);
+                }
+            }
+            Cambio::Propio(n, campo) => {
+                if let Some(p) = c.atajos.propios.get_mut(*n) {
+                    campo.aplicar(p);
+                }
+            }
+            Cambio::NuevoPropio { app, comando } => {
+                if !app.is_empty() || !comando.trim().is_empty() {
+                    c.atajos.propios.push(crate::config::AtajoPropio {
+                        app: app.clone(),
+                        command: comando.trim().to_owned(),
+                        ..Default::default()
+                    });
+                }
+            }
+            Cambio::QuitarPropio(n) => {
+                if *n < c.atajos.propios.len() {
+                    c.atajos.propios.remove(*n);
+                }
+            }
             Cambio::ModoApp(app, modo) => {
                 let n = &mut c.notificaciones;
                 n.silenciadas.retain(|a| !a.eq_ignore_ascii_case(app));
@@ -1391,9 +1471,12 @@ mod tests {
                 }
                 (Some(p), _) => p,
                 (None, Categoria::Compositor) => {
-                    super::super::compositor::pagina(&Default::default(), &Default::default(), &[])
+                    let mut p =
+                        super::super::compositor::pagina(&Default::default(), &Default::default(), &[]);
+                    p.push(super::super::reglas::seccion(&[], &[]));
+                    p
                 }
-                (None, Categoria::Atajos) => super::super::atajos::pagina(&[], &[], &c.atajos),
+                (None, Categoria::Atajos) => super::super::atajos::pagina(&[], &[], &c.atajos, &[]),
                 (None, Categoria::Aplicaciones) => super::super::sistema::aplicaciones(
                     &vec![Default::default(); super::super::sistema::PREDETERMINADAS.len()],
                     &[],

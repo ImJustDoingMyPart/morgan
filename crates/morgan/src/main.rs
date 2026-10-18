@@ -6,6 +6,7 @@ mod acerca;
 mod agenda;
 mod apariencia;
 mod animaciones;
+mod aplicacion;
 mod audio;
 mod bajada;
 mod bandeja;

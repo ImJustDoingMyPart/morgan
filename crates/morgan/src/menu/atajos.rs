@@ -1,7 +1,8 @@
 //! Los binds de la config del usuario se leen nada más: su acción es Lua suyo.
 
 use super::arbol::{self, Cambio, Categoria, Control, Fila, Que, Seccion, ajuste, opcion};
-use crate::config::Atajos;
+use super::arbol::CampoPropio;
+use crate::config::{AtajoPropio, Atajos, Cuando, PROPIO};
 use crate::launcher::binds;
 use crate::launcher::fuentes::Atajo;
 
@@ -12,17 +13,22 @@ const GRUPOS: &[(&str, &[&str])] = &[
     ("Ventanas y workspaces", &["ventana", "layout", "workspace", "foco"]),
     ("Multimedia y brillo", &["multimedia", "brillo", "volumen"]),
     ("Capturas y grabación", &["captura", "grabaci"]),
+    // Los que se crean acá (`[[keybinds.custom]]`): su cabecera en morgan.lua.
+    ("Propios", &["propios"]),
     ("Sesión y otros", &[]),
 ];
 
+const PROPIOS: usize = 5;
+
 pub fn secciones() -> &'static [&'static str] {
-    const T: [&str; 6] = [
+    const T: [&str; 7] = [
         GRUPOS[0].0,
         GRUPOS[1].0,
         GRUPOS[2].0,
         GRUPOS[3].0,
         GRUPOS[4].0,
         GRUPOS[5].0,
+        GRUPOS[6].0,
     ];
     &T
 }
@@ -122,8 +128,109 @@ fn fila_propia(p: &binds::Propio, defecto: &Atajos) -> Fila {
     ajuste(p.desc, sub, Control::Lista(opciones))
 }
 
+fn nombre_propio(p: &AtajoPropio, apps: &[(String, String)]) -> String {
+    match apps.iter().find(|(id, _)| *id == p.app) {
+        Some((_, n)) => n.clone(),
+        None => binds::nombre_propio(p, None),
+    }
+}
+
+/// Todo lo de un atajo propio en su lista; lo marcado es lo puesto.
+fn fila_propio_usuario(n: usize, p: &AtajoPropio, apps: &[(String, String)]) -> Fila {
+    let id = format!("{PROPIO}{n}");
+    let campo = |c: CampoPropio| Que::Config(Cambio::Propio(n, c));
+    let mut o = vec![opcion(tr!("Cambiar la tecla…"), "", Que::GrabarTecla(id.clone()))];
+    if !p.key.is_empty() {
+        o.push(opcion(tr!("Sin tecla"), "", Que::Config(Cambio::Teclas(vec![(id, String::new())]))));
+    }
+    if !p.app.is_empty() {
+        o.push(
+            opcion(tr!("Abrir otra ventana siempre"), "", campo(CampoPropio::NuevaVentana(!p.new_window)))
+                .activa(p.new_window),
+        );
+    }
+    for (cuando, t) in [
+        (Cuando::Press, tr!("Al apretar")),
+        (Cuando::Release, tr!("Al soltar")),
+        (Cuando::LongPress, tr!("Al mantener apretada")),
+    ] {
+        o.push(opcion(t, "", campo(CampoPropio::Cuando(cuando))).activa(p.when == cuando));
+    }
+    if p.when == Cuando::Press {
+        o.push(
+            opcion(tr!("Repetir mientras se mantiene"), "", campo(CampoPropio::Repetir(!p.repeat)))
+                .activa(p.repeat),
+        );
+    }
+    o.push(
+        opcion(tr!("También con la pantalla bloqueada"), "", campo(CampoPropio::Bloqueada(!p.locked)))
+            .activa(p.locked),
+    );
+    o.push(
+        opcion(
+            tr!("Que la tecla siga llegando a la ventana"),
+            "",
+            campo(CampoPropio::SinConsumir(!p.non_consuming)),
+        )
+        .activa(p.non_consuming),
+    );
+    o.push(opcion(tr!("Quitar el atajo"), "", Que::Config(Cambio::QuitarPropio(n))));
+    let mut sub = if p.key.is_empty() { tr!("Sin tecla").to_owned() } else { p.key.clone() };
+    if p.app.is_empty() {
+        sub.push_str(tr!(" · comando"));
+    } else if p.new_window {
+        sub.push_str(tr!(" · otra ventana"));
+    }
+    ajuste(&nombre_propio(p, apps), &sub, Control::Lista(o))
+}
+
+fn propios_usuario(c: &Atajos, apps: &[(String, String)]) -> Vec<Fila> {
+    let mut v: Vec<Fila> = c
+        .propios
+        .iter()
+        .enumerate()
+        .map(|(n, p)| fila_propio_usuario(n, p, apps))
+        .collect();
+    v.push(ajuste(
+        tr!("Nuevo atajo para una app"),
+        tr!("la abre, o va a su ventana si ya está abierta"),
+        Control::Lista(
+            apps.iter()
+                .map(|(id, n)| {
+                    opcion(
+                        n,
+                        "",
+                        Que::Config(Cambio::NuevoPropio {
+                            app: id.clone(),
+                            comando: String::new(),
+                        }),
+                    )
+                })
+                .collect(),
+        ),
+    ));
+    v.push(ajuste(
+        tr!("Nuevo atajo con un comando"),
+        tr!("lo que se escriba se corre como en una terminal"),
+        Control::Texto {
+            valor: String::new(),
+            pista: tr!("un comando, como kitty -e btop").into(),
+            que: Que::Config(Cambio::NuevoPropio {
+                app: String::new(),
+                comando: String::new(),
+            }),
+        },
+    ));
+    v
+}
+
 /// Los binds de morgan van también sin tecla: no están en `j/binds`.
-pub fn pagina(atajos: &[Atajo], grupos: &[(String, bool, usize)], c: &Atajos) -> Vec<Seccion> {
+pub fn pagina(
+    atajos: &[Atajo],
+    grupos: &[(String, bool, usize)],
+    c: &Atajos,
+    apps: &[(String, String)],
+) -> Vec<Seccion> {
     let propios = binds::propios(c);
     let defecto = Atajos::default();
     let mut filas: Vec<Vec<(String, Vec<String>)>> = vec![Vec::new(); GRUPOS.len()];
@@ -131,7 +238,12 @@ pub fn pagina(atajos: &[Atajo], grupos: &[(String, bool, usize)], c: &Atajos) ->
         if propios.iter().any(|p| p.desc == a.descripcion) {
             continue;
         }
-        let g = &mut filas[grupo_de_desc(&a.descripcion, grupos)];
+        let grupo = grupo_de_desc(&a.descripcion, grupos);
+        // Los propios ya tienen su fila editable.
+        if grupo == PROPIOS {
+            continue;
+        }
+        let g = &mut filas[grupo];
         match g.iter_mut().find(|(d, _)| *d == a.descripcion) {
             Some((_, teclas)) => teclas.push(a.teclas.clone()),
             None => g.push((a.descripcion.clone(), vec![a.teclas.clone()])),
@@ -141,6 +253,9 @@ pub fn pagina(atajos: &[Atajo], grupos: &[(String, bool, usize)], c: &Atajos) ->
         .into_iter()
         .enumerate()
         .map(|(n, g)| {
+            if n == PROPIOS {
+                return propios_usuario(c, apps);
+            }
             let mut v: Vec<Fila> = propios
                 .iter()
                 .filter(|p| grupo_de(p.cabecera) == n)
@@ -217,6 +332,7 @@ bind(mod .. " + Z", x, { desc = "Zeta" })
             ],
             &g,
             &Atajos::default(),
+            &[],
         );
         let titulos: Vec<_> = p.iter().map(|s| s.titulo).collect();
         assert_eq!(titulos, secciones());
@@ -251,6 +367,7 @@ bind(mod .. " + Z", x, { desc = "Zeta" })
                 .collect::<Vec<_>>(),
             &g,
             &Atajos::default(),
+            &[],
         );
         let titulos = |s: usize| -> Vec<String> {
             serie[s]
@@ -272,11 +389,11 @@ bind(mod .. " + Z", x, { desc = "Zeta" })
         );
         // "Mover a workspace" no figura en el Lua de prueba: va a la última, igual junta.
         assert_eq!(
-            titulos(5),
+            titulos(6),
             ["Mover a workspace 1 a 4: SUPER + CTRL + 1 … SUPER + CTRL + 4"]
         );
         // Una cabecera desconocida y lo que no figura en binds.lua, a la última.
-        assert_eq!(filas(5).len(), 2);
+        assert_eq!(filas(6).len(), 2);
         // Un grupo sin atajos no queda vacío.
         assert_eq!(filas(1)[0].0, "Ninguno");
     }
@@ -288,7 +405,7 @@ bind(mod .. " + Z", x, { desc = "Zeta" })
             ..Atajos::default()
         };
         c.multimedia = false;
-        let p = pagina(&[atajo("Launcher", "SUPER + K")], &[], &c);
+        let p = pagina(&[atajo("Launcher", "SUPER + K")], &[], &c, &[]);
         let fila = |s: usize, t: &str| -> (String, Vec<Opcion>) {
             p[s].filas
                 .iter()

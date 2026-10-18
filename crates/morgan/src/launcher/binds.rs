@@ -3,7 +3,8 @@
 //!
 //! Las cabeceras `-- ─── … ───` son las que agrupan la página de Atajos del menú.
 
-use crate::config::{Atajos, Capturas};
+use crate::aplicacion::App;
+use crate::config::{AtajoPropio, Atajos, Capturas, Cuando};
 
 type Accion<'a> = (&'static str, &'a str, &'static str, &'static str, bool);
 
@@ -220,6 +221,69 @@ fn lua_ventanas(tecla: &str, capturas: Option<&Capturas>) -> String {
 }
 
 pub fn lua(a: &Atajos, c: &Capturas, hyprshot: bool) -> String {
+    lua_con(a, c, hyprshot, &crate::aplicacion::buscar)
+}
+
+
+/// El nombre con que se muestra: el de la app o el comando.
+pub fn nombre_propio(p: &AtajoPropio, app: Option<&App>) -> String {
+    match app {
+        Some(a) => a.nombre.clone(),
+        None if !p.app.is_empty() => p.app.trim_end_matches(".desktop").to_owned(), // no-tr
+        None => p.command.clone(),
+    }
+}
+
+fn lua_propios(propios: &[AtajoPropio], buscar: &dyn Fn(&str) -> Option<App>) -> String {
+    let mut out = String::new();
+    for p in propios.iter().filter(|p| !p.key.is_empty()) {
+        let app = (!p.app.is_empty()).then(|| buscar(&p.app)).flatten();
+        let accion = match (&app, p.app.is_empty()) {
+            (Some(a), _) if p.new_window => format!("hl.dsp.exec_cmd({})", cadena(&a.lanzar)), // no-tr
+            (Some(a), _) => format!(
+                "morgan_buscar({{ {} }}, {})", // no-tr
+                a.clases.iter().map(|c| cadena(c)).collect::<Vec<_>>().join(", "),
+                cadena(&a.lanzar)
+            ),
+            // La app ya no está instalada: el atajo no hace nada.
+            (None, false) => continue,
+            (None, true) if p.command.trim().is_empty() => continue,
+            (None, true) => format!("hl.dsp.exec_cmd({})", cadena(&p.command)), // no-tr
+        };
+        let mut o = Vec::new();
+        match p.when {
+            Cuando::Press if p.repeat => o.push("repeating = true"), // no-tr
+            Cuando::Press => {}
+            Cuando::Release => o.push("release = true"), // no-tr
+            Cuando::LongPress => o.push("long_press = true"), // no-tr
+        }
+        if p.locked {
+            o.push("locked = true"); // no-tr
+        }
+        if p.non_consuming {
+            o.push("non_consuming = true"); // no-tr
+        }
+        let desc = format!("desc = {}", cadena(&nombre_propio(p, app.as_ref()))); // no-tr
+        let opciones = o.into_iter().map(str::to_owned).chain([desc]).collect::<Vec<_>>();
+        out.push_str(&format!(
+            "atajo({}, {}, {{ {} }})\n", // no-tr
+            cadena(&p.key),
+            accion,
+            opciones.join(", ")
+        ));
+    }
+    if out.is_empty() {
+        return out;
+    }
+    format!("\n-- ─── Atajos propios (menú) ───\n{}{out}", include_str!("buscar.lua")) // no-tr
+}
+
+pub fn lua_con(
+    a: &Atajos,
+    c: &Capturas,
+    hyprshot: bool,
+    buscar: &dyn Fn(&str) -> Option<App>,
+) -> String {
     let mut out = String::from(concat!(
         "\n-- Los binds de morgan (morgan/config.toml, [keybinds] y [screenshots]): pisan los que\n", // no-tr
         "-- hubiera en esas teclas.\n",                                                          // no-tr
@@ -286,6 +350,7 @@ pub fn lua(a: &Atajos, c: &Capturas, hyprshot: bool) -> String {
             ));
         }
     }
+    out.push_str(&lua_propios(&a.propios, buscar));
     // Uno vacío no se registra («submap doesn't exist»): lleva un bind de relleno en una
     // tecla que nadie aprieta.
     out.push_str(concat!(
@@ -387,6 +452,7 @@ mod tests {
             bloquear: String::new(),
             rescate: String::new(),
             multimedia: false,
+            propios: Vec::new(),
         };
         let lua = lua(&a, &Capturas::default(), false);
         assert!(!lua.contains("atajo(\""), "{lua}");
@@ -433,5 +499,58 @@ mod tests {
         assert!(lua.contains(&format!("hl.define_submap(\"{SUBMAP_GRABAR}\", function()")));
         assert!(submap_grabar(false).contains("get_current_submap"));
     }
-}
 
+    fn app_de_prueba(id: &str) -> Option<App> {
+        (id == "firefox.desktop").then(|| App {
+            nombre: "Firefox".into(),
+            clases: vec!["firefox".into()],
+            lanzar: "uwsm app -- 'firefox.desktop'".into(),
+        })
+    }
+
+    #[test]
+    fn propios_app_comando_y_opciones() {
+        let p = |key: &str, app: &str, command: &str| AtajoPropio {
+            key: key.into(),
+            app: app.into(),
+            command: command.into(),
+            ..Default::default()
+        };
+        let propios = vec![
+            p("SUPER + F", "firefox.desktop", ""),
+            AtajoPropio {
+                new_window: true,
+                ..p("SUPER + SHIFT + F", "firefox.desktop", "")
+            },
+            AtajoPropio {
+                repeat: true,
+                locked: true,
+                ..p("SUPER + T", "", "kitty -e btop")
+            },
+            // Repetir no va con soltar: Hyprland lo rechaza.
+            AtajoPropio {
+                when: Cuando::Release,
+                repeat: true,
+                non_consuming: true,
+                ..p("SUPER + R", "", "true")
+            },
+            // Sin tecla, una app que ya no está o un comando vacío: nada.
+            p("", "", "algo"),
+            p("SUPER + G", "ya-no.desktop", ""),
+            p("SUPER + H", "", "  "),
+        ];
+        let l = lua_propios(&propios, &app_de_prueba);
+        assert!(l.contains("local function morgan_buscar(clases, cmd)"), "{l}");
+        let binds: Vec<&str> = l.lines().filter(|x| x.starts_with("atajo(")).collect();
+        assert_eq!(
+            binds,
+            [
+                r#"atajo("SUPER + F", morgan_buscar({ "firefox" }, "uwsm app -- 'firefox.desktop'"), { desc = "Firefox" })"#,
+                r#"atajo("SUPER + SHIFT + F", hl.dsp.exec_cmd("uwsm app -- 'firefox.desktop'"), { desc = "Firefox" })"#,
+                r#"atajo("SUPER + T", hl.dsp.exec_cmd("kitty -e btop"), { repeating = true, locked = true, desc = "kitty -e btop" })"#,
+                r#"atajo("SUPER + R", hl.dsp.exec_cmd("true"), { release = true, non_consuming = true, desc = "true" })"#,
+            ]
+        );
+        assert_eq!(lua_propios(&[], &app_de_prueba), "");
+    }
+}
