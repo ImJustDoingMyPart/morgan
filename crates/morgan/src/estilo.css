@@ -665,12 +665,26 @@ window.blank-window {
 
 .cc-clave .launcher-entrada {
     margin-bottom: 0;
-    padding: 6px 4px;
+    padding: 6px 10px 6px 4px;
 }
 
 .cc-clave .launcher-entrada label.glifo {
-    min-width: 36px;
+    min-width: 32px;
+    margin-right: 4px;
     opacity: 0.7;
+}
+
+/* En el panel, los glifos de las listas (14 px) arrancan donde los de los niveles (18 px
+ * centrados en 36): columna de 32 más 4, así los nombres no se mueven. Lo de la derecha (el
+ * tilde, el ojo de la clave) queda centrado sobre la perilla de un slider al 100 %, a 17 px
+ * del borde de la caja. */
+.control-center .cc-opcion .glifo {
+    min-width: 32px;
+    margin-right: 4px;
+}
+
+.control-center .cc-opcion .tilde {
+    margin-right: 4px;
 }
 
 .cc-clave .launcher-entrada text {
