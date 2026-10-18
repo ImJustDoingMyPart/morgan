@@ -1,7 +1,7 @@
 //! Hyprland sabe cuándo se suelta `Mod`, morgan no: lo que GTK ve de los modificadores al
 //! tomar el teclado no es confiable. El bind de `Mod+Tab` pone el submap [`SUBMAP`] y pide el
 //! lienzo; adentro, `Mod+Tab` pide un paso más y soltar `Super_L`/`Super_R` sale del submap y
-//! avisa (`morganctl windows release`).
+//! avisa. Los avisos llegan por el socket de eventos ([`de_evento`]), en orden.
 //!
 //! Un toque enfoca la anterior sin dibujar nada; la capa se pone recién a los [`DEMORA`], así
 //! el teclado sigue en la ventana enfocada. El submap no tiene binds de flechas: si no, los
@@ -10,7 +10,8 @@
 //!
 //! Hyprland no entrega cuadros de una ventana que no toca su monitor, así que morgan saca una
 //! foto cada vez que una ventana recibe el foco y, con `Mod` apretado [`RENOVAR`], renueva a
-//! la vez las que tocan su monitor.
+//! la vez las que tocan su monitor. Las de un workspace oculto dan siempre el mismo cuadro: con
+//! una foto de después de esconderse, no se piden de nuevo.
 
 mod anillo;
 mod captura;
@@ -36,8 +37,6 @@ const DEMORA: Duration = Duration::from_millis(150);
 /// Antes de la [`DEMORA`], para que lleguen con el lienzo. Un toque más corto no captura nada:
 /// cada captura cuenta como `screencast` para el aviso de privacidad.
 const RENOVAR: Duration = Duration::from_millis(100);
-/// Los dos `morganctl` de un toque salen casi juntos y pueden llegar en cualquier orden.
-const CRUCE: Duration = Duration::from_millis(300);
 /// La animación de la cinta: la foto se saca con la ventana ya en su lugar.
 const ASENTARSE: Duration = Duration::from_millis(350);
 /// Alcanza para la franja más alta en doble densidad.
@@ -69,14 +68,16 @@ struct Inner {
     app: gtk::Application,
     hyprland: Hyprland,
     capturador: RefCell<Option<Rc<Capturador>>>,
-    fotos: RefCell<HashMap<String, gdk::Texture>>,
+    fotos: RefCell<HashMap<String, Foto>>,
     abierta: RefCell<Option<Rc<Vista>>>,
     /// Sube con cada pedido: una apertura que termina de leer tarde no abre si mientras tanto se
     /// pidió cerrar.
     pedido: Cell<u64>,
     leyendo: Cell<bool>,
     pasos: Cell<usize>,
-    soltado: Cell<Option<Instant>>,
+    soltado: Cell<bool>,
+    /// Sube con cada foco: solo se fotografía la que lo conserva al asentarse.
+    enfoque: Cell<u64>,
     fondo: RefCell<Option<(String, gdk::Texture)>>,
     /// Buscarlo puede recorrer todos los `.desktop` en el hilo principal: se busca una vez, al
     /// enfocar la ventana.
@@ -95,7 +96,8 @@ impl Ventanas {
                 pedido: Cell::new(0),
                 leyendo: Cell::new(false),
                 pasos: Cell::new(0),
-                soltado: Cell::new(None),
+                soltado: Cell::new(false),
+                enfoque: Cell::new(0),
                 fondo: RefCell::default(),
                 iconos: RefCell::default(),
             }),
@@ -108,6 +110,16 @@ impl Ventanas {
                 && actual.trim() == SUBMAP
             {
                 h.eval("hl.dispatch(hl.dsp.submap(\"reset\"))").await;
+            }
+        });
+        let debil = Rc::downgrade(&v.inner);
+        hyprland.al_cambiar_espacios(move |e| {
+            if let Some(inner) = debil.upgrade() {
+                for f in inner.fotos.borrow_mut().values_mut() {
+                    if f.congelada.is_some_and(|ws| e.activo(ws)) {
+                        f.congelada = None;
+                    }
+                }
             }
         });
         let debil = Rc::downgrade(&v.inner);
@@ -135,8 +147,8 @@ impl Ventanas {
             i.pasos.set(i.pasos.get() + 1);
             return;
         }
-        // Un aviso de soltar que se adelantó al pedido: es este mismo toque.
-        let toque_adelantado = i.soltado.take().is_some_and(|t| t.elapsed() < CRUCE);
+        // Los avisos llegan en orden: un soltar de antes es de otra vez.
+        i.soltado.set(false);
         let pedido = i.pedido.get() + 1;
         i.pedido.set(pedido);
         i.leyendo.set(true);
@@ -159,7 +171,7 @@ impl Ventanas {
                 sel = lienzo.reciente(sel);
             }
             // Ya se soltó: un toque. Se enfoca sin armar nada.
-            if toque_adelantado || i.soltado.take().is_some() {
+            if i.soltado.take() {
                 yo.enfocar(lienzo.ventanas[sel].direccion.clone(), false);
                 return;
             }
@@ -176,7 +188,7 @@ impl Ventanas {
             v.confirmar(false);
             return;
         }
-        self.inner.soltado.set(Some(Instant::now()));
+        self.inner.soltado.set(true);
     }
 
     pub fn cerrar(&self) {
@@ -256,21 +268,31 @@ impl Ventanas {
             .capturar(&v.direccion, ANCHO_FOTO)
             .await?;
         let textura = foto.textura();
-        self.inner
-            .fotos
-            .borrow_mut()
-            .insert(v.direccion.clone(), textura.clone());
+        let oculta = !self.inner.hyprland.espacios().activo(v.ws);
+        self.inner.fotos.borrow_mut().insert(
+            v.direccion.clone(),
+            Foto {
+                textura: textura.clone(),
+                congelada: oculta.then_some(v.ws),
+            },
+        );
         Some(textura)
     }
 
-    /// Con un juego en foco no: nada se mete con él.
+    /// Con un juego en foco no: nada se mete con él. Pasar por varias ventanas seguidas
+    /// fotografía solo la última.
     fn al_enfocar(&self, direccion: String) {
+        let enfoque = self.inner.enfoque.get() + 1;
+        self.inner.enfoque.set(enfoque);
         if direccion.len() <= 2 || self.abierto() {
             return;
         }
         let yo = self.clone();
         glib::timeout_add_local_once(ASENTARSE, move || {
-            if yo.inner.hyprland.juego_en_foco() || yo.abierto() {
+            if yo.inner.enfoque.get() != enfoque
+                || yo.inner.hyprland.juego_en_foco()
+                || yo.abierto()
+            {
                 return;
             }
             glib::MainContext::default().spawn_local(async move {
@@ -342,6 +364,12 @@ impl Ventanas {
             .or(monitores.first())
             .cloned()
     }
+}
+
+struct Foto {
+    textura: gdk::Texture,
+    /// Sacada con su workspace oculto: Hyprland da ese mismo cuadro hasta que se vuelva a ver.
+    congelada: Option<i64>,
 }
 
 /// Las fotos van en dos páginas que se alternan, para que la nueva entre fundiéndose.
@@ -508,8 +536,8 @@ impl Vista {
                 if !vent.capturable() {
                     celda.caja.add_css_class("fuera");
                 }
-                if let Some(t) = v.inner.fotos.borrow().get(&vent.direccion) {
-                    celda.poner(t);
+                if let Some(f) = v.inner.fotos.borrow().get(&vent.direccion) {
+                    celda.poner(&f.textura);
                 }
                 fijo.put(&celda.caja, xv, yv);
                 celdas[i] = Some(celda);
@@ -782,7 +810,13 @@ impl Vista {
         }
         let Some(d) = self.duenio() else { return };
         for (i, ventana) in self.lienzo.ventanas.iter().enumerate() {
-            if !ventana.capturable() {
+            let congelada = d
+                .inner
+                .fotos
+                .borrow()
+                .get(&ventana.direccion)
+                .is_some_and(|f| f.congelada == Some(ventana.ws));
+            if !ventana.capturable() || congelada {
                 continue;
             }
             let (d, ventana, debil) = (d.clone(), ventana.clone(), Rc::downgrade(self));
@@ -849,6 +883,15 @@ impl Celda {
     }
 }
 
+/// `Some(true)` es soltar.
+pub fn de_evento(linea: &str) -> Option<bool> {
+    match linea.strip_prefix("custom>>")?.trim_end() {
+        "morgan windows" => Some(false),
+        "morgan windows release" => Some(true),
+        _ => None,
+    }
+}
+
 fn icono_de(display: &gdk::Display, clase: &str) -> Option<gio::Icon> {
     if clase.is_empty() {
         return None;
@@ -871,4 +914,17 @@ fn icono_de(display: &gdk::Display, clase: &str) -> Option<gio::Icon> {
     // Si el tema no lo tiene, el genérico (y no el de "imagen rota").
     let es_tema = icono.downcast_ref::<gio::ThemedIcon>().is_some();
     (!es_tema || gtk::IconTheme::for_display(display).has_gicon(&icono)).then_some(icono)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn avisos_del_bind() {
+        assert_eq!(de_evento("custom>>morgan windows"), Some(false));
+        assert_eq!(de_evento("custom>>morgan windows release"), Some(true));
+        assert_eq!(de_evento("custom>>morgan windowsx"), None);
+        assert_eq!(de_evento("activewindowv2>>morgan windows"), None);
+    }
 }

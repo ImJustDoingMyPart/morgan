@@ -216,6 +216,15 @@ fn main() -> ExitCode {
             barra: OnceCell::new(),
         });
         let weak = Rc::downgrade(&servicios);
+        // El bind del lienzo avisa con `hl.dsp.event`: sin lanzar procesos y en orden.
+        let w = weak.clone();
+        servicios.hyprland.al_evento(move |linea| {
+            if let Some(soltar) = ventanas::de_evento(linea)
+                && let Some(s) = w.upgrade()
+            {
+                pedir_ventanas(&s, soltar);
+            }
+        });
         let privacidad = privacidad::Privacidad::new(&servicios.hyprland);
         let sonidos = servicios.sonidos.clone();
         let grababa = std::cell::Cell::new(false);
@@ -560,18 +569,8 @@ async fn dispatch(request: &Request, s: &Servicios) -> Response {
             });
             return Response::Done;
         }
-        Request::Ventanas { soltar: true } => {
-            s.ventanas.soltar();
-            return Response::Done;
-        }
-        Request::Ventanas { soltar: false } => {
-            s.ventanas.pedir();
-            s.centro.cerrar();
-            s.launcher.cerrar();
-            s.menu.cerrar();
-            s.calendario.cerrar();
-            s.calculadora.cerrar();
-            s.fondos.cerrar();
+        Request::Ventanas { soltar } => {
+            pedir_ventanas(s, *soltar);
             return Response::Done;
         }
         Request::Sesion => {
@@ -631,6 +630,21 @@ async fn dispatch(request: &Request, s: &Servicios) -> Response {
         s.osd.mostrar(&aviso);
     }
     Response::Done
+}
+
+/// Lo pide `morganctl windows [release]` o, desde el bind, el socket de eventos.
+fn pedir_ventanas(s: &Servicios, soltar: bool) {
+    if soltar {
+        s.ventanas.soltar();
+        return;
+    }
+    s.ventanas.pedir();
+    s.centro.cerrar();
+    s.launcher.cerrar();
+    s.menu.cerrar();
+    s.calendario.cerrar();
+    s.calculadora.cerrar();
+    s.fondos.cerrar();
 }
 
 fn aviso_no_molestar(activo: bool) -> Aviso {

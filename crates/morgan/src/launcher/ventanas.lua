@@ -5,6 +5,9 @@
 -- tecla pide un paso más y soltar {mod} sale del submap y le avisa a morgan. El submap no
 -- tiene flechas ni Escape: van a la capa del lienzo. {escape} sale a mano si algo se traba.
 --
+-- A morgan se le avisa por el socket de eventos (`custom>>morgan windows`), no con `morganctl`:
+-- sin lanzar procesos desde el compositor, y el pedido y el soltar llegan en orden.
+--
 -- Un bind `release` de una tecla modificadora no se dispara en 0.56.2 (#6946): se mira el
 -- evento de la tecla y, por si se pierde, un timer mientras dure el submap.
 local timer_ventanas = nil
@@ -18,7 +21,7 @@ local function soltar_ventanas()
         return
     end
     hl.dispatch(hl.dsp.submap("reset"))
-    hl.exec_cmd("morganctl windows release")
+    hl.dispatch(hl.dsp.event("morgan windows release"))
 end
 
 local function vigilar_ventanas()
@@ -43,7 +46,7 @@ hl.unbind("{tecla}")
 hl.define_submap("morgan-ventanas", function()
     hl.bind("{tecla}", function()
         vigilar_ventanas()
-        hl.exec_cmd("morganctl windows")
+        hl.dispatch(hl.dsp.event("morgan windows"))
     end)
     hl.bind("{escape}", soltar_ventanas){captura}
 end)
@@ -60,5 +63,5 @@ end)
 hl.bind("{tecla}", function()
     hl.dispatch(hl.dsp.submap("morgan-ventanas"))
     vigilar_ventanas()
-    hl.exec_cmd("morganctl windows")
+    hl.dispatch(hl.dsp.event("morgan windows"))
 end, { desc = "{desc}" })

@@ -183,7 +183,7 @@ fn lua_ventanas(tecla: &str, capturas: Option<&Capturas>) -> String {
     let desc = tr!("Lienzo de ventanas");
     let Some((nombre, codigo_l, codigo_r)) = modificador(tecla) else {
         return format!(
-            "\n-- ─── Lienzo de ventanas (morgan) ───\natajo({}, hl.dsp.exec_cmd(\"morganctl windows\"), {{ desc = {} }})\n", // no-tr
+            "\n-- ─── Lienzo de ventanas (morgan) ───\natajo({}, hl.dsp.event(\"morgan windows\"), {{ desc = {} }})\n", // no-tr
             cadena(tecla),
             cadena(desc)
         );
@@ -333,7 +333,8 @@ mod tests {
         assert!(!alt.contains("Print"));
         let suelta = lua_ventanas("F9", None);
         assert!(!suelta.contains("define_submap"));
-        assert!(suelta.contains(r#"atajo("F9", hl.dsp.exec_cmd("morganctl windows"), { desc = "Lienzo de ventanas" })"#));
+        assert!(suelta.contains(r#"atajo("F9", hl.dsp.event("morgan windows"), { desc = "Lienzo de ventanas" })"#));
+        assert!(!lua.contains("morganctl windows"));
     }
 
     #[test]
