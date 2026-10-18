@@ -8,6 +8,10 @@ set -eu
 
 aqui=$(cd "$(dirname "$0")" && pwd)
 [ $# -gt 0 ] || set -- morgan-git morgan-bin
+# Los commits del AUR son públicos: van con la identidad de este repo (el mail noreply), no
+# con la global.
+nombre=$(git -C "$aqui" config user.name)
+correo=$(git -C "$aqui" config user.email)
 trabajo=$(mktemp -d)
 trap 'rm -rf "$trabajo"' EXIT
 
@@ -28,7 +32,7 @@ for paquete in "$@"; do
             exit 0
         fi
         version=$(sed -n 's/^\tpkgver = //p' .SRCINFO)-$(sed -n 's/^\tpkgrel = //p' .SRCINFO)
-        git commit -m "$paquete $version"
+        git -c user.name="$nombre" -c user.email="$correo" commit -m "$paquete $version"
         git push origin HEAD:master
     )
 done
