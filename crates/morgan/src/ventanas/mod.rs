@@ -1,7 +1,7 @@
 //! Hyprland sabe cuándo se suelta `Mod`, morgan no: lo que GTK ve de los modificadores al
 //! tomar el teclado no es confiable. El bind de `Mod+Tab` pone el submap [`SUBMAP`] y pide el
 //! lienzo; adentro, `Mod+Tab` pide un paso más y soltar `Super_L`/`Super_R` sale del submap y
-//! avisa. Los avisos llegan por el socket de eventos ([`de_evento`]), en orden.
+//! avisa. Los avisos llegan por el socket de eventos (`ipc::de_evento`), en orden.
 //!
 //! Un toque enfoca la anterior sin dibujar nada; la capa se pone recién a los [`DEMORA`], así
 //! el teclado sigue en la ventana enfocada. El submap no tiene binds de flechas: si no, los
@@ -883,15 +883,6 @@ impl Celda {
     }
 }
 
-/// `Some(true)` es soltar.
-pub fn de_evento(linea: &str) -> Option<bool> {
-    match linea.strip_prefix("custom>>")?.trim_end() {
-        "morgan windows" => Some(false),
-        "morgan windows release" => Some(true),
-        _ => None,
-    }
-}
-
 fn icono_de(display: &gdk::Display, clase: &str) -> Option<gio::Icon> {
     if clase.is_empty() {
         return None;
@@ -914,17 +905,4 @@ fn icono_de(display: &gdk::Display, clase: &str) -> Option<gio::Icon> {
     // Si el tema no lo tiene, el genérico (y no el de "imagen rota").
     let es_tema = icono.downcast_ref::<gio::ThemedIcon>().is_some();
     (!es_tema || gtk::IconTheme::for_display(display).has_gicon(&icono)).then_some(icono)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn avisos_del_bind() {
-        assert_eq!(de_evento("custom>>morgan windows"), Some(false));
-        assert_eq!(de_evento("custom>>morgan windows release"), Some(true));
-        assert_eq!(de_evento("custom>>morgan windowsx"), None);
-        assert_eq!(de_evento("activewindowv2>>morgan windows"), None);
-    }
 }

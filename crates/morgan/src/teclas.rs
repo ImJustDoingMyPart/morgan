@@ -1,6 +1,6 @@
-//! Sin leer el teclado (eso pide root): un bind no consumidor de Hyprland corre
-//! `morganctl capslock` al soltar la tecla, y morgan lee el estado de `j/devices`. Al soltarla
-//! el estado ya cambió: xkb lo da vuelta al apretarla.
+//! Sin leer el teclado (eso pide root): un bind no consumidor de Hyprland avisa `morgan
+//! capslock` (el `morganctl capslock` por el socket de eventos) al soltar la tecla, y morgan lee
+//! el estado de `j/devices`. Al soltarla el estado ya cambió: xkb lo da vuelta al apretarla.
 
 use crate::osd::Aviso;
 

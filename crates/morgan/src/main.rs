@@ -216,13 +216,25 @@ fn main() -> ExitCode {
             barra: OnceCell::new(),
         });
         let weak = Rc::downgrade(&servicios);
-        // El bind del lienzo avisa con `hl.dsp.event`: sin lanzar procesos y en orden.
+        // Los binds avisan por el socket de eventos (`ipc::de_evento`).
         let w = weak.clone();
         servicios.hyprland.al_evento(move |linea| {
-            if let Some(soltar) = ventanas::de_evento(linea)
-                && let Some(s) = w.upgrade()
-            {
-                pedir_ventanas(&s, soltar);
+            let Some(pedido) = ipc::de_evento(linea) else {
+                return;
+            };
+            let Some(s) = w.upgrade() else { return };
+            match pedido {
+                // Ya mismo: el pedido y el soltar del lienzo, en el orden en que llegan.
+                Ok(Request::Ventanas { soltar }) => pedir_ventanas(&s, soltar),
+                Ok(r) => {
+                    let linea = linea.to_owned();
+                    glib::MainContext::default().spawn_local(async move {
+                        if let Response::Error { message } = dispatch(&r, &s).await {
+                            eprintln!("morgan: {linea}: {message}");
+                        }
+                    });
+                }
+                Err(e) => eprintln!("morgan: {linea}: {e}"),
             }
         });
         let privacidad = privacidad::Privacidad::new(&servicios.hyprland);
@@ -632,7 +644,7 @@ async fn dispatch(request: &Request, s: &Servicios) -> Response {
     Response::Done
 }
 
-/// Lo pide `morganctl windows [release]` o, desde el bind, el socket de eventos.
+/// Lo pide `morganctl windows [release]` o el bind, por el socket de eventos.
 fn pedir_ventanas(s: &Servicios, soltar: bool) {
     if soltar {
         s.ventanas.soltar();

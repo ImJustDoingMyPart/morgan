@@ -135,6 +135,15 @@ const CAPTURAS: [(&str, &str, &str); 3] = [
     ("ALT + Print", tr_const!("Captura ventana activa"), "-m window -m active"), // no-tr
 ];
 
+/// Lo de morgan va por el socket de eventos (`ipc::de_evento`): el compositor no lanza un
+/// proceso por tecla. El resto, un comando.
+fn accion(cmd: &str) -> String {
+    match cmd.strip_prefix("morganctl ") { // no-tr
+        Some(args) => format!("hl.dsp.event({})", cadena(&format!("morgan {args}"))), // no-tr
+        None => format!("hl.dsp.exec_cmd({})", cadena(cmd)), // no-tr
+    }
+}
+
 fn modificador(tecla: &str) -> Option<(&'static str, u32, u32)> {
     let primero = tecla.split('+').next()?.trim().to_uppercase();
     match primero.as_str() {
@@ -239,9 +248,9 @@ pub fn lua(a: &Atajos, c: &Capturas, hyprshot: bool) -> String {
         out.push_str(&format!("\n-- ─── {cabecera} ───\n")); // no-tr
         for (_, tecla, cmd, desc, locked) in binds {
             out.push_str(&format!(
-                "atajo({}, hl.dsp.exec_cmd({}), {})\n", // no-tr
+                "atajo({}, {}, {})\n", // no-tr
                 cadena(tecla),
-                cadena(cmd),
+                accion(cmd),
                 opciones(desc, locked, false)
             ));
         }
@@ -253,9 +262,9 @@ pub fn lua(a: &Atajos, c: &Capturas, hyprshot: bool) -> String {
         out.push_str("\n-- ─── Multimedia y brillo (morgan) ───\n"); // no-tr
         for (tecla, cmd, desc, repeating) in multimedia() {
             out.push_str(&format!(
-                "atajo({}, hl.dsp.exec_cmd({}), {})\n", // no-tr
+                "atajo({}, {}, {})\n", // no-tr
                 cadena(tecla),
-                cadena(cmd),
+                accion(cmd),
                 opciones(desc, true, repeating)
             ));
         }
@@ -264,7 +273,7 @@ pub fn lua(a: &Atajos, c: &Capturas, hyprshot: bool) -> String {
         // prenderse, el propio Bloq Mayús es un modificador activo. Sin descripción: no es un
         // atajo.
         out.push_str(
-            "atajo(\"Caps_Lock\", hl.dsp.exec_cmd(\"morganctl capslock\"), { release = true, non_consuming = true, ignore_mods = true })\n", // no-tr
+            "atajo(\"Caps_Lock\", hl.dsp.event(\"morgan capslock\"), { release = true, non_consuming = true, ignore_mods = true })\n", // no-tr
         );
     }
     if hyprshot {
@@ -298,15 +307,16 @@ mod tests {
     fn los_defaults_arman_todo_y_la_pagina_los_agrupa() {
         let lua = lua(&Atajos::default(), &Capturas::default(), true);
         assert!(lua.contains(
-            r#"atajo("SUPER + space", hl.dsp.exec_cmd("morganctl launcher toggle"), { desc = "Launcher" })"#
+            r#"atajo("SUPER + space", hl.dsp.event("morgan launcher toggle"), { desc = "Launcher" })"#
         ));
         assert!(lua.contains(
             r#"atajo("SUPER + ALT + SHIFT + L", hl.dsp.exec_cmd("systemctl --user start morgan-lock.service"), { locked = true, desc = "Volver a lanzar el bloqueo" })"#
         ));
         assert!(lua.contains(
-            r#"atajo("XF86AudioRaiseVolume", hl.dsp.exec_cmd("morganctl volume up"), { locked = true, repeating = true, desc = "Subir volumen" })"#
+            r#"atajo("XF86AudioRaiseVolume", hl.dsp.event("morgan volume up"), { locked = true, repeating = true, desc = "Subir volumen" })"#
         ));
-        assert!(!lua.contains("morganctl launcher toggle keybinds"), "sin tecla, sin bind");
+        assert!(!lua.contains("morgan launcher toggle keybinds"), "sin tecla, sin bind");
+        assert!(!lua.contains("exec_cmd(\"morganctl"), "lo de morgan va por eventos");
         // Las cabeceras ponen cada bind en su grupo de la página de Atajos.
         let grupos = grupos_de_binds_lua(&lua);
         let grupo = |d: &str| grupos.iter().find(|(x, ..)| x == d).map(|g| g.2);
