@@ -29,9 +29,11 @@ pub fn con_linea(texto: &str) -> Option<String> {
 }
 
 /// Lo que se para antes de arrancar morgan: hace lo mismo y se dibujaría encima o se quedaría
-/// con el nombre de las notificaciones.
+/// con el nombre de las notificaciones. Los shells de Quickshell (Noctalia, DankMaterialShell,
+/// Caelestia) corren como `quickshell`, o `qs` si se lanzaron por ese nombre.
 const COMPETIDORES: &[&str] = &[
     "waybar", "swaync", "mako", "dunst", "swayosd-server", "hypridle", "hyprlock", // no-tr
+    "swayidle", "swaylock", "quickshell", "qs", "ags", "eww", // no-tr
 ];
 
 pub fn correr() -> ExitCode {
