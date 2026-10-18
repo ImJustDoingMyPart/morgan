@@ -116,6 +116,18 @@ pub enum Que {
     VolverMonitores,
 }
 
+impl Que {
+    /// La acción de un [`Control::Texto`] con lo escrito.
+    pub fn con_texto(&self, t: &str) -> Que {
+        match self {
+            Que::Monitor(s, super::monitores::Campo::Apodo(_)) => {
+                Que::Monitor(s.clone(), super::monitores::Campo::Apodo(t.to_owned()))
+            }
+            otro => otro.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Cambio {
     Opacidad(f64),
@@ -297,6 +309,9 @@ pub enum Control {
     Boton(Que),
     /// El primer toque pide confirmar, el segundo lo hace.
     Confirmar(Que),
+    /// El toque abre la caja del buscador debajo de la fila; Enter guarda lo escrito con
+    /// [`Que::con_texto`], Escape lo deja.
+    Texto { valor: String, pista: String, que: Que },
     Nada,
 }
 
@@ -312,6 +327,8 @@ pub enum Fila {
         titulo: Option<String>,
         opciones: Vec<Opcion>,
     },
+    /// Los monitores a escala, para ubicarlos arrastrándolos.
+    Disposicion(Vec<super::monitores::Pantalla>),
 }
 
 pub fn ajuste(titulo: &str, sub: &str, control: Control) -> Fila {
@@ -725,6 +742,7 @@ pub fn buscar(paginas: &[(Categoria, &[Seccion])], consulta: &str) -> Vec<Result
                             sumar(&o.titulo, &[&o.sub], Some(fi));
                         }
                     }
+                    Fila::Disposicion(_) => {}
                 }
             }
         }

@@ -1287,6 +1287,40 @@ window.blank-window {
     opacity: 1;
 }
 
+/* Un nombre en la página: la caja del buscador debajo de su fila, como la clave de una Wi-Fi
+ * nueva en el centro. */
+.menu .menu-texto {
+    margin: 4px 0 0;
+}
+
+.menu .menu-texto .prompt {
+    margin-right: 8px;
+}
+
+/* Los monitores a escala: tarjetas del menú que se arrastran. La apagada, atenuada como lo
+ * que no se puede tocar; la que se arrastra, con el fondo de la fila abierta. */
+.menu-dibujo .cc-tarjeta {
+    padding: 4px;
+    border: 1px solid alpha(@on_surface, 0.12);
+}
+
+.menu-dibujo .cc-tarjeta .titulo {
+    font-size: 12px;
+}
+
+.menu-dibujo .cc-tarjeta .estado {
+    font-size: 11px;
+    color: @on_surface_variant;
+}
+
+.menu-dibujo .cc-tarjeta.apagada {
+    opacity: 0.6;
+}
+
+.menu-dibujo .cc-tarjeta:active {
+    transform: none;
+}
+
 /* ─── Barra ───
  * GTK4 no redondea como GTK3: la fecha y la hora van a 10pt y no a 13.5px, el relleno de 2px
  * abajo o arriba corrige 1px de centrado y la campana lleva 1px menos a la derecha. */

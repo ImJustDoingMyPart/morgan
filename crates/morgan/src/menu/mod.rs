@@ -9,6 +9,7 @@ pub mod atajos;
 pub mod compositor;
 pub mod monitores;
 mod cursores;
+mod dibujo;
 mod lectura;
 mod sistema;
 
@@ -444,6 +445,18 @@ impl Menu {
     fn tecla(&self, tecla: gdk::Key) -> bool {
         let i = &self.inner;
         let en_pagina = i.zona.get() == Zona::Pagina;
+        // Escribiendo en una caja de la página (un nombre), las teclas son de ella; Escape la
+        // deja y vuelve al buscador.
+        if let Some(f) = GtkWindowExt::focus(&i.window)
+            && f.is::<gtk::Text>()
+            && f != *i.texto.upcast_ref::<gtk::Widget>()
+        {
+            if tecla != gdk::Key::Escape {
+                return false;
+            }
+            i.texto.grab_focus();
+            return true;
+        }
         // Con algo tipeado, Izquierda y Derecha mueven el cursor del buscador.
         let tipeando = !en_pagina && !i.texto.text().is_empty();
         match tecla {
@@ -715,11 +728,19 @@ impl Menu {
                 if cat == Categoria::Pantalla
                     && let Some(m) = p.first_mut()
                 {
-                    let salidas = monitores::de_json(&leer(&["hyprctl", "-j", "monitors", "all"]).await);
+                    let mut salidas = monitores::de_json(&leer(&["hyprctl", "-j", "monitors", "all"]).await);
                     let reglas = monitores::Reglas::leer(&self.ruta_monitores()).unwrap_or_else(|e| {
                         eprintln!("morgan: menú: {e}");
                         Default::default()
                     });
+                    let ruta = glib::user_cache_dir().join("morgan/monitores-vistos.toml");
+                    let mut vistos = monitores::Vistos::leer(&ruta);
+                    if vistos.anotar(&salidas)
+                        && let Err(e) = vistos.guardar(&ruta)
+                    {
+                        eprintln!("morgan: menú: {e}");
+                    }
+                    monitores::completar(&mut salidas, &reglas, &vistos);
                     m.filas = monitores::filas(&salidas, &reglas, self.inner.prueba.borrow().is_some());
                 }
                 p
@@ -798,6 +819,10 @@ impl Menu {
         let mut r = monitores::Reglas::leer(&ruta)?;
         r.poner(salida, campo);
         r.guardar(&ruta)?;
+        // El nombre es solo de morgan: Hyprland no tiene nada que releer.
+        if matches!(campo, monitores::Campo::Apodo(_)) {
+            return Ok(());
+        }
         self.escribir_hypr(None).await
     }
 
@@ -1064,6 +1089,55 @@ impl Menu {
                         });
                         boton.upcast()
                     }
+                    Control::Texto { valor, pista, que } => {
+                        // Como la clave de una Wi-Fi nueva en el centro: la caja del buscador
+                        // debajo de la fila, con el foco mientras se escribe.
+                        derecha.append(&flecha("\u{F03EB}"));
+                        boton.add_css_class("elegible");
+                        let caja = gtk::Box::new(gtk::Orientation::Vertical, 0);
+                        caja.append(&boton);
+                        let entrada = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+                        entrada.add_css_class("launcher-entrada");
+                        entrada.add_css_class("menu-texto");
+                        let lapiz = gtk::Label::new(Some("\u{F03EB}"));
+                        lapiz.add_css_class("prompt");
+                        entrada.append(&lapiz);
+                        let texto = gtk::Text::new();
+                        texto.set_placeholder_text(Some(pista));
+                        texto.set_hexpand(true);
+                        entrada.append(&texto);
+                        entrada.set_visible(false);
+                        caja.append(&entrada);
+                        let (yo, e, t, v) =
+                            (self.clone(), entrada.clone(), texto.clone(), valor.clone());
+                        boton.connect_clicked(move |b| {
+                            yo.inner.desplegables.borrow().cerrar();
+                            yo.inner.zona.set(Zona::Pagina);
+                            yo.marcar_elegido(Some(b.clone().upcast()));
+                            e.set_visible(true);
+                            t.set_text(&v);
+                            t.grab_focus();
+                            t.select_region(0, -1);
+                        });
+                        // Escape lo atiende `tecla`: vuelve el foco al buscador, y salir de la
+                        // caja la cierra sin guardar.
+                        let salir = gtk::EventControllerFocus::new();
+                        let e = entrada.clone();
+                        salir.connect_leave(move |_| e.set_visible(false));
+                        texto.add_controller(salir);
+                        let (yo, b, que, antes) =
+                            (self.clone(), boton.downgrade(), que.clone(), valor.clone());
+                        texto.connect_activate(move |t| {
+                            let nuevo = t.text().trim().to_owned();
+                            yo.inner.texto.grab_focus();
+                            if let Some(b) = b.upgrade()
+                                && nuevo != antes
+                            {
+                                yo.ejecutar(b.upcast_ref(), &que.con_texto(&nuevo));
+                            }
+                        });
+                        caja.upcast()
+                    }
                     Control::Nada => {
                         // Solo se lee: no se toca, pero se lee entero (no atenuado).
                         boton.set_sensitive(false);
@@ -1107,6 +1181,12 @@ impl Menu {
                         caja.upcast()
                     }
                 }
+            }
+            Fila::Disposicion(pantallas) => {
+                let yo = self.clone();
+                dibujo::nuevo(pantallas, move |w, salida, campo| {
+                    yo.ejecutar(w, &Que::Monitor(salida.to_owned(), campo))
+                })
             }
             Fila::Galeria { titulo, opciones } => {
                 let caja = gtk::Box::new(gtk::Orientation::Vertical, 8);
