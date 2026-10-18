@@ -37,7 +37,8 @@ python3 -I "$raiz/dev/acerca-ambiente.py" "$video" "$inicio" "$duracion" "$tmp/a
 # Bajo a propósito (−43 LUFS, picos a −25 dB): que un ladrido no asuste. El compresor achata
 # los ladridos; entra en 0,4 s y se apaga en el último segundo. El ambiente va a 0,75: así
 # queda al nivel del ambiente real.
+# Sin los metadatos del video: el del teléfono trae dónde se grabó.
 ffmpeg -v error -y -ss "$inicio" -t "$duracion" -i "$video" -i "$tmp/ambiente.wav" -vn -filter_complex \
     "[0:a]asetpts=PTS-STARTPTS,aresample=48000,volume='1-($g)':eval=frame[o];[1:a]volume='0.75*($g)':eval=frame[a];[o][a]amix=inputs=2:normalize=0,acompressor=threshold=-30dB:ratio=8:attack=3:release=200,loudnorm=I=-28:TP=-9:LRA=5,volume=-16dB,afade=t=in:d=0.4,afade=t=out:st=$((duracion - 1)):d=1" \
-    -ar 48000 -c:a libopus -b:a 64k "$destino/sonido.ogg"
+    -map_metadata -1 -fflags +bitexact -ar 48000 -c:a libopus -b:a 64k "$destino/sonido.ogg"
 ls -l "$destino"/cuadros.bin "$destino"/sonido.ogg
