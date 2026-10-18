@@ -44,6 +44,7 @@ mod privacidad;
 mod red;
 mod reproductor;
 mod riel;
+mod setup;
 mod sistema;
 mod sonidos;
 mod tarjeta;
@@ -74,8 +75,10 @@ use crate::tema::Tema;
 
 fn main() -> ExitCode {
     // `morgan about` corre en la terminal y sale: no arranca nada del shell.
-    if std::env::args().nth(1).as_deref() == Some("about") {
-        return acerca::correr();
+    match std::env::args().nth(1).as_deref() {
+        Some("about") => return acerca::correr(),
+        Some("setup") => return setup::correr(),
+        _ => {}
     }
     // Evita intentos fallidos de conexión a at-spi en canberra y GTK.
     unsafe {

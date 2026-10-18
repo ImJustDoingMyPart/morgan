@@ -1,16 +1,17 @@
 # Unidad de systemd --user de morgan. La instala install.sh (con la ruta de los binarios en
-# ExecStart) o el paquete (dist/arch/PKGBUILD, con /usr/bin).
+# ExecStart) o el paquete (con /usr/bin). Con uwsm arranca con graphical-session.target; sin
+# uwsm la arranca el `hyprland.start` de ~/.config/hypr/morgan.lua (y la primera vez,
+# `morgan setup`).
 [Unit]
 Description=morgan (shell de escritorio)
 PartOf=graphical-session.target
 After=graphical-session.target
-# Una notificación tardía durante el apagado lo activaría por D-Bus
-# (org.freedesktop.Notifications.service) con la sesión gráfica ya caída; con Requisite ese
-# arranque falla sin ejecutarse, en vez de reintentar sin pantalla.
-Requisite=graphical-session.target
 
 [Service]
 Type=simple
+# Una notificación tardía durante el apagado lo activaría por D-Bus con el compositor ya
+# caído: sin su socket, la unidad no arranca (y no cuenta como falla que reintentar).
+ExecCondition=/bin/sh -c 'case "$$WAYLAND_DISPLAY" in "") exit 1 ;; /*) s=$$WAYLAND_DISPLAY ;; *) s=$$XDG_RUNTIME_DIR/$$WAYLAND_DISPLAY ;; esac; test -S "$$s"'
 ExecStart=%h/.local/bin/morgan
 Restart=on-failure
 RestartSec=2

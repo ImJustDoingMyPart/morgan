@@ -264,3 +264,15 @@
 "varias teclas para lo mismo, separadas por \" · \". `otras` es texto suelto." = "several keys for the same thing, separated by \" · \". `otras` is free text."
 "guardar" = "save"
 "la ayuda del programa" = "the program's help"
+
+# setup.rs
+"morgan necesita la config de Hyprland en Lua ({}); hay una hyprland.conf." = "morgan needs the Hyprland config in Lua ({}); there is a hyprland.conf."
+"No está {}: morgan necesita la config de Hyprland en Lua." = "{} is missing: morgan needs the Hyprland config in Lua."
+"No se pudo escribir {}: {}" = "Could not write {}: {}"
+"{} está corriendo: morgan hace lo mismo; conviene pararlo y deshabilitarlo." = "{} is running: morgan does the same; better stop and disable it."
+"{} tiene las notificaciones: hay que pararlo antes de arrancar morgan." = "{} owns notifications: stop it before starting morgan."
+"morgan arrancó. El menú de sistema se abre con Super+coma." = "morgan is running. The system menu opens with Super+comma."
+"Listo: morgan arranca la próxima vez que entres a Hyprland." = "Done: morgan starts the next time you log into Hyprland."
+"Agregada la línea de morgan al final de {}." = "Added morgan's line at the end of {}."
+"{} ya carga morgan." = "{} already loads morgan."
+"Falló systemctl --user {}." = "systemctl --user {} failed."

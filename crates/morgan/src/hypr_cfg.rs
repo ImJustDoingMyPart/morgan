@@ -77,6 +77,19 @@ for ns, regla in pairs({
 end
 "#;
 
+/// Con uwsm la unidad ya arrancó con la sesión y esto no hace nada; sin uwsm, el gestor de
+/// systemd no sabe de la sesión gráfica y esto la arranca. Un Hyprland anidado de pruebas no lo
+/// lleva: pisaría el entorno de la sesión de afuera.
+fn arranque() -> String {
+    if std::env::var_os("MORGAN_HYPR_CFG").is_some() {
+        return String::new();
+    }
+    format!(
+        "-- Arranque de morgan.\nhl.on(\"hyprland.start\", function()\n    hl.exec_cmd(\"systemctl --user import-environment {}; systemctl --user start morgan.service\")\nend)\n\n", // no-tr
+        crate::setup::VARIABLES.join(" ")
+    )
+}
+
 /// Los colores del tema van primero: la sombra los usa.
 pub fn lua(c: &Config, cambios: &Cambios, tema: &Path, hyprshot: bool) -> String {
     let (_, nombre, _, lua_sombra) = sombra(&c.apariencia.sombra);
@@ -84,10 +97,12 @@ pub fn lua(c: &Config, cambios: &Cambios, tema: &Path, hyprshot: bool) -> String
     format!(
         "-- Lo genera morgan: no se edita a mano, se reescribe entero. Lo guardado está en\n\
          -- morgan/config.toml y en morgan/hyprland.toml; se cambia desde su menú de sistema.\n\n\
+         {}\
          -- Colores del tema activo (morganctl theme).\n\
          pcall(dofile, {:?})\n\n\
          {CAPAS}\n\
          {}\n-- Sombra: {nombre}.\n{lua_sombra}\n{}{binds}",
+        arranque(),
         tema.to_string_lossy(),
         animaciones::lua(
             animaciones::por_id(&c.apariencia.animacion),

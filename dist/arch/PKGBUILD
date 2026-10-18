@@ -2,8 +2,8 @@
 #
 #   makepkg -si
 #
-# Lo que el paquete no puede hacer por cada usuario lo dice morgan.install al instalar:
-# la línea de morgan en ~/.config/hypr/hyprland.lua y habilitar la unidad.
+# Lo que el paquete no puede hacer por cada usuario lo hace `morgan setup` (lo dice
+# morgan.install al instalar).
 
 pkgname=morgan-git
 _nombre=morgan

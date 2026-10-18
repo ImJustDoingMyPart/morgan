@@ -14,9 +14,9 @@
 #   - instala las unidades de systemd --user y la activación por D-Bus de las
 #     notificaciones (en ~/.local/share, que se busca antes que la de los paquetes);
 #   - instala el servicio PAM de morgan-lock en /etc/pam.d (pide sudo);
-#   - agrega `pcall(require, "morgan")` al final de ~/.config/hypr/hyprland.lua;
-#   - habilita morgan.service. No lo arranca: si hay otro servidor de notificaciones o
-#     barra corriendo, primero hay que pararlos (lo avisa).
+#   - corre `morgan setup`: agrega `pcall(require, "morgan")` al final de
+#     ~/.config/hypr/hyprland.lua, habilita morgan.service, avisa qué compite con morgan y, si
+#     no hay otro servidor de notificaciones, lo arranca.
 set -euo pipefail
 
 raiz=$(cd "$(dirname "$0")" && pwd)
@@ -43,7 +43,6 @@ dbus="$datos/dbus-1/services/org.freedesktop.Notifications.service"
 compartido="$datos/morgan"
 pam=/etc/pam.d/morgan-lock
 hypr="$config/hypr/hyprland.lua"
-linea='pcall(require, "morgan")'
 
 paso() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 aviso() { printf '\033[33m  !\033[0m %s\n' "$*" >&2; }
@@ -146,38 +145,11 @@ instalar() {
         sistema sudo install -Dm644 "$raiz/dist/pam.d/morgan-lock" "$pam"
     fi
 
-    paso "Hyprland ($hypr)"
-    if grep -qF "$linea" "$hypr"; then
-        echo "  ya carga morgan"
-    else
-        printf '\n-- morgan: sus binds, los colores del tema, las reglas de sus capas y lo que se cambia\n-- desde su menú. Va al final, para pisar lo de arriba; lo agregó su install.sh.\n%s\n' \
-            "$linea" >>"$hypr"
-        echo "  agregado al final"
-    fi
-
     sistema systemctl --user daemon-reload
-    sistema systemctl --user enable morgan.service
 
-    competidores
-    paso "Listo"
-    echo "  Arrancar: systemctl --user start morgan   (o volver a entrar a la sesión)"
-    echo "  Config:   $config/morgan/config.toml, o el menú de sistema (Mod+coma)"
-}
-
-# Lo que pelea con morgan por lo mismo: otro servidor de notificaciones tiene el nombre del
-# bus, y otra barra o OSD se dibujaría encima.
-competidores() {
-    local quien
-    quien=$(busctl --user status org.freedesktop.Notifications 2>/dev/null | sed -n 's/^Comm=//p' | head -1 || true)
-    if [[ -n $quien && $quien != morgan ]]; then
-        aviso "$quien tiene las notificaciones: paralo (y deshabilitalo) antes de arrancar morgan"
-    fi
-    local p
-    for p in waybar swaync mako dunst swayosd-server hypridle hyprlock; do
-        if pgrep -x "$p" >/dev/null; then
-            aviso "$p está corriendo: morgan hace lo mismo; conviene pararlo"
-        fi
-    done
+    paso "morgan setup"
+    sistema "$bin/morgan" setup
+    echo "  Config: $config/morgan/config.toml, o el menú de sistema (Super+coma)"
 }
 
 # --- Desinstalar -------------------------------------------------------------------------
@@ -200,8 +172,8 @@ desinstalar() {
     sistema systemctl --user daemon-reload
 
     paso "Hyprland ($hypr)"
-    if [[ -f $hypr ]] && grep -qF "$linea" "$hypr"; then
-        # La línea y el comentario que puso install.sh; si la escribió otro, solo la línea.
+    if [[ -f $hypr ]] && grep -qxF 'pcall(require, "morgan")' "$hypr"; then
+        # La línea y el comentario que puso `morgan setup`; si la escribió otro, solo la línea.
         sed -i -e '/^-- morgan: sus binds, los colores del tema/,/^pcall(require, "morgan")$/d' \
             -e '/^pcall(require, "morgan")$/d' "$hypr"
         echo "  sacada la línea de morgan"
