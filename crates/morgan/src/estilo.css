@@ -657,16 +657,20 @@ window.blank-window {
     opacity: 1;
 }
 
-/* La clave de una Wi-Fi nueva: un renglón más debajo del de la red, con la caja del
- * launcher. El texto arranca en la columna de los nombres (4 del renglón + 36 del glifo +
- * 10) y el ojo queda en la del tilde; el alto es el de un renglón. */
+/* La clave de una Wi-Fi nueva: la caja del launcher debajo del renglón de la red, de su
+ * mismo ancho y con sus columnas (el padding y el glifo de 36 de `.cc-opcion`). */
 .cc-clave {
-    margin: 2px 0 2px 38px;
+    margin: 2px 0;
 }
 
 .cc-clave .launcher-entrada {
     margin-bottom: 0;
-    padding: 6px 4px 6px 12px;
+    padding: 6px 4px;
+}
+
+.cc-clave .launcher-entrada label.glifo {
+    min-width: 36px;
+    opacity: 0.7;
 }
 
 .cc-clave .launcher-entrada text {
@@ -674,7 +678,7 @@ window.blank-window {
 }
 
 .cc-clave .aviso {
-    margin: 4px 12px 2px 12px;
+    margin: 4px 4px 2px 50px;
     font-size: 12px;
     opacity: 0.5;
 }
@@ -693,6 +697,18 @@ window.blank-window {
 
 .cc-nivel {
     padding: 4px 0;
+}
+
+/* Las listas de un nivel (salidas, entradas, la salida de una app) sin padding a los
+ * costados: así sus glifos y nombres caen en las columnas de los del nivel, como los de
+ * las listas de las tarjetas. */
+.cc-niveles .cc-lista {
+    padding: 4px 0;
+}
+
+.cc-niveles .cc-opcion {
+    padding-left: 0;
+    padding-right: 0;
 }
 
 .cc-nivel button.glifo {

@@ -814,13 +814,16 @@ impl Centro {
         self.pintar_red(true);
     }
 
-    /// El campo del launcher como un renglón más, colgado del de la red: empieza en la
-    /// columna del nombre y el ojo va en la del tilde. Sin candado: ya está en el glifo.
+    /// La caja del launcher del ancho de un renglón y con sus columnas: el candado en la del
+    /// glifo, lo escrito en la del nombre y el ojo en la del tilde.
     fn campo_clave(&self) -> gtk::Box {
         let caja = gtk::Box::new(gtk::Orientation::Vertical, 0);
         caja.add_css_class("cc-clave");
         let entrada = gtk::Box::new(gtk::Orientation::Horizontal, 10);
         entrada.add_css_class("launcher-entrada");
+        let candado = gtk::Label::new(Some("\u{F033E}"));
+        candado.add_css_class("glifo");
+        entrada.append(&candado);
         let texto = gtk::Text::new();
         texto.set_placeholder_text(Some(tr!("Contraseña")));
         texto.set_visibility(false);
