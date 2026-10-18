@@ -22,7 +22,6 @@ fn acciones(a: &Atajos) -> [(&'static str, Vec<Accion<'_>>); 2] {
                 ("menu_wallpapers", &a.menu_fondos, "morganctl menu toggle wallpapers", tr!("Fondos de pantalla"), false), // no-tr
                 ("center", &a.centro, "morganctl center toggle", tr!("Centro de control"), false), // no-tr
                 ("dnd", &a.no_molestar, "morganctl dnd toggle", tr!("No molestar"), false), // no-tr
-                ("notes", &a.notas, "morganctl notes toggle", tr!("Notas de la app"), false), // no-tr
                 ("session", &a.sesion, "morganctl session", tr!("Apagar, reiniciar, salir"), false), // no-tr
             ],
         ),
@@ -383,7 +382,7 @@ mod tests {
             ventanas: String::new(),
             centro: String::new(),
             no_molestar: String::new(),
-            notas: String::new(),
+            retirada_notas: None,
             sesion: String::new(),
             bloquear: String::new(),
             rescate: String::new(),
@@ -412,7 +411,7 @@ mod tests {
             ..Atajos::default()
         };
         let p = propios(&a);
-        assert_eq!(p.len(), 15, "las catorce de acciones y el lienzo");
+        assert_eq!(p.len(), 14, "las trece de acciones y el lienzo");
         let calc = p.iter().find(|p| p.id == "calculator").unwrap();
         assert_eq!((calc.desc, calc.tecla.as_str()), ("Calculadora", ""));
         // Cada uno se edita por su clave en [keybinds].

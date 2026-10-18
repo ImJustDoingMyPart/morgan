@@ -22,7 +22,7 @@ shares one look.
 - **Lock screen and idle** (`morgan-lock`): replaces hyprlock and hypridle. It locks through
   logind, so `loginctl lock-session` works, and it can lock before suspending.
 - **OSD** for volume, brightness and Caps Lock; a **window overview** (`Super+Tab`); a
-  **wallpaper picker**; per-app **keybind notes**; a **calendar** that reads your iCal URLs.
+  **wallpaper picker**; a **calendar** that reads your iCal URLs.
 - **Themes**: nine built-in palettes (morgan, Catppuccin, Dracula, Everforest, Gruvbox, Kanagawa,
   Nord, Rosé Pine, Tokyo Night…) or colors taken from your wallpaper, applied to morgan and,
   if you choose, to Hyprland, GTK, kitty, btop and more.
@@ -137,7 +137,6 @@ warns about anything that competes with morgan, and starts it.
 | `Super+Alt+U` | Symbols and emoji |
 | `Super+Alt+C` | Calculator |
 | `Super+Y` | Wallpaper picker |
-| `Super+Alt+N` | Keybind notes for the focused app |
 | `Super+Shift+N` | Do not disturb |
 | `Super+X` | Power off, reboot, log out |
 | `Super+Alt+L` | Lock |

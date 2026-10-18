@@ -87,9 +87,6 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         soltar: bool,
     },
-    Notas {
-        accion: AccionInterruptor,
-    },
     Captura {
         ruta: String,
     },
@@ -387,9 +384,6 @@ impl Request {
                 accion: AccionSuperficie::parse(accion)?,
             },
             ["session"] => Request::Sesion,
-            ["notes", accion] => Request::Notas {
-                accion: AccionInterruptor::parse(accion)?,
-            },
             ["windows"] => Request::Ventanas { soltar: false },
             ["windows", "release"] => Request::Ventanas { soltar: true },
             ["menu", accion] => Request::Menu {
@@ -818,13 +812,7 @@ mod tests {
             })
         );
         assert!(Request::from_args(&["launcher", "open", "calc"]).is_err());
-        assert_eq!(
-            Request::from_args(&["notes", "toggle"]),
-            Ok(Request::Notas {
-                accion: AccionInterruptor::Alternar,
-            })
-        );
-        assert!(Request::from_args(&["notes"]).is_err());
+        assert!(Request::from_args(&["notes", "toggle"]).is_err());
         assert_eq!(
             Request::from_args(&["wallpapers", "toggle"]),
             Ok(Request::Fondos {

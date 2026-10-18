@@ -63,7 +63,6 @@ for ns, regla in pairs({
     ["morgan-bandeja"]        = { animation = "fade",         ignore_alpha = 0.5 },
     ["morgan-calculadora"]    = { animation = "fade",         ignore_alpha = 0.5 },
     ["morgan-notificaciones"] = { animation = "fade",         ignore_alpha = 0.5 },
-    ["morgan-notas"]          = { animation = "fade",         ignore_alpha = 0.5 },
     ["morgan-osd"]            = { animation = "slide bottom", ignore_alpha = 0.5 },
     ["morgan-launcher"]       = { animation = "fade",         ignore_alpha = 0.5 },
     ["morgan-menu"]           = { animation = "fade",         ignore_alpha = 0.5 },

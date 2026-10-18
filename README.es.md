@@ -24,8 +24,7 @@ solo proceso y con un mismo aspecto.
   a través de logind, así que `loginctl lock-session` funciona, y puede bloquear antes de
   suspender.
 - **OSD** de volumen, brillo y Bloq Mayús; una **vista de ventanas** (`Super+Tab`); un
-  **selector de fondos**; **notas de atajos** por aplicación; un **calendario** que lee las
-  URL iCal de cada uno.
+  **selector de fondos**; un **calendario** que lee las URL iCal de cada uno.
 - **Temas**: nueve paletas incluidas (morgan, Catppuccin, Dracula, Everforest, Gruvbox,
   Kanagawa, Nord, Rosé Pine, Tokyo Night) o los colores del fondo de pantalla, aplicados a
   morgan y, si se elige, a Hyprland, GTK, kitty, btop y más.
@@ -141,7 +140,6 @@ usuario, avisa qué compite con morgan y lo arranca.
 | `Super+Alt+U` | Símbolos y emoji |
 | `Super+Alt+C` | Calculadora |
 | `Super+Y` | Selector de fondos |
-| `Super+Alt+N` | Notas de atajos de la app con foco |
 | `Super+Shift+N` | No molestar |
 | `Super+X` | Apagar, reiniciar, cerrar sesión |
 | `Super+Alt+L` | Bloquear |

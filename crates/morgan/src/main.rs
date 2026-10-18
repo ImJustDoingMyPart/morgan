@@ -35,7 +35,6 @@ mod luz;
 mod menu;
 mod mezclador;
 mod mpris;
-mod notas;
 mod notificaciones;
 mod osd;
 mod pila;
@@ -60,7 +59,7 @@ use std::rc::Rc;
 use gtk::glib;
 use gtk::prelude::*;
 use morgan_ipc::{
-    AccionInterruptor, AccionSuperficie, Contenido, NivelMenu, PedidoFondo, Request, Response,
+    AccionSuperficie, Contenido, NivelMenu, PedidoFondo, Request, Response,
 };
 
 use crate::audio::Audio;
@@ -148,13 +147,6 @@ fn main() -> ExitCode {
                 }
             });
         }
-        let notas = notas::Notas::new(
-            app,
-            hyprland.clone(),
-            config.notas.apps.clone(),
-            &config.atajos.notas,
-            config_path.with_file_name("notas"),
-        );
         let agenda = agenda::Agenda::new();
         let idle = idle::Idle::new(&config.idle, hyprland.clone());
         let luz = luz::Luz::new(&config.luz, osd.clone());
@@ -204,7 +196,6 @@ fn main() -> ExitCode {
                     fondos: fondos.clone(),
                     calendario: calendario.clone(),
                     centro: centro.clone(),
-                    notas: notas.clone(),
                 },
             ),
             audio,
@@ -212,7 +203,6 @@ fn main() -> ExitCode {
             reproductor: Reproductor::default(),
             hyprland,
             notificaciones,
-            notas,
             barra: OnceCell::new(),
         });
         let weak = Rc::downgrade(&servicios);
@@ -343,7 +333,6 @@ struct Servicios {
     reproductor: Reproductor,
     hyprland: Hyprland,
     notificaciones: Notificaciones,
-    notas: notas::Notas,
     /// Pide por `dispatch`, que necesita a `Servicios`.
     barra: OnceCell<barra::Barra>,
     fondos: fondos::Fondos,
@@ -571,14 +560,6 @@ async fn dispatch(request: &Request, s: &Servicios) -> Response {
                 s.calculadora.cerrar();
                 s.ventanas.cerrar();
             }
-            return Response::Done;
-        }
-        Request::Notas { accion } => {
-            s.notas.pedir(match accion {
-                AccionInterruptor::Alternar => None,
-                AccionInterruptor::Activar => Some(true),
-                AccionInterruptor::Desactivar => Some(false),
-            });
             return Response::Done;
         }
         Request::Ventanas { soltar } => {

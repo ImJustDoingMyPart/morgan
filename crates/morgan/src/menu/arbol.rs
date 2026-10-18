@@ -75,7 +75,7 @@ impl Categoria {
                 tr_const!("Animaciones"),
                 tr_const!("Sombras"),
             ],
-            Categoria::Shell => &[tr_const!("General"), tr_const!("Notas"), tr_const!("Pantalla de bloqueo")],
+            Categoria::Shell => &[tr_const!("General"), tr_const!("Pantalla de bloqueo")],
             Categoria::Compositor => &[
                 tr_const!("Ventanas"),
                 tr_const!("Desenfoque"),
@@ -110,7 +110,6 @@ pub enum Que {
     BorrarRecientes,
     ElegirTemaSonido(String, String),
     Sonar(String),
-    EditarNotas(String),
     GrabarTecla(String),
     Monitor(String, super::monitores::Campo),
     MantenerMonitores,
@@ -143,7 +142,6 @@ pub enum Cambio {
     MatugenModo(String),
     MatugenContraste(f64),
     Capturas(crate::config::Capturas),
-    NotasApp(String, bool),
     /// De una vez: reasignar una tecla de otro bind de morgan lo deja sin ella.
     Teclas(Vec<(String, String)>),
     Multimedia(bool),
@@ -248,13 +246,6 @@ impl Cambio {
                 }
             }
             Cambio::Multimedia(v) => c.atajos.multimedia = *v,
-            Cambio::NotasApp(clase, poner) => {
-                let a = &mut c.notas.apps;
-                a.retain(|x| !x.eq_ignore_ascii_case(clase));
-                if *poner {
-                    a.push(clase.to_lowercase());
-                }
-            }
             Cambio::ModoApp(app, modo) => {
                 let n = &mut c.notificaciones;
                 n.silenciadas.retain(|a| !a.eq_ignore_ascii_case(app));
@@ -364,69 +355,10 @@ pub fn armar(cat: Categoria, filas: Vec<Vec<Fila>>) -> Vec<Seccion> {
         .collect()
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct DatosNotas {
-    pub hojas: Vec<String>,
-    pub abiertas: Vec<String>,
-}
-
-fn notas_(c: &Config, d: &DatosNotas) -> Vec<Fila> {
-    let mut clases: Vec<String> = c.notas.apps.iter().map(|a| a.to_lowercase()).collect();
-    for h in &d.hojas {
-        if !clases.contains(h) {
-            clases.push(h.clone());
-        }
-    }
-    let mut filas: Vec<Fila> = clases
-        .iter()
-        .map(|clase| {
-            let activa = crate::notas::elegida(&c.notas.apps, clase);
-            let sub = match (activa, d.hojas.contains(clase)) {
-                (true, true) => tr!("la tarjeta aparece en sus ventanas"),
-                (true, false) => tr!("sin hoja todavía: «Editar una hoja» la crea"),
-                (false, _) => tr!("no aparece"),
-            };
-            ajuste(
-                clase,
-                sub,
-                Control::Casilla {
-                    activa,
-                    que: Que::Config(Cambio::NotasApp(clase.clone(), !activa)),
-                },
-            )
-        })
-        .collect();
-    let nuevas: Vec<Opcion> = d
-        .abiertas
-        .iter()
-        .filter(|a| !clases.contains(a))
-        .map(|a| opcion(a, "", Que::Config(Cambio::NotasApp(a.clone(), true))))
-        .collect();
-    filas.push(if nuevas.is_empty() {
-        ajuste(tr!("Agregar una app"), tr!("abrí una ventana de la app y volvé acá"), Control::Nada)
-    } else {
-        ajuste(tr!("Agregar una app"), tr!("de las ventanas abiertas, por su clase"), Control::Lista(nuevas))
-    });
-    if !clases.is_empty() {
-        filas.push(ajuste(
-            tr!("Editar una hoja"),
-            tr!("las teclas y los comandos de la tarjeta, en el editor de texto"),
-            Control::Lista(
-                clases
-                    .iter()
-                    .map(|cl| opcion(cl, "", Que::EditarNotas(cl.clone())))
-                    .collect(),
-            ),
-        ));
-    }
-    filas
-}
-
 pub fn pagina_fija(
     cat: Categoria,
     c: &Config,
     apps_historial: &[String],
-    notas: &DatosNotas,
 ) -> Option<Vec<Seccion>> {
     let filas = match cat {
         Categoria::Apariencia
@@ -469,7 +401,6 @@ pub fn pagina_fija(
                     Control::Boton(Que::Calendario),
                 ),
             ],
-            notas_(c, notas),
             bloqueo(&c.bloqueo),
         ],
         Categoria::Notificaciones => vec![
@@ -1408,7 +1339,7 @@ mod tests {
     fn cada_pagina_tiene_sus_secciones() {
         let c = Config::default();
         for cat in Categoria::TODAS {
-            let p = match (pagina_fija(cat, &c, &[], &DatosNotas::default()), cat) {
+            let p = match (pagina_fija(cat, &c, &[]), cat) {
                 // Los monitores los pone la lectura de Hyprland.
                 (Some(mut p), Categoria::Pantalla) => {
                     p[0].filas = super::super::monitores::filas(&[], &Default::default(), true);
@@ -1448,27 +1379,27 @@ mod tests {
     #[test]
     fn lo_marcado_sale_de_la_config() {
         let mut c = Config::default();
-        let p = pagina_fija(Categoria::Shell, &c, &[], &DatosNotas::default()).unwrap();
+        let p = pagina_fija(Categoria::Shell, &c, &[]).unwrap();
         assert_eq!(activas(lista(&p, 0, 0)), ["85 %"]);
         c.shell.opacidad = 1.0;
         c.notificaciones.retencion_dias = 30;
-        let p = pagina_fija(Categoria::Shell, &c, &[], &DatosNotas::default()).unwrap();
+        let p = pagina_fija(Categoria::Shell, &c, &[]).unwrap();
         assert_eq!(activas(lista(&p, 0, 0)), ["100 %"]);
-        let p = pagina_fija(Categoria::Notificaciones, &c, &[], &DatosNotas::default()).unwrap();
+        let p = pagina_fija(Categoria::Notificaciones, &c, &[]).unwrap();
         assert_eq!(activas(lista(&p, 0, 0)), ["30 días"]);
         // Una opacidad escrita a mano que no está en la lista no marca ninguna.
         c.shell.opacidad = 0.33;
-        let p = pagina_fija(Categoria::Shell, &c, &[], &DatosNotas::default()).unwrap();
+        let p = pagina_fija(Categoria::Shell, &c, &[]).unwrap();
         assert!(activas(lista(&p, 0, 0)).is_empty());
     }
 
     #[test]
     fn el_bloqueo_marca_lo_puesto_y_cambia_solo_lo_suyo() {
         let mut c = Config::default();
-        let p = pagina_fija(Categoria::Shell, &c, &[], &DatosNotas::default()).unwrap();
-        assert_eq!(activas(lista(&p, 2, 0)), ["Onda"]);
-        assert_eq!(activas(lista(&p, 2, 2)), ["Los dos"]);
-        let puntos = lista(&p, 2, 0)
+        let p = pagina_fija(Categoria::Shell, &c, &[]).unwrap();
+        assert_eq!(activas(lista(&p, 1, 0)), ["Onda"]);
+        assert_eq!(activas(lista(&p, 1, 2)), ["Los dos"]);
+        let puntos = lista(&p, 1, 0)
             .iter()
             .find(|o| o.titulo == "Puntos")
             .unwrap();
@@ -1486,7 +1417,7 @@ mod tests {
                     que: Que::Config(cambio),
                 },
             ..
-        } = &p[2].filas[1]
+        } = &p[1].filas[1]
         else {
             panic!("la chispa no es una casilla")
         };
@@ -1498,49 +1429,9 @@ mod tests {
     }
 
     #[test]
-    fn notas_con_sus_casillas_y_lo_que_falta_agregar() {
-        let mut c = Config::default();
-        c.notas.apps = vec!["Kitty".into()];
-        let d = DatosNotas {
-            hojas: vec!["kitty".into(), "yazi".into()],
-            abiertas: vec!["kitty".into(), "firefox".into()],
-        };
-        let p = pagina_fija(Categoria::Shell, &c, &[], &d).unwrap();
-        assert_eq!(p[1].titulo, "Notas");
-        let casilla = |f: &Fila| match f {
-            Fila::Ajuste {
-                titulo,
-                control: Control::Casilla { activa, que },
-                ..
-            } => (titulo.clone(), *activa, que.clone()),
-            otra => panic!("no es una casilla: {otra:?}"),
-        };
-        // La elegida y la que solo tiene hoja, en ese orden y en minúsculas.
-        let (t, activa, que) = casilla(&p[1].filas[0]);
-        assert_eq!((t.as_str(), activa), ("kitty", true));
-        assert_eq!(que, Que::Config(Cambio::NotasApp("kitty".into(), false)));
-        let (t, activa, _) = casilla(&p[1].filas[1]);
-        assert_eq!((t.as_str(), activa), ("yazi", false));
-        // Agregar ofrece solo las abiertas que no están.
-        let agregar = lista(&p, 1, 2);
-        assert_eq!(agregar.iter().map(|o| o.titulo.as_str()).collect::<Vec<_>>(), ["firefox"]);
-        let editar = lista(&p, 1, 3);
-        assert_eq!(editar[1].que, Que::EditarNotas("yazi".into()));
-        // Sacar la elegida no deja la de distinta mayúscula; ponerla, la pone una vez.
-        Cambio::NotasApp("kitty".into(), false).aplicar(&mut c);
-        assert!(c.notas.apps.is_empty());
-        Cambio::NotasApp("Yazi".into(), true).aplicar(&mut c);
-        Cambio::NotasApp("yazi".into(), true).aplicar(&mut c);
-        assert_eq!(c.notas.apps, ["yazi"]);
-        // Sin nada: solo la fila de agregar, sin lista.
-        let p = pagina_fija(Categoria::Shell, &Config::default(), &[], &DatosNotas::default()).unwrap();
-        assert_eq!(p[1].filas.len(), 1);
-    }
-
-    #[test]
     fn idle_marca_y_cambia() {
         let mut c = Config::default();
-        let p = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
+        let p = pagina_fija(Categoria::Pantalla, &c, &[]).unwrap();
         assert_eq!(activas(lista(&p, 2, 0)), ["10 minutos"]);
         assert_eq!(activas(lista(&p, 2, 1)), ["20 minutos"]);
         let nunca = &lista(&p, 2, 1)[0];
@@ -1550,14 +1441,14 @@ mod tests {
         };
         cambio.aplicar(&mut c);
         assert_eq!(c.idle.bloquear, 0);
-        let p = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
+        let p = pagina_fija(Categoria::Pantalla, &c, &[]).unwrap();
         assert_eq!(activas(lista(&p, 2, 1)), ["nunca"]);
     }
 
     #[test]
     fn resumen_alterna() {
         let mut c = Config::default();
-        let casilla = |c: &Config| match &pagina_fija(Categoria::Notificaciones, c, &[], &DatosNotas::default()).unwrap()[1].filas[0]
+        let casilla = |c: &Config| match &pagina_fija(Categoria::Notificaciones, c, &[]).unwrap()[1].filas[0]
         {
             Fila::Ajuste {
                 control: Control::Casilla { activa, que },
@@ -1610,7 +1501,7 @@ mod tests {
         let mut c = Config::default();
         let p = sonido(&c, &[], "freedesktop", &[]);
         assert_eq!(activas(lista(&p, 0, 0)), ["5 %"]);
-        let p = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
+        let p = pagina_fija(Categoria::Pantalla, &c, &[]).unwrap();
         assert_eq!(activas(lista(&p, 2, 2)), ["nunca"]);
         Cambio::Suspender(60).aplicar(&mut c);
         Cambio::Paso(10).aplicar(&mut c);
@@ -1618,7 +1509,7 @@ mod tests {
         Cambio::SonidoSistema(SonidoSistema::Red, false).aplicar(&mut c);
         assert_eq!(c.sonido.tope(), 150.0);
         assert!(!c.sonido.red && c.sonido.bloqueo);
-        let p = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
+        let p = pagina_fija(Categoria::Pantalla, &c, &[]).unwrap();
         assert_eq!(activas(lista(&p, 2, 2)), ["60 minutos"]);
     }
 
@@ -1672,13 +1563,13 @@ mod tests {
     #[test]
     fn luz_nocturna() {
         let mut c = Config::default();
-        let p = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
+        let p = pagina_fija(Categoria::Pantalla, &c, &[]).unwrap();
         assert_eq!(activas(lista(&p, 1, 0)), ["4000 K · la de siempre"]);
         // Sin horario no se muestran las horas: temperatura y la casilla.
         assert_eq!(p[1].filas.len(), 2);
         Cambio::Horario(true).aplicar(&mut c);
         Cambio::PrenderLuz("21:30".into()).aplicar(&mut c);
-        let p = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
+        let p = pagina_fija(Categoria::Pantalla, &c, &[]).unwrap();
         assert_eq!(activas(lista(&p, 1, 2)), ["21:30"]);
         assert_eq!(activas(lista(&p, 1, 3)), ["07:00"]);
         assert_eq!(horas(22, 23), ["22:00", "22:30", "23:00"]);
@@ -1757,7 +1648,7 @@ mod tests {
             },
             &c,
         );
-        let en = pagina_fija(Categoria::Pantalla, &c, &[], &DatosNotas::default()).unwrap();
+        let en = pagina_fija(Categoria::Pantalla, &c, &[]).unwrap();
         let paginas = [
             (Categoria::Apariencia, &ap[..]),
             (Categoria::Pantalla, &en[..]),

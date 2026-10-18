@@ -37,16 +37,12 @@ window.barra,
         -1px -1px 0 1px @primary;
 }
 
-.osd label,
-.notas-boton label {
+.osd label {
     color: @on_surface;
     font-family: "JetBrainsMono Nerd Font", monospace;
 }
 
-/* .notas-boton va encima de la tarjeta de notas y no adentro: las mismas reglas, con su
- * clase. */
-.osd .icono,
-.icono.notas-boton {
+.osd .icono {
     min-width: 36px;
     min-height: 36px;
     border-radius: 4px;
@@ -54,25 +50,21 @@ window.barra,
 }
 
 .osd .icono image,
-.osd .icono .glifo,
-.icono.notas-boton .glifo {
+.osd .icono .glifo {
     color: @on_surface;
 }
 
-.osd .icono .glifo,
-.icono.notas-boton .glifo {
+.osd .icono .glifo {
     font-size: 18px;
 }
 
-.osd.encendido .icono,
-.icono.notas-boton {
+.osd.encendido .icono {
     background-image: linear-gradient(135deg, @primary, @tertiary);
     box-shadow: 0 0 6px 0 alpha(@tertiary, 0.3);
 }
 
 .osd.encendido .icono image,
-.osd.encendido .icono .glifo,
-.icono.notas-boton .glifo {
+.osd.encendido .icono .glifo {
     color: @surface;
 }
 
@@ -230,66 +222,6 @@ window.barra,
 .notification-row .notification-background .notification.critical .summary {
     color: @error;
     font-weight: bold;
-}
-
-/* ─── Notas ─── */
-.osd.notas {
-    padding: 10px;
-}
-
-.osd.notas > box + box {
-    margin-top: 8px;
-}
-
-.notas-cabecera {
-    margin: 0 2px 2px 0;
-}
-
-.icono.notas-boton {
-    transition: box-shadow 100ms ease, transform 150ms ease;
-}
-
-.icono.notas-boton:hover {
-    box-shadow: 0 0 10px 1px alpha(@tertiary, 0.6);
-}
-
-.icono.notas-boton:active {
-    transform: scale(0.9);
-    transition: none;
-}
-
-.notas-seccion {
-    padding: 8px 10px;
-    border-radius: 4px;
-    background: alpha(@on_surface, 0.04);
-}
-
-.osd.notas .notas-titulo {
-    font-size: 12px;
-    font-weight: bold;
-    color: @tertiary;
-}
-
-.osd.notas .notas-grupo {
-    margin-top: 4px;
-    font-size: 11px;
-    color: @on_surface_variant;
-}
-
-.osd.notas .tecla {
-    padding: 0 5px;
-    border-radius: 4px;
-    background: alpha(@on_surface, 0.06);
-    font-size: 12px;
-    color: @tertiary;
-}
-
-.osd.notas .tecla.esconder {
-    color: @on_surface_variant;
-}
-
-.osd.notas .dice {
-    font-size: 12px;
 }
 
 /* El aire de la izquierda deja la tarjeta en el mismo lugar que en el centro. */

@@ -56,7 +56,6 @@ pub struct Servicios {
     pub fondos: crate::fondos::Fondos,
     pub calendario: crate::calendario::Calendario,
     pub centro: crate::centro::Centro,
-    pub notas: crate::notas::Notas,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -712,12 +711,7 @@ impl Menu {
             | Categoria::Pantalla
             | Categoria::Notificaciones => {
                 let apps = self.inner.s.notificaciones.apps();
-                let notas = if cat == Categoria::Shell {
-                    lectura::notas(&self.dir_notas()).await
-                } else {
-                    arbol::DatosNotas::default()
-                };
-                let mut p = arbol::pagina_fija(cat, &c, &apps, &notas).unwrap_or_default();
+                let mut p = arbol::pagina_fija(cat, &c, &apps).unwrap_or_default();
                 if cat == Categoria::Pantalla
                     && let Some(m) = p.first_mut()
                 {
@@ -747,10 +741,6 @@ impl Menu {
                 arbol::sonido(&c, &sonidos::temas(), &sonidos::tema_puesto(), &salidas)
             }
         }
-    }
-
-    fn dir_notas(&self) -> PathBuf {
-        self.inner.s.ruta_config.with_file_name("notas")
     }
 
     fn ruta_monitores(&self) -> PathBuf {
@@ -1243,14 +1233,6 @@ impl Menu {
                 sonidos::sonar(id, None);
                 return;
             }
-            // El editor se abriría debajo del menú, que además tiene el teclado.
-            Que::EditarNotas(clase) => {
-                self.cerrar();
-                if let Err(e) = crate::notas::editar(&self.dir_notas(), clase) {
-                    eprintln!("morgan: menú: {e}");
-                }
-                return;
-            }
             _ => {}
         }
         let mut posicion = self.elegibles().iter().position(|e| e == desde);
@@ -1524,7 +1506,6 @@ impl Menu {
             | Que::Calendario
             | Que::Carpetas(_)
             | Que::Sonar(_)
-            | Que::EditarNotas(_)
             | Que::GrabarTecla(_) => Ok(()),
         }
     }
@@ -1583,7 +1564,6 @@ impl Menu {
         i.s.fondos.aplicar_config(&c.fondos);
         i.s.calendario.aplicar_config(&c.clima);
         i.s.centro.aplicar_config(&c.sonido);
-        i.s.notas.aplicar_config(&c.notas, &c.atajos.notas);
         i.config.replace(c);
         Ok(())
     }

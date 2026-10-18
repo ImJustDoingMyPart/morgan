@@ -27,7 +27,6 @@ usage: morganctl ping
        morganctl wallpapers toggle|open|close
        morganctl session
        morganctl windows [release]
-       morganctl notes toggle|on|off
        morganctl menu toggle|open|close [root|wallpapers|weather]
        morganctl launcher toggle|open|close [apps|symbols|clipboard|keybinds|city|calendar]
        morganctl theme list|current|reload

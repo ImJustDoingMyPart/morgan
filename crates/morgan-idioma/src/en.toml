@@ -229,7 +229,6 @@
 "Selector de fondos" = "Wallpaper picker"
 "Fondos de pantalla" = "Wallpapers"
 "Centro de control" = "Control center"
-"Notas de la app" = "App notes"
 "Apagar, reiniciar, salir" = "Shut down, restart, log out"
 "Volver a lanzar el bloqueo" = "Relaunch the lock screen"
 "Subir volumen" = "Volume up"
@@ -247,22 +246,8 @@
 "Lienzo de ventanas" = "Window canvas"
 
 # menu/arbol.rs: Shell › Notas
-"Notas" = "Notes"
-"la tarjeta aparece en sus ventanas" = "the card shows on its windows"
-"sin hoja todavía: «Editar una hoja» la crea" = "no sheet yet: “Edit a sheet” creates it"
-"no aparece" = "hidden"
-"Agregar una app" = "Add an app"
-"abrí una ventana de la app y volvé acá" = "open a window of the app and come back here"
-"de las ventanas abiertas, por su clase" = "from the open windows, by class"
-"Editar una hoja" = "Edit a sheet"
-"las teclas y los comandos de la tarjeta, en el editor de texto" = "the card's keys and commands, in the text editor"
 
 # notas.rs: la hoja nueva
-"Notas de {} para la tarjeta de morgan (Mod+Alt+N la esconde o la muestra)." = "Notes for {} on morgan's card (Mod+Alt+N hides or shows it)."
-"Pares [teclas o comando, qué hace], sueltos o en grupos ([[atajos]] con grupo y notas);" = "Pairs [keys or command, what it does], loose or in groups ([[atajos]] with grupo and notas);"
-"varias teclas para lo mismo, separadas por \" · \". `otras` es texto suelto." = "several keys for the same thing, separated by \" · \". `otras` is free text."
-"guardar" = "save"
-"la ayuda del programa" = "the program's help"
 
 # setup.rs
 "morgan necesita la config de Hyprland en Lua ({}); hay una hyprland.conf." = "morgan needs the Hyprland config in Lua ({}); there is a hyprland.conf."

@@ -40,16 +40,11 @@ pub struct Config {
     pub capturas: Capturas,
     #[serde(rename = "keybinds")]
     pub atajos: Atajos,
-    #[serde(rename = "notes")]
-    pub notas: Notas,
+    /// Retirada después de 0.1.1 (las notas por app): se acepta y se ignora, y al guardar se borra.
+    #[serde(rename = "notes", skip_serializing)]
+    pub retirada_notas: Option<toml::Value>,
     #[serde(rename = "lock")]
     pub bloqueo: morgan_ipc::bloqueo::Bloqueo,
-}
-
-#[derive(Debug, Clone, PartialEq, Default, Deserialize, Serialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Notas {
-    pub apps: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -109,9 +104,9 @@ pub struct Atajos {
     #[serde(deserialize_with = "tecla")]
     #[serde(rename = "dnd")]
     pub no_molestar: String,
-    #[serde(deserialize_with = "tecla")]
-    #[serde(rename = "notes")]
-    pub notas: String,
+    /// Retirada después de 0.1.1, como `[notes]`.
+    #[serde(rename = "notes", skip_serializing)]
+    pub retirada_notas: Option<toml::Value>,
     #[serde(deserialize_with = "tecla")]
     #[serde(rename = "session")]
     pub sesion: String,
@@ -140,7 +135,7 @@ impl Default for Atajos {
             ventanas: t("SUPER + Tab"),
             centro: t("SUPER + N"),
             no_molestar: t("SUPER + SHIFT + N"),
-            notas: t("SUPER + ALT + N"),
+            retirada_notas: None,
             sesion: t("SUPER + X"),
             bloquear: t("SUPER + ALT + L"),
             rescate: t("SUPER + ALT + SHIFT + L"),
@@ -163,7 +158,6 @@ impl Atajos {
             "windows" => &mut self.ventanas,
             "center" => &mut self.centro,
             "dnd" => &mut self.no_molestar,
-            "notes" => &mut self.notas,
             "session" => &mut self.sesion,
             "lock" => &mut self.bloquear,
             "rescue" => &mut self.rescate,
@@ -811,9 +805,8 @@ mod tests {
 
     #[test]
     fn atajos() {
-        let c = parse("[keybinds]\nlauncher = \" SUPER + R \"\nnotes = \"\"\n").unwrap();
+        let c = parse("[keybinds]\nlauncher = \" SUPER + R \"\n").unwrap();
         assert_eq!(c.atajos.launcher, "SUPER + R");
-        assert!(c.atajos.notas.is_empty());
         assert_eq!(c.atajos.centro, "SUPER + N");
         assert!(err("[keybinds]\nmenu = \"SUPER + \\\"\"").contains("no quotes"));
     }
@@ -896,10 +889,12 @@ mod tests {
     }
 
     #[test]
-    fn notas() {
-        assert!(Config::default().notas.apps.is_empty());
-        assert!(parse("[notes]\napps = []\n").unwrap().notas.apps.is_empty());
-        assert!(parse("[notes]\nclasses = []\n").is_err());
+    fn las_notas_retiradas_se_ignoran_y_se_borran_al_guardar() {
+        let previo = "[notes]\napps = [\"kitty\"]\n\n[keybinds]\nnotes = \"SUPER + ALT + N\"\nlauncher = \"SUPER + R\"\n";
+        let c = parse(previo).unwrap();
+        let t = escribir_sobre(previo, &c).unwrap();
+        assert!(!t.contains("notes"), "{t}");
+        assert!(t.contains("launcher = \"SUPER + R\""), "{t}");
     }
 
     #[test]

@@ -17,40 +17,6 @@ pub async fn leer(args: &[&str]) -> String {
     })
 }
 
-pub async fn notas(dir: &Path) -> arbol::DatosNotas {
-    let mut hojas: Vec<String> = std::fs::read_dir(dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|e| {
-            let p = e.path();
-            if p.extension()? != "toml" {
-                return None;
-            }
-            Some(p.file_stem()?.to_str()?.to_lowercase())
-        })
-        .collect();
-    hojas.sort();
-    hojas.dedup();
-    arbol::DatosNotas {
-        hojas,
-        abiertas: clases(&leer(&["hyprctl", "-j", "clients"]).await),
-    }
-}
-
-fn clases(json: &str) -> Vec<String> {
-    let v: Vec<serde_json::Value> = serde_json::from_str(json).unwrap_or_default();
-    let mut c: Vec<String> = v
-        .iter()
-        .filter_map(|w| w.get("class")?.as_str())
-        .filter(|c| !c.is_empty())
-        .map(str::to_lowercase)
-        .collect();
-    c.sort();
-    c.dedup();
-    c
-}
-
 #[derive(Debug, Default)]
 pub struct Listas {
     opciones: crate::apariencia::Opciones,
@@ -384,13 +350,6 @@ fn con_tilde(ruta: &str, home: &std::path::Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn las_clases_abiertas() {
-        let json = r#"[{"class": "kitty"}, {"class": "Firefox"}, {"class": ""}, {"class": "kitty"}, {"title": "x"}]"#;
-        assert_eq!(super::clases(json), ["firefox", "kitty"]);
-        assert!(super::clases("no").is_empty());
-    }
-
     use super::*;
 
     #[test]
