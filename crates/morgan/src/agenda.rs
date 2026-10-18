@@ -376,6 +376,8 @@ fn limpiar_cache(urls: &[String]) {
     let Ok(dir) = std::fs::read_dir(dir_cache()) else {
         return;
     };
+    // Una carpeta de antes se cierra ya, sin esperar a la próxima bajada.
+    let _ = std::fs::set_permissions(dir_cache(), std::fs::Permissions::from_mode(0o700));
     for f in dir.flatten() {
         let nombre = f.file_name().to_string_lossy().into_owned();
         if !vigentes.contains(&nombre) {
