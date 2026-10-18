@@ -729,22 +729,29 @@ impl Centro {
         if !forzar && i.clave.borrow().is_some() {
             return;
         }
-        let mut items = Vec::new();
+        // Cable y VPN arriba; las Wi-Fi, guardadas y a la vista, debajo de su radio y solo
+        // con la radio prendida.
+        let conexion = |c: &red::Conexion| {
+            let r = i.red.clone();
+            let ruta = c.ruta.clone();
+            Item::new(
+                c.tipo.glifo(),
+                &c.nombre,
+                Some(c.activa.is_some()),
+                move || r.alternar(&ruta),
+            )
+        };
+        let (wifis, otras): (Vec<_>, Vec<_>) =
+            e.conexiones.iter().partition(|c| c.tipo == red::Tipo::Wifi);
+        let mut items: Vec<Item> = otras.into_iter().map(conexion).collect();
         if let Some(w) = e.wifi {
             let r = i.red.clone();
             items.push(Item::new("󰤨", "Wi-Fi", Some(w), move || {
                 r.alternar_wifi()
             }));
         }
-        for c in e.conexiones {
-            let r = i.red.clone();
-            let ruta = c.ruta.clone();
-            items.push(Item::new(
-                c.tipo.glifo(),
-                &c.nombre,
-                Some(c.activa.is_some()),
-                move || r.alternar(&ruta),
-            ));
+        if e.wifi == Some(true) {
+            items.extend(wifis.into_iter().map(conexion));
         }
         let antes = items.len();
         for v in &e.visibles {
@@ -805,6 +812,8 @@ impl Centro {
         let texto = gtk::Text::new();
         texto.set_placeholder_text(Some(tr!("Contraseña")));
         texto.set_visibility(false);
+        // El ● de GTK ocupa la celda entera de la monoespaciada y se pegan.
+        texto.set_invisible_char('•');
         texto.set_hexpand(true);
         entrada.append(&texto);
         let ojo = gtk::Button::with_label("\u{F0208}");

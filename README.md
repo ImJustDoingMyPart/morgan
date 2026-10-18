@@ -62,10 +62,10 @@ The heart of morgan. `Super+N` opens it in the top-right corner. It grows with w
 holds, never past the edge of the screen, and scrolls inside when it has to.
 
 - **Cards**, in two columns, each with its state in words ("Wired", "2 connected"):
-  - **Network**: wired and Wi-Fi, with the saved connections; picking a Wi-Fi with the radio
-    off turns the radio on first. Below them, the Wi-Fi networks in range that aren't saved:
-    an open one connects on click and a secured one asks for its password right there; a
-    wrong password is reported and isn't saved.
+  - **Network**: wired and VPN, with the saved connections, and the Wi-Fi radio; with the
+    radio on, below it, the saved Wi-Fi networks and the ones in range: an open one
+    connects on click and a secured one asks for its password right there; a wrong
+    password is reported and isn't saved.
   - **Bluetooth**: the adapter and the paired devices, each connected or disconnected on
     its own.
   - **Do not disturb**, **Caffeine** (the screen stays on) and **Night light**.
