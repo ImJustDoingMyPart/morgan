@@ -122,7 +122,7 @@ impl Cambios {
         }
         let mut out = String::new();
         if !self.0.is_empty() {
-            out.push_str("\n-- Compositor (menú › Compositor; lo guardado está en morgan/hyprland.toml).\n");
+            out.push_str("\n-- Compositor (menú › Escritorio; lo guardado está en morgan/hyprland.toml).\n");
             out.push_str("hl.config({\n");
             escribir(&raiz, 1, &mut out);
             out.push_str("})\n");

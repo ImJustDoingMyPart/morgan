@@ -337,7 +337,12 @@ pub async fn sistema() -> Vec<Seccion> {
     let recientes = gtk::RecentManager::default().items().len();
     let privacidad =
         arbol::privacidad(clip.lines().filter(|l| !l.is_empty()).count(), recientes);
-    arbol::armar(arbol::Categoria::Sistema, vec![equipo, snapshots, privacidad])
+    let mut secciones = vec![equipo];
+    if sistema::hay_snapper() {
+        secciones.push(snapshots);
+    }
+    secciones.push(privacidad);
+    arbol::armar(arbol::Categoria::Sistema, secciones)
 }
 
 fn con_tilde(ruta: &str, home: &std::path::Path) -> String {

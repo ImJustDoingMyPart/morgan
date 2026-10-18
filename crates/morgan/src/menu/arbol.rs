@@ -39,8 +39,8 @@ impl Categoria {
     pub fn titulo(self) -> &'static str {
         match self {
             Categoria::Apariencia => tr!("Apariencia"),
-            Categoria::Shell => tr!("Shell"),
-            Categoria::Compositor => tr!("Compositor"),
+            Categoria::Shell => tr!("General"),
+            Categoria::Compositor => tr!("Escritorio"),
             Categoria::Atajos => tr!("Atajos"),
             Categoria::Aplicaciones => tr!("Aplicaciones"),
             Categoria::Sistema => tr!("Sistema"),
@@ -53,8 +53,8 @@ impl Categoria {
     pub fn glifo(self) -> char {
         let c = match self {
             Categoria::Apariencia => 0xF03D8,
-            Categoria::Shell => 0xF018D,
-            Categoria::Compositor => 0xF05B7,
+            Categoria::Shell => 0xF062E,
+            Categoria::Compositor => 0xF05B2,
             Categoria::Atajos => 0xF030C,
             Categoria::Aplicaciones => 0xF003B,
             Categoria::Sistema => 0xF02FD,
@@ -75,7 +75,11 @@ impl Categoria {
                 tr_const!("Animaciones"),
                 tr_const!("Sombras"),
             ],
-            Categoria::Shell => &[tr_const!("General"), tr_const!("Pantalla de bloqueo")],
+            Categoria::Shell => &[
+                tr_const!("Preferencias"),
+                tr_const!("Fecha y hora"),
+                tr_const!("Pantalla de bloqueo"),
+            ],
             Categoria::Compositor => &[
                 tr_const!("Ventanas"),
                 tr_const!("Desenfoque"),
@@ -87,7 +91,11 @@ impl Categoria {
             ],
             Categoria::Atajos => super::atajos::secciones(),
             Categoria::Aplicaciones => &[tr_const!("Predeterminadas"), tr_const!("Autoarranque"), tr_const!("Capturas de pantalla")],
-            Categoria::Sistema => &[tr_const!("Equipo"), tr_const!("Snapshots"), tr_const!("Privacidad")],
+            // Snapshots, solo con snapper instalado.
+            Categoria::Sistema if super::sistema::hay_snapper() => {
+                &[tr_const!("Equipo"), tr_const!("Snapshots"), tr_const!("Privacidad")]
+            }
+            Categoria::Sistema => &[tr_const!("Equipo"), tr_const!("Privacidad")],
             Categoria::Sonido => &[tr_const!("Volumen"), tr_const!("Salidas"), tr_const!("Tema"), tr_const!("Sonidos del sistema")],
             Categoria::Pantalla => &[tr_const!("Monitores"), tr_const!("Luz nocturna"), tr_const!("Inactividad")],
             Categoria::Notificaciones => &[tr_const!("Generales"), tr_const!("Modo juego"), tr_const!("Por app")],
@@ -112,6 +120,7 @@ pub enum Que {
     Sonar(String),
     GrabarTecla(String),
     Monitor(String, super::monitores::Campo),
+    Hora(super::hora::Cambio),
     MantenerMonitores,
     VolverMonitores,
 }
@@ -122,6 +131,12 @@ impl Que {
         match self {
             Que::Monitor(s, super::monitores::Campo::Apodo(_)) => {
                 Que::Monitor(s.clone(), super::monitores::Campo::Apodo(t.to_owned()))
+            }
+            Que::Hora(super::hora::Cambio::Fecha(_)) => {
+                Que::Hora(super::hora::Cambio::Fecha(t.to_owned()))
+            }
+            Que::Hora(super::hora::Cambio::Reloj(_)) => {
+                Que::Hora(super::hora::Cambio::Reloj(t.to_owned()))
             }
             otro => otro.clone(),
         }
@@ -418,6 +433,8 @@ pub fn pagina_fija(
                     Control::Boton(Que::Calendario),
                 ),
             ],
+            // La fecha y la hora las pone la lectura de timedated.
+            Vec::new(),
             bloqueo(&c.bloqueo),
         ],
         Categoria::Notificaciones => vec![
@@ -1363,6 +1380,15 @@ mod tests {
                     p[0].filas = super::super::monitores::filas(&[], &Default::default(), true);
                     p
                 }
+                (Some(mut p), Categoria::Shell) => {
+                    let l = super::super::hora::Lectura {
+                        zona: "UTC".into(),
+                        zonas: vec!["UTC".into()],
+                        ..Default::default()
+                    };
+                    p[1].filas = super::super::hora::filas(&l, None, chrono::Utc::now());
+                    p
+                }
                 (Some(p), _) => p,
                 (None, Categoria::Compositor) => {
                     super::super::compositor::pagina(&Default::default(), &Default::default(), &[])
@@ -1375,14 +1401,14 @@ mod tests {
                     "/home/r/Imágenes",
                 ),
                 (None, Categoria::Sonido) => sonido(&c, &[tema_prueba("ocean", 7)], "ocean", &[]),
-                (None, Categoria::Sistema) => armar(
-                    cat,
-                    vec![
-                        super::super::sistema::equipo(&[("Kernel", "7.2".into())]),
-                        super::super::sistema::snapshots(None),
-                        privacidad(0, 0),
-                    ],
-                ),
+                (None, Categoria::Sistema) => {
+                    let mut filas = vec![super::super::sistema::equipo(&[("Kernel", "7.2".into())])];
+                    if super::super::sistema::hay_snapper() {
+                        filas.push(super::super::sistema::snapshots(None));
+                    }
+                    filas.push(privacidad(0, 0));
+                    armar(cat, filas)
+                }
                 (None, _) => apariencia(&Lecturas::default(), &c),
             };
             let titulos: Vec<_> = p.iter().map(|s| s.titulo).collect();
@@ -1415,9 +1441,9 @@ mod tests {
     fn el_bloqueo_marca_lo_puesto_y_cambia_solo_lo_suyo() {
         let mut c = Config::default();
         let p = pagina_fija(Categoria::Shell, &c, &[]).unwrap();
-        assert_eq!(activas(lista(&p, 1, 0)), ["Onda"]);
-        assert_eq!(activas(lista(&p, 1, 2)), ["Los dos"]);
-        let puntos = lista(&p, 1, 0)
+        assert_eq!(activas(lista(&p, 2, 0)), ["Onda"]);
+        assert_eq!(activas(lista(&p, 2, 2)), ["Los dos"]);
+        let puntos = lista(&p, 2, 0)
             .iter()
             .find(|o| o.titulo == "Puntos")
             .unwrap();
@@ -1435,7 +1461,7 @@ mod tests {
                     que: Que::Config(cambio),
                 },
             ..
-        } = &p[1].filas[1]
+        } = &p[2].filas[1]
         else {
             panic!("la chispa no es una casilla")
         };

@@ -10,6 +10,7 @@ pub mod compositor;
 pub mod monitores;
 mod cursores;
 mod dibujo;
+mod hora;
 mod lectura;
 mod sistema;
 
@@ -83,6 +84,8 @@ type Prueba = (Vec<(String, monitores::Campo)>, glib::SourceId);
 struct Inner {
     /// Los cambios de monitor a prueba y la vuelta automática.
     prueba: RefCell<Option<Prueba>>,
+    /// La región cuyas ciudades muestra «Fecha y hora»; sin elegir, la de la zona puesta.
+    region_horaria: RefCell<Option<String>>,
     al_fondos: RefCell<Option<Rc<dyn Fn()>>>,
     al_launcher: RefCell<Option<AlLauncher>>,
     window: gtk::ApplicationWindow,
@@ -242,6 +245,7 @@ impl Menu {
             grabando: RefCell::new(None),
             grabaciones: Cell::new(0),
             prueba: RefCell::new(None),
+            region_horaria: RefCell::new(None),
         });
         let m = Menu { inner };
         m.conectar();
@@ -308,13 +312,14 @@ impl Menu {
         let (cat, seccion) = match nivel {
             NivelMenu::Raiz => (Categoria::Apariencia, None),
             NivelMenu::Fondos => (Categoria::Apariencia, Some("Fondos")),
-            NivelMenu::Clima => (Categoria::Shell, Some("General")),
+            NivelMenu::Clima => (Categoria::Shell, Some("Preferencias")),
         };
         let seccion = seccion.and_then(|n| cat.secciones().iter().position(|s| *s == n));
         if !ya_abierto {
             i.bajada.arrancar();
             i.indice_abierta.set(None);
             i.seguido.replace(None);
+            i.region_horaria.replace(None);
             i.mezclador.abrir();
             i.listas.replace(None);
             // Se muestra lo de la vez anterior y se relee todo: la búsqueda lo necesita.
@@ -725,6 +730,12 @@ impl Menu {
             | Categoria::Notificaciones => {
                 let apps = self.inner.s.notificaciones.apps();
                 let mut p = arbol::pagina_fija(cat, &c, &apps).unwrap_or_default();
+                if cat == Categoria::Shell
+                    && let Some(f) = p.get_mut(1)
+                {
+                    let region = self.inner.region_horaria.borrow().clone();
+                    f.filas = hora::filas(&hora::leer().await, region.as_deref(), chrono::Utc::now());
+                }
                 if cat == Categoria::Pantalla
                     && let Some(m) = p.first_mut()
                 {
@@ -1560,6 +1571,11 @@ impl Menu {
             Que::Hypr(clave, valor) => self.escribir_hypr(Some((clave, valor))).await,
             Que::Monitor(salida, campo) if campo.a_prueba() => self.probar_monitor(salida, campo).await,
             Que::Monitor(salida, campo) => self.guardar_monitor(&salida, &campo).await,
+            Que::Hora(hora::Cambio::Region(r)) => {
+                self.inner.region_horaria.replace(Some(r));
+                Ok(())
+            }
+            Que::Hora(c) => hora::aplicar(c).await,
             Que::MantenerMonitores => self.mantener_monitores().await,
             Que::VolverMonitores => self.volver_monitores().await,
             Que::Apariencia(c) => crate::apariencia::aplicar(c).await,

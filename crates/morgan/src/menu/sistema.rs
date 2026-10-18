@@ -177,6 +177,11 @@ pub fn equipo(datos: &[(&'static str, String)]) -> Vec<Fila> {
 pub const COLUMNAS_SNAPPER: &str = "number,date,description,pre-number";
 const SNAPSHOTS: usize = 15;
 
+pub fn hay_snapper() -> bool {
+    static HAY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *HAY.get_or_init(|| gtk::glib::find_program_in_path("snapper").is_some())
+}
+
 /// `None` si snapper no los dio: solo los lista para quien figura en `ALLOW_USERS`.
 pub fn snapshots(csv: Option<&str>) -> Vec<Fila> {
     let Some(csv) = csv else {
