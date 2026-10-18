@@ -37,6 +37,7 @@ optdepends=(
     'cliphist: launcher, portapapeles'
     'wtype: launcher, escribir símbolos'
     'libqalculate: calculadora'
+    'cava: ecualizador del reproductor en el centro de control'
     'rofimoji: launcher, datos de los símbolos'
     'libcanberra: sonidos del sistema'
     'uwsm: lanzar apps como unidades de systemd'

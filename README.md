@@ -6,14 +6,42 @@ A desktop shell for [Hyprland](https://hyprland.org), written in Rust with GTK 4
 control center, notifications, launcher, OSD, lock screen and idle, in one process that
 shares one look.
 
-<!-- video -->
+https://github.com/user-attachments/assets/2c7eb327-ed32-4eef-89ac-40cdce4034c0
+
+## Why morgan
+
+I built morgan for my own desktop, after living with the two usual ways of putting one
+together on Hyprland:
+
+- **Complete shells**, like Noctalia and DankMaterialShell. They look great and do a lot,
+  but the look and the behavior are theirs: going past the options they expose meant
+  fighting them instead of configuring them.
+- **A shell made of separate programs**: rofi or walker, swaync or mako, Waybar, SwayOSD,
+  hyprlock. Each one can be styled, but each one is a closed box. A toggle stores its own
+  state instead of asking the system, so two outputs that exclude each other can both end
+  up checked. There's no per-app audio, panels don't grow with their content or respect the
+  edge of the screen, the styling stops where each program stops, every menu is a new
+  process, and none of them knows what the others are doing.
+
+morgan is one process with one look that asks the system what's going on, and draws
+everything the way I wanted it.
+
+## Before anything: it's built for me
+
+morgan covers **my** needs, on **my** machine, and that's the bar it was built to. It is
+**not very customizable**: there are no modules to add or rearrange, the layout is fixed,
+and the look changes through the theme's colors, not through a stylesheet of yours. Some
+choices only make sense for how I use my computer. If you want a shell to shape into your
+own, Noctalia, DankMaterialShell or a modular setup will serve you better. If what you see
+here is what you want, welcome.
 
 ## What's in it
 
 - **Bar** with workspaces, tray, clock (with a calendar and weather popover) and a privacy
   indicator when the microphone or screen capture is in use.
 - **Control center**: network, Bluetooth, do not disturb, caffeine, night light, power,
-  volume per app, microphone, brightness, the media player and your notifications.
+  AI quotas, volume per app, microphone, brightness, the media player and your
+  notifications. [More below](#the-control-center).
 - **Notifications**: a full freedesktop notification server, with do-not-disturb and a
   game mode that keeps quiet while you play.
 - **Launcher**: apps, symbols and emoji, clipboard history, calculator and your keybinds.
@@ -27,6 +55,37 @@ shares one look.
   Nord, Rosé Pine, Tokyo Night…) or colors taken from your wallpaper, applied to morgan and,
   if you choose, to Hyprland, GTK, kitty, btop and more.
 - **English and Spanish**, following your locale.
+
+## The control center
+
+The heart of morgan. `Super+N` opens it in the top-right corner. It grows with what it
+holds, never past the edge of the screen, and scrolls inside when it has to.
+
+- **Cards**, in two columns, each with its state in words ("Wired", "2 connected"):
+  - **Network**: wired and Wi-Fi, with the saved connections; picking a Wi-Fi with the radio
+    off turns the radio on first.
+  - **Bluetooth**: the adapter and the paired devices, each connected or disconnected on
+    its own.
+  - **Do not disturb**, **Caffeine** (the screen stays on) and **Night light**.
+  - **Power**: power-saver, balanced or performance.
+  - **AI quotas**: what's left of the Claude Code, Codex and Gemini (Antigravity) limits.
+  - **Session**: how long the machine has been on, and lock, suspend, log out, reboot and
+    power off. The last three ask first, and a double click can't confirm by accident.
+- **What's checked is what the system says**, never what was clicked. If something changes
+  elsewhere, the card follows.
+- **Levels**: the output (click its name to switch outputs), **every app that's playing
+  with its own volume**, mute and output, the microphone, and brightness (laptop backlight,
+  or external monitors over DDC/CI). Turning the volume with the panel open doesn't pop up
+  the OSD: the slider already shows it.
+- **The media player**: title (scrolling when it doesn't fit), controls, shuffle and repeat
+  when the player has them, and an equalizer drawn behind it while music plays.
+- **Notifications**: grouped by app, critical ones first, groups stacked until you open
+  them. Tap one to see its actions, swipe right to dismiss it, swipe left to copy its text.
+  While the center is open, nothing pops up on top.
+- **All of it by keyboard**: Tab and the arrows move, the arrows change a slider, Enter
+  opens a list or runs an action, Delete closes a notification, Escape closes the center.
+- **Free while closed**: it only listens to audio, network, Bluetooth, power and the
+  player while it's open.
 
 ## Requirements
 
@@ -66,6 +125,7 @@ list is also a good set of tools to start from.
 | GPU Screen Recorder (`gpu-screen-recorder-ui`) | Screen recording: the bar shows the time and stops it with a click. Other recorders don't get that counter |
 | `cliphist` (with `wl-clipboard`) | Clipboard history in the launcher |
 | `libqalculate` | The calculator |
+| `cava` | The equalizer behind the media player in the control center |
 | `wtype` and `rofimoji` | Typing symbols and emoji from the launcher, and their names |
 | `libcanberra` and a sound theme | System sounds |
 | Papirus icons and `papirus-folders` | Folder colors that follow the theme |
