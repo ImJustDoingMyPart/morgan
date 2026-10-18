@@ -1020,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "morgan"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-channel",
  "bitflags",
@@ -1053,14 +1053,14 @@ dependencies = [
 
 [[package]]
 name = "morgan-idioma"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "toml",
 ]
 
 [[package]]
 name = "morgan-ipc"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1068,7 +1068,7 @@ dependencies = [
 
 [[package]]
 name = "morgan-lock"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-channel",
  "futures-lite",
@@ -1082,7 +1082,7 @@ dependencies = [
 
 [[package]]
 name = "morgan-temas"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "libc",
  "serde",
@@ -1092,7 +1092,7 @@ dependencies = [
 
 [[package]]
 name = "morganctl"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "morgan-ipc",
  "morgan-temas",
