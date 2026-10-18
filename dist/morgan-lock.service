@@ -1,0 +1,17 @@
+# Unidad de systemd --user de morgan-lock. La arranca morgan (StartUnit) al recibir la señal
+# Lock de la sesión: así el bloqueo no es hijo de morgan y no se cae con su cgroup.
+# Arrancarla con el bloqueo ya activo no hace nada: dos bloqueos no se apilan.
+# La instala install.sh o el paquete, con el servicio PAM (dist/pam.d/morgan-lock).
+[Unit]
+Description=morgan-lock (pantalla de bloqueo)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/morgan-lock
+# Solo si se cae por una señal (un crash): un código de salida es un error que no se arregla
+# relanzando (sin servicio PAM, otro bloqueo activo). Relanzado, toma la sesión bloqueada si
+# Hyprland tiene misc:allow_session_lock_restore; si no, sale con error.
+Restart=on-abnormal
+RestartSec=0

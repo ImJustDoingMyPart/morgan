@@ -1,0 +1,123 @@
+/**
+ * @name morgan
+ * @description Los colores del tema activo de morgan sobre el aspecto de siempre de Discord.
+ * @author morgan
+ * @version 1.0.0
+ */
+
+/*
+ * Plantilla del motor de temas de morgan -> ~/.local/state/morgan/tema/vesktop.css
+ * morgan la enlaza a ~/.config/vesktop/themes/theme.css. En Vesktop: Ajustes > Temas, tildar
+ * "theme.css" y que sea el único; un tema online o el QuickCSS se cargan encima.
+ *
+ * Solo color: las variables de Discord, por rol, con la escala de fondos del tema (el más
+ * oscuro afuera, el más claro en el chat), como la oscura de siempre. Nada de fuentes,
+ * radios, tamaños ni reglas sobre clases: Discord se ve como siempre, con otros colores.
+ * Los nombres de las variables son los vigentes según Midnight (refact0r/midnight-discord,
+ * MIT), que los sigue con cada versión de Discord; ver CREDITOS.md.
+ *
+ * Sin placeholders en los comentarios, que el motor no los distingue.
+ */
+
+/* El perfil de un usuario con colores propios los mantiene. */
+body,
+.theme-dark:not(.custom-user-profile-theme),
+.theme-light:not(.custom-user-profile-theme) {
+  --m-primary: {{colors.primary.default.hex}};
+  --m-on-primary: {{colors.on_primary.default.hex}};
+  --m-tertiary: {{colors.tertiary.default.hex}};
+  --m-error: {{colors.error.default.hex}};
+  --m-on-surface: {{colors.on_surface.default.hex}};
+  --m-on-surface-variant: {{colors.on_surface_variant.default.hex}};
+  --m-outline: {{colors.outline.default.hex}};
+  --m-outline-variant: {{colors.outline_variant.default.hex}};
+  --m-lowest: {{colors.surface_container_lowest.default.hex}};
+  --m-low: {{colors.surface_container_low.default.hex}};
+  --m-surface: {{colors.surface.default.hex}};
+  --m-container: {{colors.surface_container.default.hex}};
+  --m-high: {{colors.surface_container_high.default.hex}};
+  --m-highest: {{colors.surface_container_highest.default.hex}};
+
+  /* Fondos: servidores, canales, chat; lo que flota, un escalón más claro. */
+  --app-frame-background: var(--m-lowest);
+  --background-base-lowest: var(--m-lowest);
+  --background-base-lower: var(--m-low);
+  --background-base-low: var(--m-surface);
+  --background-surface-high: var(--m-container);
+  --background-surface-higher: var(--m-high);
+  --background-surface-highest: var(--m-highest);
+  --chat-background-default: var(--m-surface);
+  --home-background: var(--m-surface);
+  --modal-background: var(--m-container);
+  --modal-footer-background: var(--m-low);
+  --card-background-default: var(--m-container);
+  --background-code: var(--m-low);
+  --background-scrim: color-mix(in srgb, var(--m-lowest) 70%, transparent);
+
+  /* Puntero y selección: un tinte del texto o del acento, como en Discord. */
+  --background-mod-subtle: color-mix(in srgb, var(--m-on-surface) 6%, transparent);
+  --background-mod-normal: color-mix(in srgb, var(--m-on-surface) 10%, transparent);
+  --background-mod-strong: color-mix(in srgb, var(--m-on-surface) 14%, transparent);
+  --interactive-background-hover: color-mix(in srgb, var(--m-on-surface) 6%, transparent);
+  --interactive-background-active: color-mix(in srgb, var(--m-on-surface) 10%, transparent);
+  --interactive-background-selected: color-mix(in srgb, var(--m-primary) 16%, transparent);
+  --message-background-hover: color-mix(in srgb, var(--m-on-surface) 3%, transparent);
+
+  --border-subtle: var(--m-outline-variant);
+  --border-normal: var(--m-outline-variant);
+  --border-strong: var(--m-outline);
+  --border-focus: var(--m-primary);
+
+  /* Texto e íconos: on_surface lo que se lee, on_surface_variant lo secundario, outline lo
+   * apagado; el acento en enlaces y marca. */
+  --text-strong: var(--m-on-surface);
+  --text-default: var(--m-on-surface);
+  --text-subtle: var(--m-on-surface-variant);
+  --text-muted: var(--m-outline);
+  --text-link: var(--m-primary);
+  --text-brand: var(--m-primary);
+  --text-feedback-critical: var(--m-error);
+  --channels-default: var(--m-on-surface-variant);
+  --interactive-text-default: var(--m-on-surface-variant);
+  --interactive-text-hover: var(--m-on-surface);
+  --interactive-text-active: var(--m-on-surface);
+  --icon-default: var(--m-on-surface-variant);
+  --icon-subtle: var(--m-outline);
+  --icon-strong: var(--m-on-surface);
+  --icon-muted: var(--m-outline);
+  --icon-link: var(--m-primary);
+  --icon-feedback-critical: var(--m-error);
+
+  --channeltextarea-background: var(--m-container);
+  --input-background-default: var(--m-low);
+  --input-border-default: var(--m-outline-variant);
+  --input-text-default: var(--m-on-surface);
+  --input-placeholder-text-default: var(--m-outline);
+
+  /* Botones: el de acción, el acento; los neutros, un fondo más. */
+  --control-brand-foreground: var(--m-primary);
+  --background-brand: var(--m-primary);
+  --control-primary-background-default: var(--m-primary);
+  --control-primary-background-hover: color-mix(in srgb, var(--m-primary) 88%, var(--m-on-surface));
+  --control-primary-background-active: color-mix(in srgb, var(--m-primary) 76%, var(--m-on-surface));
+  --control-primary-text-default: var(--m-on-primary);
+  --control-primary-text-hover: var(--m-on-primary);
+  --control-primary-text-active: var(--m-on-primary);
+  --control-primary-icon-default: var(--m-on-primary);
+  --control-primary-icon-hover: var(--m-on-primary);
+  --control-primary-icon-active: var(--m-on-primary);
+  --control-secondary-background-default: var(--m-high);
+  --control-secondary-background-hover: var(--m-highest);
+  --control-secondary-background-active: var(--m-highest);
+  --control-secondary-text-default: var(--m-on-surface);
+  --control-secondary-text-hover: var(--m-on-surface);
+  --control-secondary-text-active: var(--m-on-surface);
+
+  /* Menciones: el acento en vez del amarillo. */
+  --mention-foreground: var(--m-primary);
+  --mention-background: color-mix(in srgb, var(--m-primary) 12%, transparent);
+
+  --scrollbar-thin-thumb: var(--m-outline-variant);
+  --scrollbar-auto-thumb: var(--m-outline-variant);
+  --scrollbar-auto-track: transparent;
+}

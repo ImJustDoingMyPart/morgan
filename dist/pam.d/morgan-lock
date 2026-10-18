@@ -1,0 +1,4 @@
+#%PAM-1.0
+# Servicio PAM de morgan-lock: la pila de login, con faillock. morgan-lock solo usa la pila
+# auth. Sin este archivo no bloquea.
+auth        include     login

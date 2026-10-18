@@ -1,0 +1,26 @@
+/* Plantilla del motor de temas de morgan -> ~/.local/state/morgan/tema/morgan.css
+ *
+ * La mitad de color del tema de morgan; la estructura vive en la hoja
+ * del programa, que pide colores por ROL, nunca por valor. Los nombres son los de los roles
+ * de Material de matugen, tal cual: la configuracion de morgan elige rol por elemento, y un
+ * nombre propio seria una traduccion de mas. morgan vigila el symlink
+ * ~/.config/morgan/theme.css y su destino: no hace falta avisarle en `morganctl theme reload`.
+ *
+ * Seis roles para superficies, acento y texto (los del centro, los toasts y el OSD), más
+ * on_surface_variant, el texto secundario del launcher, y surface y surface_container: el
+ * fondo y el tooltip de la barra (los de bar.css).
+ * Se agregan roles cuando la hoja de morgan los necesite.
+ *
+ * Sin placeholders dentro de comentarios: el motor de matugen no los distingue y un
+ * ejemplo comentado rompe el archivo entero.
+ */
+
+@define-color surface_container_low {{colors.surface_container_low.default.hex}};
+@define-color primary {{colors.primary.default.hex}};
+@define-color tertiary {{colors.tertiary.default.hex}};
+@define-color on_surface {{colors.on_surface.default.hex}};
+@define-color on_surface_variant {{colors.on_surface_variant.default.hex}};
+@define-color outline_variant {{colors.outline_variant.default.hex}};
+@define-color error {{colors.error.default.hex}};
+@define-color surface {{colors.surface.default.hex}};
+@define-color surface_container {{colors.surface_container.default.hex}};

@@ -1,0 +1,30 @@
+# morgan: el tema propio. Oscuro y frío, con el anillo de azul a orquídea. Es también el
+# que usa morgan mismo (embebido) mientras no se eligió ningún tema.
+#
+# Vocabulario y reglas: crates/morgan-temas/src/paleta.rs. Los fondos, del más oscuro al
+# más claro.
+
+fondo0 = "#0f1115"
+fondo1 = "#14171c"
+fondo  = "#181b21"
+fondo2 = "#1f232a"
+fondo3 = "#272c34"
+fondo4 = "#333942"
+
+texto   = "#dfe3ea"
+texto2  = ["#dfe3ea", "#6b7480", 0.7]
+apagado = "#6b7480"
+
+primario   = "#8fb8ff"
+secundario = "#a9c4d9"
+terciario  = "#e0a3ff"
+
+rojo     = "#ef6f6c"
+amarillo = "#e8c27a"
+verde    = "#8ccf9a"
+
+# Negro, rojo, verde, amarillo, azul, magenta, cian, blanco; después, los brillantes.
+terminal = [
+  "#272c34", "#ef6f6c", "#8ccf9a", "#e8c27a", "#8fb8ff", "#e0a3ff", "#7fd4d4", "#c8ced8",
+  "#4a515c", "#ff8a87", "#a6e3b2", "#f5d595", "#aecbff", "#ecbdff", "#9de6e6", "#f2f4f8",
+]

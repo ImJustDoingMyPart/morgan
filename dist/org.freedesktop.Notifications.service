@@ -1,0 +1,9 @@
+# Activación por D-Bus del servidor de notificaciones: va en
+# ~/.local/share/dbus-1/services/ (install.sh), que se busca antes que /usr/share. Sin esto,
+# la primera notificación que llegue antes que morgan activa el servidor de otro paquete que
+# esté instalado (mako, dunst…: cada uno trae su archivo con este mismo Name), y ése se queda
+# con el nombre.
+[D-BUS Service]
+Name=org.freedesktop.Notifications
+Exec=/bin/false
+SystemdService=morgan.service

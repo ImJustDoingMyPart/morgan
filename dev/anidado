@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# Hyprland anidado para probar morgan sin tocar la sesión real.
+#
+#   dev/anidado arrancar          levanta el anidado con bus de sesión propio
+#   dev/anidado ejecutar CMD...   corre CMD adentro (hereda su WAYLAND_DISPLAY y su bus)
+#   dev/anidado morgan            (re)arranca adentro el morgan de target/debug, con
+#                                 comandos de mentira para lo que toca la sesión real
+#   dev/anidado parar NOMBRE      termina los procesos NOMBRE del anidado (no los de afuera)
+#   dev/anidado captura NOMBRE    grim de la salida virtual del anidado
+#   dev/anidado hyprctl ARGS...   hyprctl contra el anidado
+#   dev/anidado cerrar            sale con el dispatcher exit (nunca con señales)
+#
+# El anidado dibuja en una salida virtual (headless, `MORGAN`, del tamaño del monitor real)
+# y la de su ventana se apaga: la ventana no hace falta a la vista (una regla de la sesión
+# de afuera puede mandarla a un workspace especial escondido). La salida virtual se dibuja con
+# su propio temporizador, así que grim funciona igual.
+#
+# El estado (firma de la instancia, logs) vive en $XDG_RUNTIME_DIR/morgan-dev.
+set -euo pipefail
+
+raiz=$(cd "$(dirname "$0")/.." && pwd)
+estado="${XDG_RUNTIME_DIR:?}/morgan-dev"
+firma_archivo="$estado/firma"
+
+firma() {
+    [[ -s $firma_archivo ]] || { echo "anidado: no está corriendo" >&2; exit 1; }
+    cat "$firma_archivo"
+}
+
+hc() { hyprctl -i "$(firma)" "$@"; }
+
+# Nunca `pkill` por nombre: matchea en toda la máquina y se lleva puesto el de la sesión
+# real. Se elige por el WAYLAND_DISPLAY del anidado.
+parar() {
+    local display pid
+    display=$(cat "$estado/display")
+    for pid in $(pgrep -x "$1" || true); do
+        if tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null | grep -qx "WAYLAND_DISPLAY=$display"; then
+            kill "$pid"
+            while kill -0 "$pid" 2>/dev/null; do sleep 0.05; done
+        fi
+    done
+}
+
+case "${1:-}" in
+arrancar)
+    mkdir -p "$estado"
+    if [[ -s $firma_archivo ]] && hyprctl -i "$(cat "$firma_archivo")" version >/dev/null 2>&1; then
+        echo "anidado: ya está corriendo ($(cat "$firma_archivo"))" >&2; exit 1
+    fi
+    antes=$(hyprctl instances -j | jq -r '.[].instance' | sort)
+    # Las de la vez anterior apagarían la única salida antes de que exista la virtual.
+    rm -f "$estado/monitores.lua"
+    # GTK_A11Y=none: en el bus privado no hay registro de accesibilidad y GTK lo reporta como
+    # CRITICAL en cada arranque.
+    GTK_A11Y=none setsid dbus-run-session -- Hyprland -c "$raiz/dev/hyprland.lua" \
+        >"$estado/hyprland.log" 2>&1 </dev/null &
+    for _ in $(seq 50); do
+        sleep 0.1
+        nueva=$(comm -13 <(echo "$antes") <(hyprctl instances -j | jq -r '.[].instance' | sort) | head -1)
+        if [[ -n $nueva ]] && hyprctl -i "$nueva" version >/dev/null 2>&1; then
+            echo "$nueva" >"$firma_archivo"
+            hyprctl instances -j | jq -r --arg i "$nueva" '.[] | select(.instance == $i) | .wl_socket' \
+                >"$estado/display"
+            # La salida virtual, con el modo del monitor enfocado de afuera; después se apaga
+            # la de la ventana (el workspace pasa solo a la que queda).
+            modo=$(hyprctl -j monitors | jq -r '[.[] | select(.focused)][0] | "\(.width)x\(.height)"')
+            ventana=$(hyprctl -i "$nueva" -j monitors | jq -r '.[0].name')
+            # Las reglas quedan en monitores.lua, que dev/hyprland.lua vuelve a cargar: una
+            # recarga (la de morgan al reescribir su morgan.lua) no las pierde.
+            hyprctl -i "$nueva" output create headless MORGAN >/dev/null
+            printf 'hl.monitor({ output = "MORGAN", mode = "%s", position = "0x0", scale = 1 })\nhl.monitor({ output = "%s", disabled = true })\n' \
+                "$modo" "$ventana" >"$estado/monitores.lua"
+            hyprctl -i "$nueva" eval "dofile('$estado/monitores.lua')" >/dev/null
+            # El aviso de "started without start-hyprland" taparía la esquina de las capturas.
+            sleep 0.3
+            hyprctl -i "$nueva" dismissnotify >/dev/null
+            echo "anidado: $nueva (MORGAN, $modo)"
+            exit 0
+        fi
+    done
+    echo "anidado: no arrancó; ver $estado/hyprland.log" >&2; exit 1
+    ;;
+ejecutar)
+    shift
+    cmd=$(printf '%q ' "$@")
+    hc eval "hl.exec_cmd([[$cmd >>'$estado/ejecutar.log' 2>&1]])" >/dev/null
+    ;;
+captura)
+    # De la salida virtual: se dibuja aunque la ventana anidada esté escondida. El timeout
+    # queda por si la salida no existe. El archivo queda en $estado (el /tmp de quien llama
+    # puede no ser el de los procesos del anidado).
+    salida=MORGAN
+    archivo="$estado/${2:?falta el nombre}"
+    # Uno viejo con el mismo nombre haría creer que grim ya terminó.
+    rm -f "$archivo"
+    # grim escribe a un temporal y se renombra al terminar: sin eso, el archivo deja de estar
+    # vacío antes de estar completo y quien lo lea se lleva un PNG cortado.
+    hc eval "hl.exec_cmd([[timeout 5 grim -o $salida '$archivo.part' && mv '$archivo.part' '$archivo']])" >/dev/null
+    for _ in $(seq 60); do [[ -s $archivo ]] && { echo "$archivo"; exit 0; }; sleep 0.1; done
+    echo "anidado: grim no terminó; ¿existe la salida MORGAN? (hyprctl monitors)" >&2; exit 1
+    ;;
+parar)
+    parar "${2:?falta el nombre}"
+    ;;
+morgan)
+    parar morgan
+    display=$(cat "$estado/display")
+    # Lo que morgan lanza y actúa sobre la sesión real (apagar, suspender, la unidad de la
+    # luz nocturna, el brillo por DDC, el fondo, las apps con uwsm, lo que el launcher escribe
+    # con wtype) se reemplaza por comandos de mentira que solo anotan en comandos.log: un
+    # click de prueba en "Apagar" apagaría la máquina.
+    falsos="$estado/falsos"
+    mkdir -p "$falsos"
+    # `systemctl --user is-active` contesta "inactiva": la luz nocturna del anidado arranca
+    # apagada y nunca cree que la unidad real es suya.
+    for c in systemctl systemd-run awww uwsm loginctl ddcutil \
+        wtype canberra-gtk-play cliphist; do
+        printf '#!/bin/sh\necho "%s $*" >>"%s/comandos.log"\n[ "$1" = status ] && echo off\n[ "$2" = is-active ] && exit 3\nexit 0\n' \
+            "$c" "$estado" >"$falsos/$c"
+        chmod +x "$falsos/$c"
+    done
+    # Un tema del menú se aplica con `morganctl theme`, que escribe en las apps de verdad (el
+    # ~/.config del anidado son symlinks al real). Sin matugen falla antes de tocar nada.
+    printf '#!/bin/sh\necho "matugen $*" >>"%s/comandos.log"\nexit 1\n' "$estado" >"$falsos/matugen"
+    chmod +x "$falsos/matugen"
+    # GDK_DEBUG=no-portals: el portal del bus del anidado arranca con el WAYLAND_DISPLAY de
+    # afuera, y el selector de «Examinar…» se abría en la sesión real. Sin portal, GTK usa
+    # su diálogo propio, en el anidado.
+    # Configuración propia: el menú escribe config.toml. El resto de ~/.config se ve igual
+    # (symlinks), y theme.css es el real, para que el tema siga en vivo.
+    conf="$estado/config"
+    if [[ ! -d $conf ]]; then
+        mkdir -p "$conf/morgan"
+        for e in "$HOME"/.config/* "$HOME"/.config/.[!.]*; do
+            [[ -e $e && $(basename "$e") != morgan ]] && ln -s "$e" "$conf/"
+        done
+        ln -s "$HOME/.config/morgan/theme.css" "$conf/morgan/theme.css"
+    fi
+    # Las notas, las reales (morgan solo las lee).
+    [[ -e $conf/morgan/notas || ! -d $HOME/.config/morgan/notas ]] ||
+        ln -s "$HOME/.config/morgan/notas" "$conf/morgan/notas"
+    # Estado propio: el historial de notificaciones del anidado no pisa el real.
+    # MORGAN_SIN_LOGIND: el bus del sistema del anidado es el real; sin esto, un tiempo de
+    # idle bloquearía la sesión de verdad. Bloquear lanza el morgan-lock de target/debug.
+    # GSETTINGS_BACKEND=memory: el tema de sonidos que se elija no llega al dconf real.
+    hc eval "hl.exec_cmd([[env PATH='$falsos:$raiz/target/debug:$PATH' MORGAN_SIN_LOGIND=1 MORGAN_APARIENCIA_SECO=1 GDK_DEBUG=no-portals ${MORGAN_TRAZA:+MORGAN_TRAZA=1} ${MORGAN_IDIOMA:+MORGAN_IDIOMA=$MORGAN_IDIOMA} GSETTINGS_BACKEND=memory MORGAN_HYPR_CFG='$estado/hypr-morgan.lua' XDG_STATE_HOME='$estado/state' XDG_CONFIG_HOME='$conf' $raiz/target/debug/morgan >>'$estado/morgan.log' 2>&1]])" >/dev/null
+    for _ in $(seq 50); do
+        sleep 0.1
+        WAYLAND_DISPLAY=$display "$raiz/target/debug/morganctl" ping >/dev/null 2>&1 && exit 0
+    done
+    echo "anidado: morgan no contesta; ver $estado/morgan.log" >&2; exit 1
+    ;;
+hyprctl)
+    shift; hc "$@"
+    ;;
+cerrar)
+    f=$(firma)
+    hc eval 'hl.dispatch(hl.dsp.exit())' >/dev/null || true
+    # morgan muere con su compositor sin salida limpia: su socket queda.
+    [[ -s $estado/display ]] && rm -f "$XDG_RUNTIME_DIR/morgan-$(cat "$estado/display").sock"
+    # Hyprland deja su carpeta de instancia (log y .socket2.sock) al salir. Se borra solo la
+    # del anidado, y solo cuando ya no figura entre las instancias vivas.
+    for _ in $(seq 50); do
+        hyprctl instances -j | jq -e --arg i "$f" 'any(.[]; .instance == $i)' >/dev/null || break
+        sleep 0.1
+    done
+    hyprctl instances -j | jq -e --arg i "$f" 'any(.[]; .instance == $i)' >/dev/null \
+        || rm -rf "${XDG_RUNTIME_DIR:?}/hypr/${f:?}"
+    rm -rf "$estado"
+    ;;
+*)
+    sed -n '2,10p' "$0" >&2; exit 2
+    ;;
+esac

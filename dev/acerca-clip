@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Arma el clip de `morgan about` a partir del video original.
+#
+#   dev/acerca-clip VIDEO [INICIO] [DURACIÓN]
+#
+# Escribe `crates/morgan/src/acerca/cuadros.bin` y `sonido.ogg`, que van en el binario. El
+# video original no está en el repo; estos dos archivos sí.
+set -euo pipefail
+
+raiz=$(cd "$(dirname "$0")/.." && pwd)
+video=${1:?uso: dev/acerca-clip VIDEO [INICIO] [DURACIÓN]}
+inicio=${2:-20}
+duracion=${3:-10}
+lado=108   # píxeles del arte: 108 columnas × 54 filas de terminal con medio bloque
+fps=24
+destino="$raiz/crates/morgan/src/acerca"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# Cuadrado desde 80 px bajo el borde de arriba (Morgan queda adentro en el tramo 20–30 s),
+# achicado por área y con una paleta de 24 colores para todo el clip, tramado ordenado.
+ffmpeg -v error -y -ss "$inicio" -t "$duracion" -i "$video" -filter_complex \
+    "[0:v]fps=$fps,crop=1080:1080:0:80,scale=$lado:$lado:flags=area,split[a][b];[a]palettegen=max_colors=24:stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=3[v]" \
+    -map "[v]" -f rawvideo -pix_fmt rgb24 "$tmp/cuadros.rgb"
+python3 -I "$raiz/dev/acerca-cuadros.py" "$lado" "$lado" "$fps" "$tmp/cuadros.rgb" "$destino/cuadros.bin"
+
+# Solo Morgan: los tramos con voz humana (segundos del clip, para el tramo 20–30; los
+# encontró un análisis de tono cada 20 ms, voz en 90–230 Hz, y su oído los bordes) se
+# reemplazan por ambiente, con 30 ms de fundido en cada borde.
+voz=(0.18-0.96 1.90-2.60 3.33-3.60 3.83-3.92 4.06-7.67 8.56-9.22)
+g=0
+for w in "${voz[@]}"; do
+    g="max($g,clip((t-${w%-*})/0.03,0,1)*clip((${w#*-}-t)/0.03,0,1))"
+done
+python3 -I "$raiz/dev/acerca-ambiente.py" "$video" "$inicio" "$duracion" "$tmp/ambiente.wav"
+
+# Bajo a propósito (−43 LUFS, picos a −25 dB): que un ladrido no asuste. El compresor achata
+# los ladridos; entra en 0,4 s y se apaga en el último segundo. El ambiente va a 0,75: así
+# queda al nivel del ambiente real.
+ffmpeg -v error -y -ss "$inicio" -t "$duracion" -i "$video" -i "$tmp/ambiente.wav" -vn -filter_complex \
+    "[0:a]asetpts=PTS-STARTPTS,aresample=48000,volume='1-($g)':eval=frame[o];[1:a]volume='0.75*($g)':eval=frame[a];[o][a]amix=inputs=2:normalize=0,acompressor=threshold=-30dB:ratio=8:attack=3:release=200,loudnorm=I=-28:TP=-9:LRA=5,volume=-16dB,afade=t=in:d=0.4,afade=t=out:st=$((duracion - 1)):d=1" \
+    -ar 48000 -c:a libopus -b:a 64k "$destino/sonido.ogg"
+ls -l "$destino"/cuadros.bin "$destino"/sonido.ogg

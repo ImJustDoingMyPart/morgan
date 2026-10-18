@@ -1,0 +1,1900 @@
+/* Agnóstica de color: los colores son roles de matugen que define theme.css, y morgan_fondo
+ * lo arma tema.rs con la opacidad de la configuración. Ningún hex acá. */
+
+window.morgan {
+    background: transparent;
+}
+
+/* El blur de Hyprland detrás de las tarjetas lo pide morgan. Desde GTK 4.24, toda superficie
+ * GTK se anota en ext-background-effect, y Hyprland 0.56 entonces blurea solo la región que
+ * declara la app e ignora la regla `blur` de la capa (con la región vacía, nada). GTK declara
+ * la región donde hay un `backdrop-filter: blur` de 20px o más; el radio no importa más allá
+ * de eso: el desenfoque es el de `decoration:blur` de Hyprland. */
+.osd,
+.floating-notifications .notification-row .notification-background .notification,
+.control-center,
+.launcher,
+window.barra,
+.fondos .banda,
+.ventanas {
+    backdrop-filter: blur(20px);
+}
+
+/* ─── OSD ───
+ * El borde es un anillo de box-shadow, que GTK4 dibuja por fuera del contorno, y el margin
+ * de 6px es el lugar del glow (1 de offset + 1 de spread + 4 de blur). GTK4 apila la ÚLTIMA
+ * sombra arriba: la lista va de abajo hacia arriba (glow, mezcla, tertiary, primary). */
+.osd {
+    margin: 6px;
+    padding: 12px;
+    border-radius: 4px;
+    background-color: @morgan_fondo;
+    box-shadow:
+        -1px -1px 4px 1px alpha(@primary, 0.5),
+        1px 1px 4px 1px alpha(@tertiary, 0.5),
+        0 0 0 2px mix(@primary, @tertiary, 0.5),
+        1px 1px 0 1px @tertiary,
+        -1px -1px 0 1px @primary;
+}
+
+.osd label,
+.notas-boton label {
+    color: @on_surface;
+    font-family: "JetBrainsMono Nerd Font", monospace;
+}
+
+/* .notas-boton va encima de la tarjeta de notas y no adentro: las mismas reglas, con su
+ * clase. */
+.osd .icono,
+.icono.notas-boton {
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.08);
+}
+
+.osd .icono image,
+.osd .icono .glifo,
+.icono.notas-boton .glifo {
+    color: @on_surface;
+}
+
+.osd .icono .glifo,
+.icono.notas-boton .glifo {
+    font-size: 18px;
+}
+
+.osd.encendido .icono,
+.icono.notas-boton {
+    background-image: linear-gradient(135deg, @primary, @tertiary);
+    box-shadow: 0 0 6px 0 alpha(@tertiary, 0.3);
+}
+
+.osd.encendido .icono image,
+.osd.encendido .icono .glifo,
+.icono.notas-boton .glifo {
+    color: @surface;
+}
+
+.osd .titulo {
+    font-size: 14px;
+}
+
+.osd .estado {
+    font-size: 12px;
+    opacity: 0.5;
+}
+
+.osd.encendido .estado {
+    color: @tertiary;
+    opacity: 0.9;
+}
+
+.osd .porcentaje {
+    font-size: 12px;
+    color: @tertiary;
+}
+
+.osd.mudo .porcentaje {
+    color: @error;
+}
+
+/* La barra conserva las puntas redondas: con 6px de alto, el radio de la tarjeta la haría
+ * ver como un rectángulo mal cortado. */
+.osd progressbar,
+.osd progressbar trough,
+.osd progressbar progress,
+.cc-cuota progressbar,
+.cc-cuota progressbar trough,
+.cc-cuota progressbar progress {
+    min-width: 0;
+    min-height: 6px;
+    border-radius: 999px;
+    border: none;
+}
+
+.osd progressbar {
+    background: none;
+    margin-top: 4px;
+}
+
+.osd progressbar trough,
+.cc-cuota progressbar trough {
+    background: alpha(@outline_variant, 0.6);
+}
+
+/* Sin animación: el OSD vive un segundo y su aparición ya es el movimiento. */
+.osd progressbar progress,
+.cc-cuota progressbar progress {
+    background-image: linear-gradient(to right, @primary, @tertiary);
+    box-shadow: 0 0 4px 0 alpha(@tertiary, 0.35);
+    /* Sin borde, el margin: 0 -1px del tema por defecto lo dejaría en -2 px de ancho. */
+    margin: 0;
+}
+
+.osd progressbar:disabled,
+.cc-cuota progressbar:disabled {
+    opacity: 0.5;
+}
+
+/* ─── Notificaciones ─── */
+.notification-row,
+.notification-row * {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+}
+
+.notification-row {
+    background: none;
+    outline: none;
+}
+
+.notification-row .notification-background {
+    padding: 6px 12px;
+}
+
+.notification-row .notification-background .notification {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 4px;
+    transition: background-color 100ms ease, transform 100ms ease;
+}
+
+.notification-row .notification-background .notification .notification-default-action {
+    padding: 4px;
+    margin: 0;
+    background: transparent;
+    color: @on_surface;
+    border: none;
+    border-radius: 4px;
+}
+
+.notification-row .notification-background .notification .notification-content {
+    background: transparent;
+    padding: 0;
+}
+
+.notification-row .notification-background .notification .image {
+    -gtk-icon-size: 40px;
+    border-radius: 4px;
+    margin: 4px;
+}
+
+.notification-row .notification-background .notification .app-icon {
+    -gtk-icon-size: 16px;
+    -gtk-icon-shadow: 0 1px 4px black;
+    margin: 6px;
+}
+
+.notification-row .notification-background .notification .summary {
+    font-size: 14px;
+    font-weight: normal;
+    color: @on_surface;
+}
+
+.notification-row .notification-background .notification .body {
+    font-size: 12px;
+    font-weight: normal;
+    color: @on_surface;
+    opacity: 0.5;
+}
+
+.notification-row .notification-background .notification .time {
+    font-size: 12px;
+    font-weight: normal;
+    color: @on_surface;
+    opacity: 0.35;
+    text-transform: lowercase;
+}
+
+.notification-row .notification-background .notification progressbar {
+    margin-top: 4px;
+}
+
+.notification-row .notification-background .notification progressbar trough {
+    background: @outline_variant;
+    border: none;
+}
+
+.notification-row .notification-background .notification progressbar progress {
+    background: @primary;
+    border: none;
+    margin: 0;
+}
+
+.notification-row .notification-background .notification.low .summary {
+    opacity: 0.6;
+}
+
+.notification-row .notification-background .notification.critical .summary {
+    color: @error;
+    font-weight: bold;
+}
+
+/* ─── Notas ─── */
+.osd.notas {
+    padding: 10px;
+}
+
+.osd.notas > box + box {
+    margin-top: 8px;
+}
+
+.notas-cabecera {
+    margin: 0 2px 2px 0;
+}
+
+.icono.notas-boton {
+    transition: box-shadow 100ms ease, transform 150ms ease;
+}
+
+.icono.notas-boton:hover {
+    box-shadow: 0 0 10px 1px alpha(@tertiary, 0.6);
+}
+
+.icono.notas-boton:active {
+    transform: scale(0.9);
+    transition: none;
+}
+
+.notas-seccion {
+    padding: 8px 10px;
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.04);
+}
+
+.osd.notas .notas-titulo {
+    font-size: 12px;
+    font-weight: bold;
+    color: @tertiary;
+}
+
+.osd.notas .notas-grupo {
+    margin-top: 4px;
+    font-size: 11px;
+    color: @on_surface_variant;
+}
+
+.osd.notas .tecla {
+    padding: 0 5px;
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.06);
+    font-size: 12px;
+    color: @tertiary;
+}
+
+.osd.notas .tecla.esconder {
+    color: @on_surface_variant;
+}
+
+.osd.notas .dice {
+    font-size: 12px;
+}
+
+/* El aire de la izquierda deja la tarjeta en el mismo lugar que en el centro. */
+window.floating-notifications {
+    background: transparent;
+}
+
+.floating-notifications .notification-row .notification-background {
+    padding-left: 16px;
+}
+
+.floating-notifications .notification-row .notification-background .notification {
+    background: @morgan_fondo;
+    box-shadow:
+        -1px -1px 4px 1px alpha(@primary, 0.5),
+        1px 1px 4px 1px alpha(@tertiary, 0.5),
+        0 0 0 2px mix(@primary, @tertiary, 0.5),
+        1px 1px 0 1px @tertiary,
+        -1px -1px 0 1px @primary;
+}
+
+.floating-notifications .notification-row .notification-background .notification .image.icono {
+    -gtk-icon-size: 24px;
+    min-width: 36px;
+    min-height: 36px;
+    margin: 0 10px 0 0;
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.08);
+}
+
+/* En fila, cada opción mide lo que su texto, el aire que sobra se reparte y el glifo no lleva
+ * la columna de 36 px. */
+/* En columna, a ras de la acción por defecto: con los 4 px de cada opción, el texto (o el
+ * glifo, en su columna) arranca donde el título. */
+.floating-notifications .notification .cc-lista.acciones {
+    margin: 6px 0 0 0;
+    padding: 0;
+}
+
+.floating-notifications .notification .cc-lista.acciones.en-fila {
+    margin: 6px 4px 4px 4px;
+}
+
+.floating-notifications .notification .cc-lista.acciones .cc-opcion {
+    padding: 6px 4px;
+}
+
+/* Sobre el fondo translúcido del toast, el 0,14 del panel casi no se ve. */
+.floating-notifications .notification .cc-lista.acciones .cc-opcion:hover,
+.floating-notifications .notification .cc-lista.acciones .cc-opcion:focus-visible {
+    background: alpha(@primary, 0.28);
+}
+
+.floating-notifications .notification .cc-lista.acciones.en-fila .cc-opcion {
+    padding: 6px 8px;
+}
+
+.floating-notifications .notification .cc-lista.acciones.en-fila .cc-opcion .glifo {
+    min-width: 0;
+}
+
+.floating-notifications .notification-row .notification-background .notification.critical {
+    box-shadow:
+        0 0 4px 2px alpha(@error, 0.5),
+        0 0 0 2px @error;
+}
+
+.floating-notifications scrollbar {
+    opacity: 0;
+}
+
+.notification-row .notification-background .notification:hover {
+    transform: scale(1.02);
+}
+
+/* ─── Centro de control ─── */
+window.blank-window {
+    background: transparent;
+}
+
+.control-center,
+.control-center * {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+}
+
+/* El anillo es un borde de verdad (2 px; GTK parte las esquinas en diagonal), y por fuera lo
+ * delimita una línea de 1 px del fondo: el `tertiary`, pálido, contra un fondo de pantalla
+ * claro se lee más fino que el `primary` con su glow. */
+.control-center {
+    margin: 8px;
+    padding: 14px;
+    border-radius: 4px;
+    color: @on_surface;
+    border: 2px solid;
+    border-color: @primary @tertiary @tertiary @primary;
+    background: @morgan_fondo;
+    box-shadow:
+        0 0 0 1px alpha(@surface, 0.85),
+        -1px -1px 5px 2px alpha(@primary, 0.45),
+        1px 1px 5px 2px alpha(@tertiary, 0.45);
+}
+
+.control-center viewport,
+.control-center scrolledwindow {
+    background: transparent;
+}
+
+.control-center scrollbar {
+    opacity: 0;
+}
+
+.control-center .control-center-list {
+    background: transparent;
+}
+
+/* Entre dos notificaciones van los 8 px del ritmo del panel. */
+.control-center .control-center-list > row,
+.control-center .control-center-list > row:hover,
+.control-center .control-center-list > row:focus {
+    background: transparent;
+    padding: 0;
+    outline: none;
+}
+
+/* "Limpiar": cada fila sale a la derecha y se apaga (el escalonado lo pone `lista.rs`). */
+.control-center .control-center-list > row {
+    transition: opacity 220ms ease-in, transform 220ms cubic-bezier(0.55, 0, 0.75, 0.2);
+}
+
+.control-center .control-center-list > row.saliendo {
+    opacity: 0;
+    transform: translateX(56px);
+}
+
+.control-center .control-center-list-placeholder {
+    color: @on_surface;
+    opacity: 0.35;
+    font-size: 13px;
+    padding: 18px 0 14px;
+}
+
+.control-center .control-center-list .notification-row .notification-background .notification {
+    background: alpha(@on_surface, 0.06);
+}
+
+.control-center .control-center-list .notification-row .notification-background .notification:hover,
+.control-center .control-center-list .notification-row:focus .notification-background .notification {
+    background: alpha(@primary, 0.25);
+}
+
+/* ── Ritmo del panel ──
+ * - 16 px del borde del panel a cualquier caja (2 de borde + 14 de padding);
+ * - 8 px entre dos cajas, sean cuales sean;
+ * - 8 px adentro de cada caja, a cada lado.
+ * Los íconos van en una columna de 36 px pegada a esos 8 px y los textos arrancan todos en la
+ * misma vertical, a 8 + 36 + 10 = 54 px del borde de su caja. Dos tamaños de letra: 14 px para
+ * lo que es título y 12 px atenuado para lo secundario. */
+.control-center .widget {
+    margin: 0;
+    padding: 0;
+}
+
+.control-center .notification-row .notification-background {
+    padding: 4px 0;
+}
+
+/* La primera y la última no suman los 4 px de afuera: el rótulo pone los 8 de arriba y el
+ * borde del panel los 16 de abajo. */
+.control-center .control-center-list > row:first-child .notification-background {
+    padding-top: 0;
+}
+
+.control-center .control-center-list > row:last-child .notification-background {
+    padding-bottom: 0;
+}
+
+.control-center .notification-row .notification-background .notification .notification-default-action {
+    padding: 8px;
+}
+
+.control-center .notification-row .notification-background .notification .image {
+    -gtk-icon-size: 36px;
+    margin: 0 10px 0 0;
+}
+
+.control-center .notification-row .notification-background .notification .time {
+    margin-right: 0;
+}
+
+/* La pila colapsada va con fondos opacos: dos tintes que se pisan se sumarían. */
+.notification-group {
+    transition: opacity 200ms ease-in-out;
+}
+
+.notification-group:focus {
+    background: transparent;
+    outline: none;
+}
+
+.control-center .control-center-list .notification-group.collapsed .notification-row:last-child .notification-background .notification {
+    background: alpha(@on_surface, 0.06);
+}
+
+.control-center .control-center-list .notification-group.collapsed .notification-row:not(:last-child) .notification-background .notification {
+    background: alpha(@on_surface, 0.03);
+}
+
+.notification-group.collapsed .notification-row:not(:last-child) .notification-default-action,
+.notification-group.collapsed .notification-row:not(:last-child) .notification-action,
+.notification-group.collapsed .notification-row:not(:last-child) .notification-alt-actions {
+    opacity: 0;
+}
+
+/* El foco de teclado está en la fila de la lista, no en el grupo. */
+.control-center .control-center-list .notification-group.collapsed:hover .notification-row:last-child .notification-background .notification,
+.control-center .control-center-list > row:focus .notification-group.collapsed .notification-row:last-child .notification-background .notification {
+    background: alpha(@primary, 0.25);
+}
+
+.control-center .control-center-list .notification-group.collapsed:hover .notification-row:not(:last-child) .notification-background .notification,
+.control-center .control-center-list > row:focus .notification-group.collapsed .notification-row:not(:last-child) .notification-background .notification {
+    background: alpha(@primary, 0.12);
+}
+
+.control-center .control-center-list .notification-group.collapsed:hover .notification-row .notification-background .notification,
+.control-center .control-center-list > row:focus .notification-group.collapsed .notification-row .notification-background .notification {
+    transform: scale(1.02);
+}
+
+.notification-group .notification-group-headers,
+.notification-group .notification-group-buttons {
+    margin: 0 8px;
+    color: @on_surface;
+}
+
+.notification-group .notification-group-headers .notification-group-header {
+    color: @on_surface;
+    opacity: 0.5;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: lowercase;
+}
+
+/* El ícono de la app no se dibuja: el rótulo ya la nombra. */
+.notification-group .notification-group-headers .notification-group-icon {
+    opacity: 0;
+    min-width: 0;
+    min-height: 0;
+    -gtk-icon-size: 0;
+}
+
+.notification-group .notification-group-buttons button {
+    background: transparent;
+    color: @on_surface;
+    opacity: 0.35;
+    border: none;
+    box-shadow: none;
+    min-width: 0;
+    min-height: 0;
+    padding: 2px;
+    transition: color 100ms ease, opacity 100ms ease, transform 150ms ease;
+}
+
+.notification-group .notification-group-buttons button:hover {
+    background: transparent;
+    color: @primary;
+    opacity: 1;
+}
+
+.notification-group .notification-group-buttons button:active {
+    transform: scale(0.9);
+    transition: none;
+}
+
+.notification-group .notification-row .notification-background .notification {
+    background: alpha(@on_surface, 0.06);
+}
+
+.notification-group .notification-row .notification-background .notification:hover {
+    background: alpha(@primary, 0.25);
+}
+
+/* ── Widgets ── */
+.widget {
+    border-radius: 4px;
+    margin: 4px 6px;
+    padding: 4px;
+}
+
+.cc-tarjeta label,
+.cc-opcion label,
+.cc-nivel button {
+    font-weight: normal;
+}
+
+.cc-nivel button.glifo,
+.cc-nivel .rotulo button.nombre {
+    background: transparent;
+    color: @on_surface;
+    border: none;
+    box-shadow: none;
+    outline: none;
+    border-radius: 4px;
+    min-height: 0;
+    min-width: 0;
+    padding: 0;
+    transition: color 100ms ease, opacity 100ms ease, transform 150ms ease;
+}
+
+.cc-nivel button.glifo:hover,
+.cc-nivel button.glifo:focus-visible,
+.cc-nivel .rotulo button.nombre.con-lista:hover,
+.cc-nivel .rotulo button.nombre.con-lista:focus-visible,
+.cc-nivel .rotulo button.nombre.abierto {
+    background: transparent;
+    color: @primary;
+    opacity: 1;
+}
+
+.cc-nivel button.glifo:active,
+.cc-nivel .rotulo button.nombre.con-lista:active {
+    transform: scale(0.9);
+    transition: none;
+}
+
+/* ── Tarjetas ── */
+.cc-tarjeta {
+    background: alpha(@on_surface, 0.06);
+    color: @on_surface;
+    border: none;
+    box-shadow: none;
+    border-radius: 4px;
+    padding: 8px;
+    min-height: 0;
+    transition: background-color 150ms ease, transform 100ms ease;
+}
+
+.cc-tarjeta:hover,
+.cc-tarjeta:focus-visible {
+    background: alpha(@primary, 0.14);
+    outline: none;
+}
+
+.cc-tarjeta.abierto {
+    background: alpha(@primary, 0.2);
+}
+
+.cc-tarjeta:active {
+    transform: scale(0.97);
+    transition: none;
+}
+
+.cc-tarjeta .icono {
+    font-size: 18px;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.08);
+    color: @on_surface;
+    transition: background-color 150ms ease, color 150ms ease;
+}
+
+.cc-tarjeta.encendida .icono {
+    background-image: linear-gradient(135deg, @primary, @tertiary);
+    color: @surface;
+    box-shadow: 0 0 6px 0 alpha(@tertiary, 0.3);
+}
+
+.cc-tarjeta .titulo {
+    font-size: 14px;
+}
+
+.cc-tarjeta .estado {
+    font-size: 12px;
+    opacity: 0.5;
+}
+
+.cc-tarjeta.encendida .estado {
+    color: @tertiary;
+    opacity: 0.9;
+}
+
+/* ── Listas desplegadas ── */
+.cc-lista {
+    margin-top: 8px;
+    padding: 4px;
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.04);
+}
+
+.cc-opcion {
+    background: transparent;
+    color: @on_surface;
+    border: none;
+    box-shadow: none;
+    border-radius: 4px;
+    padding: 6px 4px;
+    min-height: 0;
+    transition: background-color 100ms ease, transform 100ms ease;
+}
+
+.cc-opcion:hover,
+.cc-opcion:focus-visible {
+    background: alpha(@primary, 0.14);
+    outline: none;
+}
+
+/* En el menú no se hunde: es de la familia del launcher, que muestra la elección con el
+ * resaltado. */
+.cc-opcion:active {
+    transform: scale(0.97);
+    transition: none;
+}
+
+.menu .cc-opcion:active {
+    transform: none;
+}
+
+.cc-opcion label {
+    font-size: 14px;
+}
+
+.cc-opcion .glifo {
+    min-width: 36px;
+    opacity: 0.7;
+}
+
+.cc-opcion.marcada .glifo,
+.cc-opcion .tilde {
+    color: @tertiary;
+    opacity: 1;
+}
+
+/* ── Niveles ── */
+.cc-niveles {
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.06);
+}
+
+.cc-nivel {
+    padding: 4px 0;
+}
+
+.cc-nivel button.glifo {
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 18px;
+}
+
+.cc-nivel.mudo button.glifo {
+    color: @error;
+}
+
+.cc-nivel .rotulo label {
+    font-size: 12px;
+    color: @on_surface;
+}
+
+.cc-nivel .rotulo .nombre {
+    opacity: 0.5;
+}
+
+.cc-nivel .rotulo button.nombre.abierto,
+.cc-nivel .rotulo button.nombre.con-lista:hover {
+    opacity: 1;
+}
+
+.cc-nivel .rotulo .porcentaje {
+    color: @tertiary;
+}
+
+.cc-nivel.mudo .rotulo .porcentaje {
+    color: @error;
+}
+
+/* La tinta de lo gráfico llega a 8 + 9, en espejo con la del glifo (18 px centrados en su
+ * columna de 36): la perilla al 100 % queda a 17 px del borde. */
+.cc-nivel scale {
+    padding: 4px 14px 2px 0;
+}
+
+/* ── Acciones de una notificación ── */
+.control-center .notification .cc-lista.acciones {
+    margin: 0 4px 4px 4px;
+    padding: 0;
+    background: alpha(@on_surface, 0.04);
+}
+
+.control-center .notification .cc-lista.acciones .cc-opcion {
+    padding: 6px 4px;
+}
+
+.control-center .control-center-list .notification-row .notification-background .notification.abierta {
+    background: alpha(@primary, 0.2);
+}
+
+/* ── Lo que asoma debajo de una tarjeta que se arrastra ── */
+.deslizable-fondo {
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.04);
+}
+
+.deslizable-fondo label {
+    font-size: 12px;
+    color: @on_surface;
+    opacity: 0.7;
+    padding: 0 16px;
+}
+
+/* ── Cuotas de IA ──
+ * La barra termina donde el canal de un slider (el padding de su escala). */
+.cc-cuotas {
+    margin-top: 8px;
+}
+
+.cc-cuota progressbar {
+    background: none;
+    margin: 6px 14px 4px 0;
+}
+
+.cc-cuota .rotulo .renueva {
+    opacity: 0.5;
+}
+
+.cc-tarjeta.alerta .estado {
+    color: @error;
+}
+
+/* ── Sliders ── */
+.cc-nivel trough {
+    background: alpha(@outline_variant, 0.6);
+    border: none;
+    min-width: 0;
+    min-height: 5px;
+    border-radius: 4px;
+}
+
+.cc-nivel highlight {
+    background-image: linear-gradient(to right, @primary, @tertiary);
+    border: none;
+    min-width: 0;
+    /* El tema por defecto le pone margin: -1px para tapar su borde; sin borde, el gizmo
+     * mediría -2 px y GTK lo avisa en el journal. */
+    margin: 0;
+    border-radius: 4px;
+    transition: background-image 150ms ease-out, background-color 150ms ease-out;
+}
+
+.cc-nivel.mudo highlight {
+    background-image: none;
+    background: alpha(@on_surface, 0.25);
+}
+
+.cc-nivel slider {
+    background: @tertiary;
+    border: none;
+    box-shadow: 0 0 3px 0 alpha(@tertiary, 0.35);
+    min-width: 10px;
+    min-height: 10px;
+    margin: -5px;
+    transition: min-width 120ms ease-out, min-height 120ms ease-out, margin 120ms ease-out, box-shadow 200ms ease-out;
+}
+
+.cc-nivel.mudo slider {
+    background: @on_surface_variant;
+    box-shadow: none;
+}
+
+.cc-nivel scale:hover slider {
+    box-shadow:
+        0 0 3px 1px alpha(@tertiary, 0.5),
+        0 0 6px 2px alpha(@tertiary, 0.25);
+}
+
+.cc-nivel scale:active slider {
+    box-shadow:
+        0 0 4px 1px alpha(@tertiary, 0.5),
+        0 0 8px 2px alpha(@tertiary, 0.25);
+    min-width: 7px;
+    min-height: 7px;
+    margin: -3.5px;
+}
+
+/* Con el foco del teclado (las flechas mueven el nivel), la perilla más grande y con el
+ * glow, para que se vea dónde se está. */
+.cc-nivel scale:focus-visible slider {
+    box-shadow:
+        0 0 4px 1px alpha(@tertiary, 0.6),
+        0 0 10px 3px alpha(@tertiary, 0.3);
+    min-width: 14px;
+    min-height: 14px;
+    margin: -7px;
+}
+
+/* ── Reproductor ── */
+
+.widget-mpris .widget-mpris-player {
+    margin: 0;
+    border-radius: 4px;
+    box-shadow: none;
+    background: alpha(@on_surface, 0.06);
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay {
+    padding: 8px;
+    background-color: transparent;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay .widget-mpris-album-art {
+    border-radius: 4px;
+    box-shadow: none;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay .widget-mpris-title {
+    font-size: 14px;
+    font-weight: normal;
+    color: @on_surface;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay .widget-mpris-subtitle {
+    font-size: 12px;
+    color: @on_surface;
+    opacity: 0.5;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay > box > button {
+    background: transparent;
+    color: @on_surface;
+    border: none;
+    box-shadow: none;
+    border-radius: 4px;
+    transition: color 100ms ease, transform 150ms ease;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay > box > button:hover {
+    background: transparent;
+    color: @primary;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay > box > button:active {
+    transform: scale(0.9);
+    transition: none;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay > box > button:focus,
+.widget-mpris .widget-mpris-player .mpris-overlay > box > button:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
+
+/* Sin fondo; la atenuación la pone el tema. */
+.widget-mpris .widget-mpris-player .mpris-overlay > box > button:disabled {
+    background: transparent;
+}
+
+/* `color` es el principio del degradé; `.fin`, el final. */
+.ecualizador {
+    color: @primary;
+    opacity: 0.22;
+    transition: opacity 600ms ease;
+}
+
+.ecualizador .fin {
+    color: @tertiary;
+}
+
+.ecualizador.quieto {
+    opacity: 0;
+}
+
+/* ── Notificaciones: el rótulo de la sección ── */
+.cc-seccion {
+    margin: 0 0 8px 0;
+}
+
+.cc-seccion label {
+    color: @on_surface;
+    opacity: 0.5;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.cc-seccion button {
+    background: transparent;
+    color: @on_surface;
+    border: none;
+    box-shadow: none;
+    min-height: 0;
+    min-width: 0;
+    padding: 0;
+    border-radius: 4px;
+    font-size: 12px;
+    opacity: 0.5;
+    transition: color 100ms ease, opacity 100ms ease, transform 150ms ease;
+}
+
+.cc-seccion button:hover {
+    background: transparent;
+    color: @primary;
+    opacity: 1;
+}
+
+.cc-seccion button:active {
+    transform: scale(0.9);
+    transition: none;
+}
+
+/* ─── Launcher ─── */
+.launcher,
+.launcher * {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 10pt;
+}
+
+.launcher {
+    margin: 8px;
+    padding: 14px;
+    border-radius: 4px;
+    color: @on_surface;
+    border: 2px solid;
+    border-color: @primary @tertiary @tertiary @primary;
+    background: @morgan_fondo;
+    box-shadow:
+        0 0 0 1px alpha(@surface, 0.85),
+        -1px -1px 5px 2px alpha(@primary, 0.45),
+        1px 1px 5px 2px alpha(@tertiary, 0.45);
+}
+
+.launcher-entrada {
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.06);
+}
+
+.launcher-entrada .prompt {
+    margin-right: 6px;
+    color: @primary;
+}
+
+.launcher-entrada .separador {
+    margin-right: 6px;
+    color: @on_surface_variant;
+}
+
+.launcher-entrada text {
+    background: transparent;
+    color: @on_surface;
+    caret-color: @primary;
+}
+
+.launcher-entrada text > placeholder {
+    color: @on_surface_variant;
+    opacity: 1;
+}
+
+.launcher scrolledwindow,
+.launcher viewport,
+.launcher-lista {
+    background: transparent;
+}
+
+.launcher-lista > row {
+    padding: 6px 10px;
+    border-radius: 4px;
+    background: transparent;
+    color: @on_surface;
+    outline: none;
+}
+
+/* Una fila sin ícono mide lo mismo que una con. */
+.launcher-lista > row > box {
+    min-height: 24px;
+}
+
+.launcher-lista > row:not(:first-child) {
+    margin-top: 4px;
+}
+
+.launcher-lista > row:selected {
+    background: alpha(@primary, 0.14);
+    color: @on_surface;
+}
+
+/* El recuadro de la elegida lo dibuja el widget que envuelve a la lista, para que se deslice;
+ * `color` es el del recuadro y la fila no pinta fondo. El índice del menú de sistema también
+ * es .launcher-lista, sin foco: lo de abajo no lo toca. */
+.launcher-foco {
+    color: alpha(@primary, 0.14);
+}
+
+.launcher-lista.con-foco > row:selected {
+    background: transparent;
+}
+
+/* El borde transparente es el lugar del destello: la fila mide lo mismo (4 + 2 = 6). */
+.launcher-lista.con-foco > row {
+    padding: 4px 8px;
+    border: 2px solid transparent;
+}
+
+/* El destello dura un cuadro; la capa se lo lleva fundiéndose al cerrar. */
+.launcher-lista.con-foco > row.elegida {
+    border-color: @primary @tertiary @tertiary @primary;
+    background: alpha(@primary, 0.24);
+    box-shadow:
+        -1px -1px 4px 0 alpha(@primary, 0.45),
+        1px 1px 4px 0 alpha(@tertiary, 0.45);
+}
+
+/* tema.rs no lo usa: lo lee el launcher para el markup. */
+.launcher-resaltado {
+    color: @tertiary;
+}
+
+/* El degradé va de `color` a `.fin`; el riel lo muestra tenue y la perilla, su tramo. */
+.riel {
+    color: @primary;
+}
+
+.riel .fin {
+    color: @tertiary;
+}
+
+/* ─── Menú de sistema ─── */
+.menu-lateral {
+    padding: 8px;
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.04);
+}
+
+.menu-lateral .launcher-entrada .prompt {
+    font-size: 14px;
+    margin-right: 8px;
+}
+
+.menu .glifo {
+    color: @primary;
+    font-size: 16px;
+    min-width: 20px;
+}
+
+.menu-indice > row {
+    padding: 8px 10px;
+}
+
+.menu-indice > row > box {
+    min-height: 20px;
+}
+
+.menu-indice > row:hover:not(:selected) {
+    background: alpha(@on_surface, 0.05);
+}
+
+/* El aire va adentro del revelador, para que la fila entera baje desde cero al abrirse la
+ * categoría. */
+.menu-indice > row.seccion {
+    padding: 0;
+    color: @on_surface_variant;
+}
+
+.menu-indice > row.seccion > revealer > box {
+    padding: 4px 10px 4px 40px;
+    min-height: 20px;
+}
+
+.menu-indice > row.seccion:not(:first-child) {
+    margin-top: 0;
+}
+
+.menu-indice > row.seccion.a-la-vista {
+    color: @tertiary;
+}
+
+.menu-pagina {
+    padding: 4px 4px 16px 0;
+}
+
+/* La lleva cada hijo nuevo de la página; al releer la misma página no. */
+.menu-pagina > .entra {
+    animation: menu-entra 180ms ease-out;
+}
+
+@keyframes menu-entra {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.menu-titulo {
+    font-size: 18px;
+    color: @on_surface;
+}
+
+.menu-seccion {
+    font-size: 12px;
+    color: @primary;
+    margin-top: 16px;
+}
+
+.menu-subtitulo {
+    font-size: 12px;
+    color: @on_surface_variant;
+    margin-top: 4px;
+}
+
+.menu-leyendo {
+    font-size: 12px;
+    color: @on_surface_variant;
+}
+
+.menu .cc-tarjeta {
+    padding: 10px 12px;
+}
+
+.menu .cc-tarjeta .flecha,
+.menu-bandeja .cc-opcion .flecha {
+    color: @on_surface_variant;
+    font-size: 16px;
+}
+
+.menu .casilla,
+.menu-bandeja .casilla {
+    min-width: 14px;
+    min-height: 14px;
+    border-radius: 3px;
+    border: 1px solid alpha(@on_surface, 0.35);
+    transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.menu .cc-tarjeta.encendida .casilla,
+.menu-bandeja .cc-opcion.encendida .casilla {
+    border-color: transparent;
+    background-image: linear-gradient(135deg, @primary, @tertiary);
+    box-shadow: 0 0 6px 0 alpha(@tertiary, 0.3);
+}
+
+.menu .cc-tarjeta.encendida:not(.menu-ajuste) .titulo,
+.menu .cc-tarjeta .tilde {
+    color: @tertiary;
+}
+
+.menu .cc-opcion,
+.menu-bandeja .cc-opcion {
+    padding: 6px 12px;
+}
+
+.menu .cc-opcion .glifo {
+    min-width: 0;
+}
+
+.menu .cc-tarjeta.elegida,
+.menu .cc-opcion.elegida {
+    background: alpha(@primary, 0.14);
+}
+
+.menu .resalte,
+.menu .resalte > .cc-tarjeta {
+    background: alpha(@tertiary, 0.25);
+    transition: background-color 400ms ease;
+}
+
+.menu .cc-tarjeta:disabled {
+    opacity: 0.6;
+}
+
+.menu .cc-tarjeta.peligro.confirmando,
+.menu .cc-tarjeta.fallo {
+    background: alpha(@error, 0.18);
+}
+
+.menu .cc-tarjeta.peligro.confirmando .titulo,
+.menu .cc-tarjeta.peligro.confirmando .flecha,
+.menu .cc-tarjeta.fallo .titulo {
+    color: @error;
+}
+
+/* Late mientras se aplica: lo marcado cambia recién cuando el sistema responde. */
+.menu .cc-tarjeta.aplicando {
+    animation: grabando 1s ease-in-out infinite;
+}
+
+.menu .cc-tarjeta.dato:disabled {
+    opacity: 1;
+    background: transparent;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+.menu .cc-tarjeta.dato .titulo {
+    font-size: 12px;
+    color: @on_surface_variant;
+}
+
+.menu .cc-tarjeta.dato .estado {
+    font-size: 14px;
+    color: @on_surface;
+    opacity: 1;
+}
+
+/* ─── Barra ───
+ * GTK4 no redondea como GTK3: la fecha y la hora van a 10pt y no a 13.5px, el relleno de 2px
+ * abajo o arriba corrige 1px de centrado y la campana lleva 1px menos a la derecha. */
+window.barra {
+    background-color: @morgan_barra;
+}
+
+.barra label {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 14px;
+    color: @on_surface;
+}
+
+.barra .espacios {
+    margin-left: 10px;
+}
+
+.barra .espacios label {
+    font-weight: 500;
+    opacity: 0.40;
+    padding: 2px 3px 0;
+    margin: 0 1px;
+}
+
+.barra .espacios label:hover {
+    opacity: 1;
+}
+
+.barra .espacios label:not(.vacio) {
+    opacity: 1;
+}
+
+.barra .espacios label.activo {
+    opacity: 1;
+    color: @primary;
+    font-weight: 700;
+}
+
+.barra .espacios label.urgente {
+    opacity: 1;
+    color: @error;
+}
+
+.barra .fecha,
+.barra .hora {
+    font-size: 10pt;
+    padding: 0 5px 2px;
+}
+
+.barra .fecha {
+    font-weight: 500;
+}
+
+.barra .separador {
+    color: @primary;
+    opacity: 0.45;
+    font-size: 13px;
+    padding: 0 4px 2px;
+}
+
+.barra .hora {
+    color: @primary;
+    font-weight: 700;
+}
+
+.barra .derecha {
+    margin-right: 10px;
+}
+
+.barra .campana {
+    font-size: 15.5px;
+    margin-left: 2px;
+    padding: 0 3px 0 4px;
+    opacity: 0.90;
+}
+
+.barra .campana.con-avisos {
+    opacity: 1;
+    color: @primary;
+}
+
+.barra .campana.no-molestar {
+    color: @on_surface_variant;
+    opacity: 0.50;
+}
+
+/* Los tooltips son superficies propias, sin la clase de la ventana que los abre: esto vale
+ * para todos los de morgan. */
+tooltip.background {
+    background-color: alpha(@surface_container, 0.95);
+    border: 1px solid alpha(@primary, 0.40);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.50);
+}
+
+tooltip label {
+    padding: 1px 4px;
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 11px;
+    color: @on_surface;
+}
+
+.barra .flecha {
+    color: @on_surface_variant;
+    opacity: 0.65;
+    padding: 0 4px;
+    transition: color 150ms ease, opacity 150ms ease;
+}
+
+.barra .cajon:hover .flecha {
+    color: @primary;
+    opacity: 1;
+}
+
+.barra .bandeja {
+    padding: 0 8px 0 2px;
+}
+
+.menu-bandeja > .cc-lista:first-child {
+    margin-top: 0;
+}
+
+.menu-bandeja .otra-seccion {
+    margin-top: 8px;
+}
+
+.menu-bandeja .cc-opcion.abierto {
+    background: alpha(@primary, 0.2);
+}
+
+.menu-bandeja .cc-opcion:disabled {
+    opacity: 0.6;
+}
+
+/* ─── Calendario ─── */
+.calendario .cc-seccion {
+    margin: 0;
+}
+
+.calendario button label {
+    font-weight: normal;
+}
+
+.calendario .cal-mes {
+    padding: 8px;
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.06);
+}
+
+.calendario .cal-semana label {
+    font-size: 12px;
+    opacity: 0.5;
+}
+
+.calendario .cal-dia {
+    background: transparent;
+    color: @on_surface;
+    border: none;
+    box-shadow: none;
+    border-radius: 4px;
+    padding: 4px 0;
+    min-height: 0;
+    min-width: 0;
+    transition: background-color 150ms ease, transform 100ms ease;
+}
+
+.calendario .cal-dia:hover {
+    background: alpha(@primary, 0.14);
+}
+
+.calendario .cal-dia:active {
+    transform: scale(0.94);
+    transition: none;
+}
+
+.calendario .cal-dia.elegido {
+    background: alpha(@primary, 0.2);
+}
+
+.calendario .cal-dia.hoy {
+    background-image: linear-gradient(135deg, @primary, @tertiary);
+    color: @surface;
+    box-shadow: 0 0 6px 0 alpha(@tertiary, 0.3);
+}
+
+.calendario .cal-dia .numero {
+    font-size: 14px;
+}
+
+.calendario .cal-dia.pasado .numero {
+    opacity: 0.5;
+}
+
+.calendario .cal-dia .glifo {
+    font-size: 12px;
+    min-height: 14px;
+    color: @tertiary;
+}
+
+.calendario .cal-dia.hoy .glifo {
+    color: @surface;
+}
+
+.calendario .cal-dia .marca {
+    min-width: 4px;
+    min-height: 4px;
+    margin: 2px 6px;
+    border-radius: 2px;
+    background: @tertiary;
+}
+
+.calendario .cal-dia.hoy .marca {
+    background: @surface;
+}
+
+.calendario .cal-clima,
+.calendario .cal-evento {
+    background: alpha(@on_surface, 0.06);
+    color: @on_surface;
+    border: none;
+    box-shadow: none;
+    border-radius: 4px;
+    padding: 8px;
+    min-height: 0;
+}
+
+.calendario .cal-evento.elegido {
+    background: alpha(@primary, 0.2);
+}
+
+.calendario .cal-evento.pasado > * {
+    opacity: 0.5;
+}
+
+.calendario .icono {
+    font-size: 18px;
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.08);
+}
+
+.calendario .cal-evento .icono {
+    color: @tertiary;
+    background: alpha(@tertiary, 0.12);
+}
+
+.calendario .titulo {
+    font-size: 14px;
+}
+
+.calendario .estado {
+    font-size: 12px;
+    opacity: 0.5;
+}
+
+/* ─── Calculadora ─── */
+.calculadora .calc-pantalla {
+    background: alpha(@on_surface, 0.06);
+    border-radius: 4px;
+    padding: 4px;
+}
+
+.calculadora .calc-actual,
+.calculadora .calc-fila {
+    background: transparent;
+    color: @on_surface;
+    border: none;
+    box-shadow: none;
+    border-radius: 4px;
+    padding: 8px 10px;
+    min-height: 0;
+    transition: background-color 150ms ease;
+}
+
+.calculadora .calc-fila {
+    padding: 4px 10px;
+}
+
+.calculadora .calc-actual:hover {
+    background: alpha(@on_surface, 0.03);
+}
+
+.calculadora .calc-fila:hover {
+    background: alpha(@primary, 0.14);
+}
+
+.calculadora .calc-fila:active {
+    background: alpha(@primary, 0.2);
+    transition: none;
+}
+
+.calculadora .calc-fila label {
+    font-size: 13px;
+    font-weight: normal;
+}
+
+.calculadora .calc-fila .cuenta {
+    opacity: 0.5;
+}
+
+.calculadora .calc-pantalla .grande {
+    font-size: 26px;
+    font-weight: normal;
+}
+
+.calculadora .calc-pantalla .chica {
+    font-size: 13px;
+    font-weight: normal;
+    opacity: 0.5;
+}
+
+.calculadora .calc-pantalla .chica.copiado {
+    color: @tertiary;
+    opacity: 1;
+}
+
+.calculadora .calc-botonera {
+    padding: 8px;
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.06);
+}
+
+.calculadora .calc-tecla {
+    background: transparent;
+    color: @on_surface;
+    border: none;
+    box-shadow: none;
+    border-radius: 4px;
+    padding: 10px 0;
+    min-height: 0;
+    min-width: 0;
+    transition: background-color 150ms ease, transform 100ms ease;
+}
+
+.calculadora .calc-tecla label {
+    font-size: 16px;
+    font-weight: normal;
+}
+
+.calculadora .calc-tecla:hover {
+    background: alpha(@primary, 0.14);
+}
+
+.calculadora .calc-tecla:active,
+.calculadora .calc-tecla.apretada {
+    background: alpha(@primary, 0.2);
+    transform: scale(0.94);
+    transition: none;
+}
+
+.calculadora .calc-tecla.operador {
+    color: @tertiary;
+}
+
+.calculadora .calc-tecla.funcion {
+    color: @on_surface_variant;
+}
+
+.calculadora .calc-tecla.igual {
+    background-image: linear-gradient(135deg, @primary, @tertiary);
+    color: @surface;
+    box-shadow: 0 0 6px 0 alpha(@tertiary, 0.3);
+}
+
+/* En error: lo que no se puede pasar por alto. */
+.barra .privacidad {
+    color: @error;
+    font-size: 15.5px;
+    padding: 0 4px;
+}
+
+/* Late despacio: es lo único de la barra que avisa algo que sigue pasando. */
+.barra .grabacion {
+    color: @error;
+    padding: 0 6px 0 4px;
+    animation: grabando 2s ease-in-out infinite;
+}
+
+/* ── Botones de la barra ──
+ * Al pasar el puntero y con lo suyo abierto avanzan un paso por el degradé del anillo: lo que
+ * está en color de texto pasa a `primary` y lo que ya es `primary` pasa a `tertiary`. Los
+ * íconos de la bandeja traen sus colores: su paso es de opacidad. Lo que avisa (urgente,
+ * grabación) no cambia de color. Un glow alrededor del texto engorda y desenfoca la letra. */
+.barra .boton,
+.barra .boton label {
+    transition: color 150ms ease, opacity 150ms ease, transform 150ms ease;
+}
+
+.barra .boton:hover,
+.barra .boton.abierto {
+    color: @primary;
+    opacity: 1;
+}
+
+.barra .espacios label.activo:hover,
+.barra .reloj:hover > .hora,
+.barra .reloj.abierto > .hora,
+.barra .campana.con-avisos:not(.no-molestar):hover,
+.barra .campana.con-avisos:not(.no-molestar).abierto {
+    color: @tertiary;
+}
+
+.barra .reloj:hover > .fecha,
+.barra .reloj.abierto > .fecha {
+    color: @primary;
+}
+
+.barra .reloj:hover > .separador,
+.barra .reloj.abierto > .separador {
+    color: mix(@primary, @tertiary, 0.5);
+    opacity: 0.9;
+}
+
+.barra .bandeja .boton {
+    opacity: 0.8;
+}
+
+.barra .bandeja .boton:hover,
+.barra .bandeja .boton.abierto {
+    opacity: 1;
+}
+
+.barra .espacios label.urgente:hover,
+.barra .grabacion:hover {
+    color: @error;
+}
+
+.barra .boton:active {
+    transform: scale(0.92);
+    transition: none;
+}
+
+@keyframes grabando {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.55;
+    }
+}
+
+/* ─── Banda de fondos ───
+ * El anillo es el fondo de la celda asomando por su padding, a 45°. */
+window.fondos {
+    background: transparent;
+}
+
+.fondos .banda {
+    background-color: @morgan_barra;
+    padding-top: 14px;
+}
+
+.fondos .cabecera {
+    padding: 0 24px;
+}
+
+.fondos .cabecera label {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 14px;
+}
+
+.fondos .prompt {
+    color: @primary;
+}
+
+.fondos .filtro {
+    color: @on_surface;
+}
+
+.fondos .filtro.vacio {
+    color: @on_surface_variant;
+}
+
+.fondos scrolledwindow,
+.fondos viewport {
+    background: none;
+}
+
+.fondos .celda {
+    padding: 3px;
+    border-radius: 6px;
+    background: none;
+    transition: box-shadow 150ms ease-out;
+}
+
+.fondos .celda picture {
+    border-radius: 4px;
+}
+
+.fondos .celda.actual {
+    background-color: @outline_variant;
+}
+
+.fondos .celda.sel {
+    background-image: linear-gradient(45deg, @primary, @tertiary);
+    box-shadow: 0 0 8px 1px alpha(@primary, 0.45);
+}
+
+.notification-row .notification-background .notification .preview {
+    border-radius: 4px;
+}
+
+/* ─── Lienzo de ventanas ───
+ * El anillo de la elegida lo dibuja `ventanas/anillo.rs`, para que se deslice entre celdas. */
+.ventanas,
+.ventanas * {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+}
+
+.ventanas {
+    padding: 14px 0;
+    color: @on_surface;
+    background-color: @morgan_barra;
+    transition: transform 180ms cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+
+/* La capa se funde (Hyprland) mientras la banda sube estos px. */
+.ventanas.entrando {
+    transform: translateY(10px);
+}
+
+.ventanas .anillo {
+    color: @primary;
+}
+
+.ventanas .anillo .fin {
+    color: @tertiary;
+}
+
+.ventanas scrolledwindow,
+.ventanas viewport {
+    background: none;
+}
+
+.ventanas .cabecera {
+    padding: 0 24px;
+}
+
+.ventanas .cabecera label {
+    font-size: 14px;
+}
+
+.ventanas .prompt {
+    color: @primary;
+}
+
+.ventanas .cabecera .titulo {
+    color: @on_surface;
+}
+
+.ventanas .cabecera .detalle {
+    font-size: 12px;
+    color: @on_surface_variant;
+}
+
+.ventanas .rotulo {
+    font-size: 14px;
+    color: @on_surface_variant;
+}
+
+.ventanas .rotulo.actual {
+    color: @primary;
+}
+
+/* Esquinas rectas: las de un monitor. */
+.ventanas .pantalla {
+    border-radius: 0;
+    background: alpha(@on_surface, 0.06);
+}
+
+.ventanas .pantalla picture {
+    opacity: 0.55;
+}
+
+.ventanas .ventana.fuera:not(.sel):not(:hover) {
+    opacity: 0.5;
+}
+
+.ventanas .ventana {
+    padding: 3px;
+    border-radius: 6px;
+    background: none;
+    transition: opacity 160ms ease-out, background-color 120ms ease-out;
+}
+
+.ventanas .ventana .interior {
+    border-radius: 4px;
+    background: alpha(@on_surface, 0.08);
+}
+
+.ventanas .ventana:hover {
+    background: alpha(@primary, 0.5);
+}
+
+.ventanas .ventana .insignia {
+    margin: 8px;
+}
+
+.ventanas .ventana .sin-foto {
+    opacity: 0.8;
+}

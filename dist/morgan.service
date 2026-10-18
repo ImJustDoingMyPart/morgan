@@ -1,0 +1,19 @@
+# Unidad de systemd --user de morgan. La instala install.sh (con la ruta de los binarios en
+# ExecStart) o el paquete (dist/arch/PKGBUILD, con /usr/bin).
+[Unit]
+Description=morgan (shell de escritorio)
+PartOf=graphical-session.target
+After=graphical-session.target
+# Una notificación tardía durante el apagado lo activaría por D-Bus
+# (org.freedesktop.Notifications.service) con la sesión gráfica ya caída; con Requisite ese
+# arranque falla sin ejecutarse, en vez de reintentar sin pantalla.
+Requisite=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/morgan
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

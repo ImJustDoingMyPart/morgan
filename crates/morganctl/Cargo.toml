@@ -1,0 +1,10 @@
+[package]
+name = "morganctl"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+morgan-ipc.workspace = true
+morgan-temas.workspace = true

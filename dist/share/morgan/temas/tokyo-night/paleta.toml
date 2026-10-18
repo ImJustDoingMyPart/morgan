@@ -1,0 +1,27 @@
+# Tokyo Night (variante night). Fuente: folke/tokyonight.nvim (lua/tokyonight/colors/storm.lua
+# y night.lua, que pisa los fondos) y, para la terminal, kovidgoyal/kitty-themes
+# (tokyo_night_night.conf). Vocabulario y reglas: crates/morgan-temas/src/paleta.rs.
+
+fondo0 = "#0c0e14"  # bg_dark1
+fondo1 = "#16161e"  # bg_dark
+fondo  = "#1a1b26"  # bg
+fondo2 = "#292e42"  # bg_highlight
+fondo3 = "#3b4261"  # fg_gutter
+fondo4 = "#414868"  # terminal_black
+
+texto   = "#c0caf5"  # fg
+texto2  = "#a9b1d6"  # fg_dark
+apagado = "#565f89"  # comment
+
+primario   = "#7aa2f7"  # blue
+secundario = "#bb9af7"  # magenta
+terciario  = "#7dcfff"  # cyan
+
+rojo     = "#f7768e"
+amarillo = "#e0af68"
+verde    = "#9ece6a"
+
+terminal = [
+  "#15161e", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#a9b1d6",
+  "#414868", "#ff899d", "#9fe044", "#faba4a", "#8db0ff", "#c7a9ff", "#a4daff", "#c0caf5",
+]

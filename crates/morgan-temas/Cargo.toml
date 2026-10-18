@@ -1,0 +1,13 @@
+[package]
+name = "morgan-temas"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+toml.workspace = true
+# El orden de las claves: un settings.json ajeno se reescribe sin reordenarlo.
+serde_json = { workspace = true, features = ["preserve_order"] }
+libc.workspace = true
+serde.workspace = true

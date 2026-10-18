@@ -1,0 +1,4 @@
+# Los tests comparan textos en castellano, el idioma del fuente: sin esto, `cargo test` en
+# una sesión en inglés fallaría. Una variable ya puesta gana (`MORGAN_IDIOMA=en cargo run`).
+[env]
+MORGAN_IDIOMA = "es"

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Guarda la cuota que un agente le pasa a su status line, para la tarjeta de cuotas del
+# centro de morgan (`cuotas.rs`). Es la única fuente documentada de las dos: el payload de
+# la status line de Claude Code (`rate_limits`) y el de Antigravity CLI (`quota`).
+#
+#   morgan-cuota claude   lee el payload de Claude Code por stdin; solo guarda
+#   morgan-cuota gemini   lee el de Antigravity CLI; guarda e imprime su status line
+#
+# Deja `{"observada": <epoch>, "cuota": …}` en $XDG_CACHE_HOME/morgan/cuotas/<agente>.json,
+# con un rename para que morgan nunca lea un archivo a medias. Un payload sin cuota (antes
+# del primer turno, sin red) no pisa lo último que se vio.
+set -euo pipefail
+
+case "${1:-}" in
+claude) filtro='.rate_limits' ;;
+gemini) filtro='.quota' ;;
+*) echo "uso: morgan-cuota claude|gemini" >&2; exit 2 ;;
+esac
+
+input=$(cat)
+dir="${XDG_CACHE_HOME:-$HOME/.cache}/morgan/cuotas"
+mkdir -p "$dir"
+
+cuota=$(jq -c "$filtro // null" <<<"$input" 2>/dev/null || echo null)
+if [[ $cuota != null ]]; then
+    tmp=$(mktemp "$dir/.$1.XXXXXX")
+    jq -nc --argjson o "$(date +%s)" --argjson c "$cuota" '{observada: $o, cuota: $c}' >"$tmp"
+    mv "$tmp" "$dir/$1.json"
+fi
+
+# La status line de Antigravity: el modelo y lo que queda de la ventana de 5 h.
+if [[ $1 == gemini ]]; then
+    jq -r '[.model.display_name // empty,
+            (.quota["gemini-5h"].remaining_fraction // empty | "5 h \(. * 100 | floor)%")]
+           | join(" · ")' <<<"$input" 2>/dev/null || true
+fi

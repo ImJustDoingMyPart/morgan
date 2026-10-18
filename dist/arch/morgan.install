@@ -1,0 +1,14 @@
+post_install() {
+    cat <<'EOF'
+==> Para usar morgan, cada usuario:
+    1. Agregar al final de ~/.config/hypr/hyprland.lua (morgan necesita la config en Lua):
+           pcall(require, "morgan")
+       Ahí morgan pone sus binds, los colores del tema y lo que se cambia desde su menú.
+    2. Parar (y deshabilitar) lo que hace lo mismo (otro servidor de notificaciones, barra, OSD, bloqueo).
+    3. systemctl --user enable --now morgan.service
+EOF
+}
+
+post_upgrade() {
+    echo '==> Para usar la versión nueva: systemctl --user restart morgan'
+}

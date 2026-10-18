@@ -1,0 +1,9 @@
+[package]
+name = "morgan-idioma"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+toml.workspace = true

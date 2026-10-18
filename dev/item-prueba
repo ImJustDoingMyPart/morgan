@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""Ítem de bandeja de prueba para el anidado (`dev/anidado ejecutar dev/item-prueba`).
+
+Publica un StatusNotifierItem con ícono por nombre, tooltip y un menú dbusmenu (fila
+normal, deshabilitada, casilla marcada, separador y submenú), y anota en
+$XDG_RUNTIME_DIR/morgan-dev/comandos.log lo que le piden: Activate, SecondaryActivate,
+Scroll y Event. La casilla cambia de estado con cada click y avisa con LayoutUpdated, así
+se ve que lo marcado sale de la app. Con `--pixmap` publica el ícono como IconPixmap.
+"""
+
+import os
+import sys
+
+from gi.repository import Gio, GLib
+
+LOG = os.path.join(os.environ["XDG_RUNTIME_DIR"], "morgan-dev", "comandos.log")
+PIXMAP = "--pixmap" in sys.argv
+
+ITEM_XML = """
+<node><interface name="org.kde.StatusNotifierItem">
+  <method name="Activate"><arg type="i" direction="in"/><arg type="i" direction="in"/></method>
+  <method name="SecondaryActivate"><arg type="i" direction="in"/><arg type="i" direction="in"/></method>
+  <method name="ContextMenu"><arg type="i" direction="in"/><arg type="i" direction="in"/></method>
+  <method name="Scroll"><arg type="i" direction="in"/><arg type="s" direction="in"/></method>
+  <property name="Id" type="s" access="read"/>
+  <property name="Title" type="s" access="read"/>
+  <property name="Status" type="s" access="read"/>
+  <property name="IconName" type="s" access="read"/>
+  <property name="IconPixmap" type="a(iiay)" access="read"/>
+  <property name="ToolTip" type="(sa(iiay)ss)" access="read"/>
+  <property name="Menu" type="o" access="read"/>
+  <property name="ItemIsMenu" type="b" access="read"/>
+  <signal name="NewIcon"/>
+</interface></node>
+"""
+
+MENU_XML = """
+<node><interface name="com.canonical.dbusmenu">
+  <method name="GetLayout">
+    <arg type="i" direction="in"/><arg type="i" direction="in"/><arg type="as" direction="in"/>
+    <arg type="u" direction="out"/><arg type="(ia{sv}av)" direction="out"/>
+  </method>
+  <method name="Event">
+    <arg type="i" direction="in"/><arg type="s" direction="in"/>
+    <arg type="v" direction="in"/><arg type="u" direction="in"/>
+  </method>
+  <method name="AboutToShow"><arg type="i" direction="in"/><arg type="b" direction="out"/></method>
+  <signal name="LayoutUpdated"><arg type="u"/><arg type="i"/></signal>
+</interface></node>
+"""
+
+estado = {"casilla": True, "revision": 1}
+
+
+def anotar(texto):
+    with open(LOG, "a") as f:
+        f.write(f"item-prueba {texto}\n")
+
+
+def fila(id_, props, hijos=()):
+    p = {k: GLib.Variant(t, v) for k, (t, v) in props.items()}
+    return GLib.Variant("(ia{sv}av)", (id_, p, [GLib.Variant("v", h) for h in hijos]))
+
+
+def layout():
+    return fila(0, {"children-display": ("s", "submenu")}, [
+        fila(1, {"label": ("s", "_Abrir")}),
+        fila(2, {"label": ("s", "Deshabilitada"), "enabled": ("b", False)}),
+        fila(3, {"label": ("s", "Casilla"), "toggle-type": ("s", "checkmark"),
+                 "toggle-state": ("i", 1 if estado["casilla"] else 0)}),
+        fila(4, {"type": ("s", "separator")}),
+        fila(5, {"label": ("s", "Submenú"), "children-display": ("s", "submenu")},
+             [fila(6, {"label": ("s", "Hija")})]),
+        fila(7, {"label": ("s", "Oculta"), "visible": ("b", False)}),
+    ])
+
+
+def pixmap():
+    # 16x16, un cuadrado lleno en el color de la casilla.
+    lado = 16
+    px = bytes([255, 255, 180, 171]) * (lado * lado)
+    return [(lado, lado, px)]
+
+
+def item_prop(conn, sender, path, iface, prop):
+    valores = {
+        "Id": GLib.Variant("s", "item-prueba"),
+        "Title": GLib.Variant("s", "Ítem de prueba"),
+        "Status": GLib.Variant("s", "Active"),
+        "IconName": GLib.Variant("s", "" if PIXMAP else "dialog-information"),
+        "IconPixmap": GLib.Variant("a(iiay)", pixmap() if PIXMAP else []),
+        "ToolTip": GLib.Variant("(sa(iiay)ss)", ("", [], "Ítem de prueba", "De dev/item-prueba")),
+        "Menu": GLib.Variant("o", "/Menu"),
+        "ItemIsMenu": GLib.Variant("b", False),
+    }
+    return valores[prop]
+
+
+def item_call(conn, sender, path, iface, method, params, inv):
+    anotar(f"{method} {params.unpack()}")
+    inv.return_value(None)
+
+
+def menu_call(conn, sender, path, iface, method, params, inv):
+    if method == "GetLayout":
+        inv.return_value(GLib.Variant.new_tuple(GLib.Variant("u", estado["revision"]), layout()))
+    elif method == "AboutToShow":
+        inv.return_value(GLib.Variant("(b)", (False,)))
+    elif method == "Event":
+        id_, evento, _, _ = params.unpack()
+        anotar(f"Event {id_} {evento}")
+        if id_ == 3 and evento == "clicked":
+            estado["casilla"] = not estado["casilla"]
+            estado["revision"] += 1
+            conn.emit_signal(None, "/Menu", "com.canonical.dbusmenu", "LayoutUpdated",
+                             GLib.Variant("(ui)", (estado["revision"], 0)))
+        inv.return_value(None)
+
+
+def al_bus(conn, nombre):
+    item = Gio.DBusNodeInfo.new_for_xml(ITEM_XML).interfaces[0]
+    menu = Gio.DBusNodeInfo.new_for_xml(MENU_XML).interfaces[0]
+    conn.register_object("/StatusNotifierItem", item, item_call, item_prop, None)
+    conn.register_object("/Menu", menu, menu_call, None, None)
+
+
+def al_nombre(conn, nombre):
+    conn.call("org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher",
+              "org.kde.StatusNotifierWatcher", "RegisterStatusNotifierItem",
+              GLib.Variant("(s)", (nombre,)), None, Gio.DBusCallFlags.NONE, -1, None,
+              lambda c, r: c.call_finish(r))
+
+
+Gio.bus_own_name(Gio.BusType.SESSION, f"org.kde.StatusNotifierItem-{os.getpid()}-1",
+                 Gio.BusNameOwnerFlags.NONE, al_bus, al_nombre, None)
+GLib.MainLoop().run()
