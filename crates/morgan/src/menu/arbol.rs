@@ -1629,15 +1629,15 @@ mod tests {
         let p = sonido(&c, &[], "freedesktop", &[]);
         assert_eq!(activas(lista(&p, 0, 0)), ["5 %"]);
         let p = pagina_fija(Categoria::Pantalla, &c, &[]).unwrap();
-        assert_eq!(activas(lista(&p, 2, 2)), ["nunca"]);
-        Cambio::Suspender(60).aplicar(&mut c);
+        assert_eq!(activas(lista(&p, 2, 2)), ["60 minutos"]);
+        Cambio::Suspender(120).aplicar(&mut c);
         Cambio::Paso(10).aplicar(&mut c);
         Cambio::Amplificar(true).aplicar(&mut c);
         Cambio::SonidoSistema(SonidoSistema::Red, false).aplicar(&mut c);
         assert_eq!(c.sonido.tope(), 150.0);
         assert!(!c.sonido.red && c.sonido.bloqueo);
         let p = pagina_fija(Categoria::Pantalla, &c, &[]).unwrap();
-        assert_eq!(activas(lista(&p, 2, 2)), ["60 minutos"]);
+        assert_eq!(activas(lista(&p, 2, 2)), ["120 minutos"]);
     }
 
     #[test]

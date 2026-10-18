@@ -619,7 +619,7 @@ impl Default for Idle {
         Idle {
             apagar: 10,
             bloquear: 20,
-            suspender: 0,
+            suspender: 60,
         }
     }
 }
@@ -1045,7 +1045,7 @@ mod tests {
             parse("[idle]\nsuspend = 30\n").unwrap().idle.suspender,
             30
         );
-        assert_eq!(d.suspender, 0);
+        assert_eq!(d.suspender, 60);
     }
 
     #[test]

@@ -28,11 +28,21 @@ pub enum Accion {
     Apagar,
     Bloquear,
     Suspender,
+    /// De entrada, mientras las pantallas están apagadas: su `resumed` las prende.
+    Despertar,
+    /// De entrada, con la sesión bloqueada: apaga lo que prendió una tecla y quedó ahí.
+    Bloqueada,
 }
 
 /// logind espera como mucho `InhibitDelayMaxSec` (5 s); morgan suelta antes para no llegar
 /// al tope.
 const ESPERA_BLOQUEO: Duration = Duration::from_secs(4);
+
+/// Lo que tarda `Despertar` en quedar inactiva: después, cualquier tecla prende.
+const DESPERTAR_MS: u32 = 100;
+
+/// Como GNOME: bloqueada, las pantallas se apagan tras 30 s sin tocar nada.
+const APAGAR_BLOQUEADA_MS: u32 = 30_000;
 
 pub fn tiempos(c: &config::Idle, inhibido: bool) -> Vec<(Accion, u32)> {
     if inhibido {
@@ -71,6 +81,7 @@ struct Inner {
     dbus: Cell<usize>,
     logind_inhibe: Cell<bool>,
     apagadas: Cell<bool>,
+    bloqueada: Cell<bool>,
     notificador: RefCell<Option<Rc<Notificador>>>,
     logind: RefCell<Option<Rc<Logind>>>,
     inhibidor: RefCell<Option<OwnedFd>>,
@@ -90,6 +101,7 @@ impl Idle {
                 dbus: Cell::new(0),
                 logind_inhibe: Cell::new(false),
                 apagadas: Cell::new(false),
+                bloqueada: Cell::new(false),
                 notificador: RefCell::default(),
                 logind: RefCell::default(),
                 inhibidor: RefCell::default(),
@@ -114,6 +126,9 @@ impl Idle {
 
     pub fn set_caffeine(&self, si: bool) {
         if self.inner.caffeine.replace(si) != si {
+            if si {
+                self.prender();
+            }
             self.recalcular();
             let oyentes = self.inner.oyentes.borrow().clone();
             for f in oyentes {
@@ -176,12 +191,9 @@ impl Idle {
         i.caffeine.get() || i.dbus.get() > 0 || i.logind_inhibe.get()
     }
 
-    /// Una que estaba inactiva se destruye sin `resumed`: si había apagado las pantallas, se
-    /// prenden acá.
+    /// Un inhibidor nuevo frena la cuenta pero no prende unas pantallas ya apagadas: eso es
+    /// solo de la entrada (`Despertar`).
     fn recalcular(&self) {
-        if self.inner.apagadas.replace(false) {
-            self.inner.hyprland.dpms(true);
-        }
         if let Some(n) = self.inner.notificador.borrow().as_ref() {
             n.poner(&tiempos(&self.inner.config.borrow(), self.inhibido()));
         }
@@ -189,13 +201,39 @@ impl Idle {
 
     fn evento(&self, accion: Accion, inactivo: bool) {
         match (accion, inactivo) {
-            (Accion::Apagar, si) => {
-                self.inner.apagadas.set(si);
-                self.inner.hyprland.dpms(!si);
-            }
+            (Accion::Apagar | Accion::Bloqueada, true) => self.apagar(),
+            // Sin notificaciones de entrada, el `resumed` es lo único que hay.
+            (Accion::Apagar, false) if !self.con_entrada() => self.prender(),
+            (Accion::Despertar, false) => self.prender(),
             (Accion::Bloquear, true) => self.bloquear(),
             (Accion::Suspender, true) => self.suspender_por_idle(),
-            (Accion::Bloquear | Accion::Suspender, false) => {}
+            _ => {}
+        }
+    }
+
+    fn con_entrada(&self) -> bool {
+        let n = self.inner.notificador.borrow();
+        n.as_ref().is_some_and(|n| n.con_entrada())
+    }
+
+    fn apagar(&self) {
+        if self.inner.apagadas.replace(true) {
+            return;
+        }
+        eprintln!("morgan: idle: pantallas apagadas");
+        self.inner.hyprland.dpms(false);
+        if let Some(n) = self.inner.notificador.borrow().as_ref() {
+            n.pedir_entrada(Accion::Despertar, DESPERTAR_MS);
+        }
+    }
+
+    fn prender(&self) {
+        if let Some(n) = self.inner.notificador.borrow().as_ref() {
+            n.soltar_entrada(Accion::Despertar);
+        }
+        if self.inner.apagadas.replace(false) {
+            eprintln!("morgan: idle: pantallas prendidas");
+            self.inner.hyprland.dpms(true);
         }
     }
 
@@ -237,6 +275,7 @@ impl Idle {
                 }
             };
             yo.inner.logind.replace(Some(l.clone()));
+            yo.releer_bloqueo(&l).await;
             yo.tomar_inhibidor().await;
             yo.releer_inhibidores().await;
             // Cada escucha en su tarea, con su copia de la conexión.
@@ -295,7 +334,9 @@ impl Idle {
                 return;
             };
             if !antes {
-                yo.inner.hyprland.dpms(true);
+                // Al despertar, prendidas aunque morgan las creyera prendidas.
+                yo.inner.apagadas.set(true);
+                yo.prender();
                 yo.tomar_inhibidor().await;
                 return;
             }
@@ -322,17 +363,32 @@ impl Idle {
     }
 
     fn cambio_bloqueo(&self) {
-        let Some(tx) = self.inner.esperando.borrow().clone() else {
-            return;
-        };
         let Some(l) = self.inner.logind.borrow().clone() else {
             return;
         };
+        let yo = self.clone();
         glib::MainContext::default().spawn_local(async move {
-            if l.bloqueada().await.unwrap_or(false) {
+            yo.releer_bloqueo(&l).await;
+            if yo.inner.bloqueada.get()
+                && let Some(tx) = yo.inner.esperando.borrow().clone()
+            {
                 let _ = tx.try_send(());
             }
         });
+    }
+
+    async fn releer_bloqueo(&self, l: &Logind) {
+        let si = l.bloqueada().await.unwrap_or(false);
+        if self.inner.bloqueada.replace(si) == si {
+            return;
+        }
+        if let Some(n) = self.inner.notificador.borrow().as_ref() {
+            if si {
+                n.pedir_entrada(Accion::Bloqueada, APAGAR_BLOQUEADA_MS);
+            } else {
+                n.soltar_entrada(Accion::Bloqueada);
+            }
+        }
     }
 }
 
@@ -374,11 +430,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn por_defecto_los_de_hypridle() {
+    fn por_defecto() {
         let t = tiempos(&config::Idle::default(), false);
         assert_eq!(
             t,
-            [(Accion::Apagar, 600_000), (Accion::Bloquear, 1_200_000)]
+            [
+                (Accion::Apagar, 600_000),
+                (Accion::Bloquear, 1_200_000),
+                (Accion::Suspender, 3_600_000)
+            ]
         );
     }
 
