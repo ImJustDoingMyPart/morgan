@@ -518,6 +518,7 @@ window.blank-window {
 }
 
 .cc-nivel button.glifo,
+.cc-clave button.glifo,
 .cc-nivel .rotulo button.nombre {
     background: transparent;
     color: @on_surface;
@@ -533,6 +534,7 @@ window.blank-window {
 
 .cc-nivel button.glifo:hover,
 .cc-nivel button.glifo:focus-visible,
+.cc-clave button.glifo:hover,
 .cc-nivel .rotulo button.nombre.con-lista:hover,
 .cc-nivel .rotulo button.nombre.con-lista:focus-visible,
 .cc-nivel .rotulo button.nombre.abierto {
@@ -652,6 +654,30 @@ window.blank-window {
 .cc-opcion.marcada .glifo,
 .cc-opcion .tilde {
     color: @tertiary;
+    opacity: 1;
+}
+
+/* La clave de una Wi-Fi nueva: el campo del launcher debajo de su renglón. */
+.cc-clave {
+    margin: 4px 0;
+}
+
+.cc-clave .launcher-entrada {
+    margin-bottom: 0;
+}
+
+.cc-clave .launcher-entrada .prompt {
+    margin-right: 8px;
+}
+
+.cc-clave .aviso {
+    margin: 4px 12px 0 12px;
+    font-size: 12px;
+    opacity: 0.5;
+}
+
+.cc-clave .aviso.error {
+    color: @error;
     opacity: 1;
 }
 

@@ -66,7 +66,9 @@ más allá del borde de la pantalla, y si no entra se desplaza por dentro.
 - **Tarjetas**, en dos columnas, cada una con su estado en palabras («Cable», «2
   conectados»):
   - **Red**: cable y Wi-Fi, con las conexiones guardadas; elegir una Wi-Fi con la radio
-    apagada la prende primero.
+    apagada la prende primero. Debajo, las Wi-Fi a la vista que no están guardadas: una
+    abierta conecta al click y una con clave la pide ahí mismo; si la clave no sirve, lo
+    dice y no queda guardada.
   - **Bluetooth**: el adaptador y los dispositivos emparejados, cada uno se conecta o se
     desconecta por separado.
   - **No molestar**, **Caffeine** (la pantalla no se apaga) y **Luz nocturna**.

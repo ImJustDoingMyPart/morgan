@@ -67,6 +67,18 @@ pub fn propiedades(destino: &'static str, ruta: &'static str) -> MatchRule<'stat
         .expect("regla fija")
 }
 
+/// Las de todos los objetos debajo de `raiz`, que pueden aparecer y desaparecer.
+pub fn propiedades_bajo(destino: &'static str, raiz: &'static str) -> MatchRule<'static> {
+    MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender(destino)
+        .and_then(|b| b.path_namespace(raiz))
+        .and_then(|b| b.interface("org.freedesktop.DBus.Properties"))
+        .and_then(|b| b.member("PropertiesChanged"))
+        .map(|b| b.build())
+        .expect("regla fija")
+}
+
 pub fn de(destino: &'static str) -> MatchRule<'static> {
     MatchRule::builder()
         .msg_type(zbus::message::Type::Signal)

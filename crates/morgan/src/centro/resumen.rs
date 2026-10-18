@@ -138,6 +138,7 @@ mod tests {
     #[test]
     fn red_por_peso() {
         let e = red::Estado {
+            visibles: Vec::new(),
             wifi: None,
             conexiones: vec![
                 conexion("Cableada 1", Tipo::Cable, true),
@@ -148,6 +149,7 @@ mod tests {
         assert!(red(&e).encendida);
 
         let e = red::Estado {
+            visibles: Vec::new(),
             wifi: Some(true),
             conexiones: vec![
                 conexion("Casa", Tipo::Wifi, true),
@@ -158,6 +160,7 @@ mod tests {
         assert_eq!(red(&e).glifo, Tipo::Wifi.glifo());
 
         let e = red::Estado {
+            visibles: Vec::new(),
             wifi: None,
             conexiones: vec![conexion("Cableada 1", Tipo::Cable, false)],
         };

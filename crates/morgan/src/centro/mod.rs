@@ -31,7 +31,7 @@ use crate::mpris::Mpris;
 use crate::notificaciones::{Cambio, Notificaciones};
 use crate::luz::Luz;
 use crate::osd::Osd;
-use crate::red::Red;
+use crate::red::{self, Red, Visible};
 use crate::toasts::Toasts;
 use desplegable::{Desplegable, Grupo, Item};
 use nivel::Nivel;
@@ -79,6 +79,9 @@ struct Inner {
     no_molestar: RefCell<Option<Tarjeta>>,
     luz: RefCell<Option<Tarjeta>>,
     red_: RefCell<Option<(Tarjeta, Desplegable)>>,
+    /// La Wi-Fi nueva que pide su clave. Mientras el campo está abierto la lista de red no
+    /// se rehace: cada escaneo se llevaría lo escrito y el foco.
+    clave: RefCell<Option<Pedido>>,
     bt: RefCell<Option<(Tarjeta, Desplegable)>>,
     energia_: RefCell<Option<(Tarjeta, Desplegable)>>,
     sesion: RefCell<Option<Tarjeta>>,
@@ -145,6 +148,7 @@ impl Centro {
             no_molestar: RefCell::default(),
             luz: RefCell::default(),
             red_: RefCell::default(),
+            clave: RefCell::default(),
             bt: RefCell::default(),
             energia_: RefCell::default(),
             sesion: RefCell::default(),
@@ -260,8 +264,11 @@ impl Centro {
         if let Some((_, v)) = i.cuotas.borrow().as_ref() {
             v.cerrar();
         }
-        // Una confirmación a medias no queda para la próxima apertura.
+        // Una confirmación a medias no queda para la próxima apertura, ni una clave.
         self.llenar_sesion();
+        if i.clave.take().is_some() {
+            self.pintar_red(true);
+        }
         i.mezclador.cerrar();
         i.red.cerrar();
         i.bluetooth.cerrar();
@@ -709,12 +716,19 @@ impl Centro {
     }
 
     fn mostrar_red(&self) {
+        self.pintar_red(false);
+    }
+
+    fn pintar_red(&self, forzar: bool) {
         let i = &self.inner;
         let Some((tarjeta, lista)) = i.red_.borrow().clone() else {
             return;
         };
         let e = i.red.estado();
         tarjeta.poner(&resumen::red(&e));
+        if !forzar && i.clave.borrow().is_some() {
+            return;
+        }
         let mut items = Vec::new();
         if let Some(w) = e.wifi {
             let r = i.red.clone();
@@ -732,7 +746,149 @@ impl Centro {
                 move || r.alternar(&ruta),
             ));
         }
-        lista.llenar(items);
+        let antes = items.len();
+        for v in &e.visibles {
+            let yo = self.clone();
+            let v2 = v.clone();
+            items.push(Item::new(v.glifo(), &v.nombre, None, move || {
+                yo.elegir_wifi(&v2)
+            }));
+        }
+        let botones = lista.llenar(items);
+        let pedida = i.clave.borrow().as_ref().map(|p| p.visible.ssid.clone());
+        let Some(ssid) = pedida else { return };
+        // La red se fue de la vista: el campo no tiene adónde ir.
+        let Some(n) = e.visibles.iter().position(|v| v.ssid == ssid) else {
+            i.clave.replace(None);
+            return;
+        };
+        let Some(boton) = botones.get(antes + n) else {
+            return;
+        };
+        let campo = self.campo_clave();
+        lista.opciones().insert_child_after(&campo, Some(boton));
+        if let Some((texto, _)) = i.clave.borrow().as_ref().and_then(|p| p.campo.as_ref()) {
+            texto.grab_focus();
+        }
+    }
+
+    /// Una abierta conecta al click; una con clave abre el campo debajo (o lo cierra).
+    fn elegir_wifi(&self, v: &Visible) {
+        let i = &self.inner;
+        if !v.seguridad.pide_clave() {
+            i.clave.replace(None);
+            i.red.conectar_nueva(v, None, |_| {});
+            self.pintar_red(true);
+            return;
+        }
+        let misma = i
+            .clave
+            .borrow()
+            .as_ref()
+            .is_some_and(|p| p.visible.ssid == v.ssid);
+        i.clave.replace((!misma).then(|| Pedido {
+            visible: v.clone(),
+            campo: None,
+        }));
+        self.pintar_red(true);
+    }
+
+    /// El campo del launcher, con un candado de prompt y un ojo para ver lo escrito.
+    fn campo_clave(&self) -> gtk::Box {
+        let caja = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        caja.add_css_class("cc-clave");
+        let entrada = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        entrada.add_css_class("launcher-entrada");
+        let candado = gtk::Label::new(Some("\u{F033E}"));
+        candado.add_css_class("prompt");
+        entrada.append(&candado);
+        let texto = gtk::Text::new();
+        texto.set_placeholder_text(Some(tr!("Contraseña")));
+        texto.set_visibility(false);
+        texto.set_hexpand(true);
+        entrada.append(&texto);
+        let ojo = gtk::Button::with_label("\u{F0208}");
+        ojo.add_css_class("glifo");
+        ojo.set_focus_on_click(false);
+        let t = texto.clone();
+        ojo.connect_clicked(move |b| {
+            let ver = !t.is_visible();
+            t.set_visibility(ver);
+            b.set_label(if ver { "\u{F0209}" } else { "\u{F0208}" });
+        });
+        entrada.append(&ojo);
+        caja.append(&entrada);
+        let aviso = gtk::Label::new(None);
+        aviso.add_css_class("aviso");
+        aviso.set_xalign(0.0);
+        aviso.set_wrap(true);
+        aviso.set_visible(false);
+        caja.append(&aviso);
+
+        let yo = self.clone();
+        texto.connect_activate(move |_| yo.enviar_clave());
+        let teclas = gtk::EventControllerKey::new();
+        let yo = self.clone();
+        teclas.connect_key_pressed(move |_, tecla, _, _| {
+            if tecla != gdk::Key::Escape {
+                return glib::Propagation::Proceed;
+            }
+            yo.inner.clave.replace(None);
+            yo.pintar_red(true);
+            glib::Propagation::Stop
+        });
+        texto.add_controller(teclas);
+
+        if let Some(p) = self.inner.clave.borrow_mut().as_mut() {
+            p.campo = Some((texto, aviso));
+        }
+        caja
+    }
+
+    fn enviar_clave(&self) {
+        let i = &self.inner;
+        let Some((v, texto, aviso)) = i.clave.borrow().as_ref().and_then(|p| {
+            let (t, a) = p.campo.clone()?;
+            Some((p.visible.clone(), t, a))
+        }) else {
+            return;
+        };
+        let clave = texto.text().to_string();
+        if !red::clave_valida(v.seguridad, &clave) {
+            avisar(&aviso, tr!("Tiene de 8 a 63 caracteres"), true);
+            return;
+        }
+        texto.set_sensitive(false);
+        avisar(&aviso, tr!("Conectando…"), false);
+        let yo = self.clone();
+        let ssid = v.ssid.clone();
+        i.red.conectar_nueva(&v, Some(clave), move |r| {
+            let sigue = yo
+                .inner
+                .clave
+                .borrow()
+                .as_ref()
+                .is_some_and(|p| p.visible.ssid == ssid);
+            match r {
+                Ok(()) => {
+                    if sigue {
+                        yo.inner.clave.replace(None);
+                    }
+                    yo.pintar_red(true);
+                }
+                Err(f) if sigue => {
+                    texto.set_sensitive(true);
+                    texto.set_text("");
+                    texto.grab_focus();
+                    let m = match f {
+                        red::Falla::Clave => tr!("Contraseña incorrecta"),
+                        red::Falla::Otra => tr!("No se pudo conectar"),
+                    };
+                    avisar(&aviso, m, true);
+                }
+                Err(_) => {}
+            }
+        });
     }
 
     fn mostrar_bluetooth(&self) {
@@ -784,6 +940,21 @@ impl Centro {
             })
             .collect();
         lista.llenar(items);
+    }
+}
+
+struct Pedido {
+    visible: Visible,
+    campo: Option<(gtk::Text, gtk::Label)>,
+}
+
+fn avisar(aviso: &gtk::Label, texto: &str, error: bool) {
+    aviso.set_label(texto);
+    aviso.set_visible(true);
+    if error {
+        aviso.add_css_class("error");
+    } else {
+        aviso.remove_css_class("error");
     }
 }
 
