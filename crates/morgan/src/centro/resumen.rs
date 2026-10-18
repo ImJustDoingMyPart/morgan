@@ -177,6 +177,7 @@ mod tests {
             conectado,
         };
         let mut e = bluetooth::Estado {
+            cercanos: Vec::new(),
             adaptador: Some(ruta("/hci0")),
             encendido: false,
             dispositivos: vec![d("Auris", true)],

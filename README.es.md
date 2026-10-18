@@ -70,7 +70,9 @@ más allá del borde de la pantalla, y si no entra se desplaza por dentro.
     al click y una con clave la pide ahí mismo; si la clave no sirve, lo dice y no queda
     guardada. Una guardada se olvida deslizándola a la derecha, como una notificación.
   - **Bluetooth**: el adaptador y los dispositivos emparejados, cada uno se conecta o se
-    desconecta por separado.
+    desconecta por separado; deslizarlo a la derecha lo olvida. Debajo, los que están
+    cerca (se buscan mientras el centro está abierto): elegir uno lo empareja y lo conecta,
+    y si pide confirmar o escribir un código, la caja aparece ahí mismo.
   - **No molestar**, **Caffeine** (la pantalla no se apaga) y **Luz nocturna**.
   - **Energía**: ahorro, equilibrado o rendimiento.
   - **Cuotas de IA**: lo que queda de los límites de Claude Code, Codex y Gemini (Antigravity).

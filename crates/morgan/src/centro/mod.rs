@@ -1,6 +1,8 @@
 //! El panel crece con el contenido hasta el alto de la salida y lo que no entra se scrollea
 //! adentro, sin medir nada a mano. Los servicios se escuchan solo mientras está abierto.
 
+mod bt;
+mod campo;
 mod cuotas;
 mod deslizador;
 pub mod desplegable;
@@ -34,6 +36,7 @@ use crate::osd::Osd;
 use crate::red::{self, Red, Visible};
 use crate::toasts::Toasts;
 use crate::deslizable::Accion;
+use campo::Campo;
 use desplegable::{Desplegable, Grupo, Item};
 use nivel::Nivel;
 use tarjetas::{Tarjeta, Tarjetas};
@@ -83,6 +86,8 @@ struct Inner {
     /// La Wi-Fi nueva que pide su clave. Mientras el campo está abierto la lista de red no
     /// se rehace: cada escaneo se llevaría lo escrito y el foco.
     clave: RefCell<Option<Pedido>>,
+    /// El dispositivo que se está emparejando, con su caja; congela la lista como `clave`.
+    emparejo: RefCell<Option<bt::Emparejo>>,
     bt: RefCell<Option<(Tarjeta, Desplegable)>>,
     energia_: RefCell<Option<(Tarjeta, Desplegable)>>,
     sesion: RefCell<Option<Tarjeta>>,
@@ -150,6 +155,7 @@ impl Centro {
             luz: RefCell::default(),
             red_: RefCell::default(),
             clave: RefCell::default(),
+            emparejo: RefCell::default(),
             bt: RefCell::default(),
             energia_: RefCell::default(),
             sesion: RefCell::default(),
@@ -270,6 +276,7 @@ impl Centro {
         if i.clave.take().is_some() {
             self.pintar_red(true);
         }
+        self.cancelar_emparejo();
         i.mezclador.cerrar();
         i.red.cerrar();
         i.bluetooth.cerrar();
@@ -513,6 +520,8 @@ impl Centro {
         i.red.al_cambiar(move || yo.mostrar_red());
         let yo = self.clone();
         i.bluetooth.al_cambiar(move || yo.mostrar_bluetooth());
+        let yo = self.clone();
+        i.bluetooth.al_pedido(move |p| yo.atender_pedido(p));
         let yo = self.clone();
         i.energia.al_cambiar(move || yo.mostrar_energia());
         let yo = self.clone();
@@ -787,10 +796,10 @@ impl Centro {
         };
         boton.add_css_class("abierto");
         let campo = self.campo_clave();
-        lista.opciones().insert_child_after(&campo, Some(&lista.fila(boton)));
-        if let Some((texto, _)) = i.clave.borrow().as_ref().and_then(|p| p.campo.as_ref()) {
-            texto.grab_focus();
-        }
+        lista
+            .opciones()
+            .insert_child_after(&campo.raiz, Some(&lista.fila(boton)));
+        campo.enfocar();
     }
 
     /// Una abierta conecta al click; una con clave abre el campo debajo (o lo cierra).
@@ -814,76 +823,38 @@ impl Centro {
         self.pintar_red(true);
     }
 
-    /// La caja del launcher del ancho de un renglón y con sus columnas: el candado en la del
-    /// glifo, lo escrito en la del nombre y el ojo en la del tilde.
-    fn campo_clave(&self) -> gtk::Box {
-        let caja = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        caja.add_css_class("cc-clave");
-        let entrada = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-        entrada.add_css_class("launcher-entrada");
-        let candado = gtk::Label::new(Some("\u{F033E}"));
-        candado.add_css_class("glifo");
-        entrada.append(&candado);
-        let texto = gtk::Text::new();
-        texto.set_placeholder_text(Some(tr!("Contraseña")));
-        texto.set_visibility(false);
-        // El ● de GTK ocupa la celda entera de la monoespaciada y se pegan.
-        texto.set_invisible_char('•');
-        texto.set_hexpand(true);
-        entrada.append(&texto);
-        let ojo = gtk::Button::with_label("\u{F0208}");
-        ojo.add_css_class("glifo");
-        ojo.set_focus_on_click(false);
-        let t = texto.clone();
-        ojo.connect_clicked(move |b| {
-            let ver = !t.is_visible();
-            t.set_visibility(ver);
-            b.set_label(if ver { "\u{F0209}" } else { "\u{F0208}" });
-        });
-        entrada.append(&ojo);
-        caja.append(&entrada);
-        let aviso = gtk::Label::new(None);
-        aviso.add_css_class("aviso");
-        aviso.set_xalign(0.0);
-        aviso.set_wrap(true);
-        aviso.set_visible(false);
-        caja.append(&aviso);
-
+    fn campo_clave(&self) -> Campo {
+        let c = Campo::clave(tr!("Contraseña"));
         let yo = self.clone();
-        texto.connect_activate(move |_| yo.enviar_clave());
-        let teclas = gtk::EventControllerKey::new();
+        c.al_enviar(move || yo.enviar_clave());
         let yo = self.clone();
-        teclas.connect_key_pressed(move |_, tecla, _, _| {
-            if tecla != gdk::Key::Escape {
-                return glib::Propagation::Proceed;
-            }
+        c.al_escape(move || {
             yo.inner.clave.replace(None);
             yo.pintar_red(true);
-            glib::Propagation::Stop
         });
-        texto.add_controller(teclas);
-
         if let Some(p) = self.inner.clave.borrow_mut().as_mut() {
-            p.campo = Some((texto, aviso));
+            p.campo = Some(c.clone());
         }
-        caja
+        c
     }
 
     fn enviar_clave(&self) {
         let i = &self.inner;
-        let Some((v, texto, aviso)) = i.clave.borrow().as_ref().and_then(|p| {
-            let (t, a) = p.campo.clone()?;
-            Some((p.visible.clone(), t, a))
-        }) else {
+        let Some((v, campo)) = i
+            .clave
+            .borrow()
+            .as_ref()
+            .and_then(|p| Some((p.visible.clone(), p.campo.clone()?)))
+        else {
             return;
         };
-        let clave = texto.text().to_string();
+        let clave = campo.texto.text().to_string();
         if !red::clave_valida(v.seguridad, &clave) {
-            avisar(&aviso, tr!("Tiene de 8 a 63 caracteres"), true);
+            campo.avisar(tr!("Tiene de 8 a 63 caracteres"), true);
             return;
         }
-        texto.set_sensitive(false);
-        avisar(&aviso, tr!("Conectando…"), false);
+        campo.ocupar(true);
+        campo.avisar(tr!("Conectando…"), false);
         let yo = self.clone();
         let ssid = v.ssid.clone();
         i.red.conectar_nueva(&v, Some(clave), move |r| {
@@ -901,47 +872,18 @@ impl Centro {
                     yo.pintar_red(true);
                 }
                 Err(f) if sigue => {
-                    texto.set_sensitive(true);
-                    texto.set_text("");
-                    texto.grab_focus();
+                    campo.ocupar(false);
+                    campo.texto.set_text("");
+                    campo.enfocar();
                     let m = match f {
                         red::Falla::Clave => tr!("Contraseña incorrecta"),
                         red::Falla::Otra => tr!("No se pudo conectar"),
                     };
-                    avisar(&aviso, m, true);
+                    campo.avisar(m, true);
                 }
                 Err(_) => {}
             }
         });
-    }
-
-    fn mostrar_bluetooth(&self) {
-        let i = &self.inner;
-        let Some((tarjeta, lista)) = i.bt.borrow().clone() else {
-            return;
-        };
-        let e = i.bluetooth.estado();
-        tarjeta.poner(&resumen::bluetooth(&e));
-        let b = i.bluetooth.clone();
-        let mut items = vec![Item::new(
-            "󰂯",
-            tr!("Bluetooth"),
-            Some(e.encendido),
-            move || b.alternar(),
-        )];
-        if e.encendido {
-            for d in e.dispositivos {
-                let b = i.bluetooth.clone();
-                let ruta = d.ruta.clone();
-                items.push(Item::new(
-                    d.glifo(),
-                    &d.nombre,
-                    Some(d.conectado),
-                    move || b.alternar_dispositivo(&ruta),
-                ));
-            }
-        }
-        lista.llenar(items);
     }
 
     fn mostrar_energia(&self) {
@@ -969,17 +911,7 @@ impl Centro {
 
 struct Pedido {
     visible: Visible,
-    campo: Option<(gtk::Text, gtk::Label)>,
-}
-
-fn avisar(aviso: &gtk::Label, texto: &str, error: bool) {
-    aviso.set_label(texto);
-    aviso.set_visible(true);
-    if error {
-        aviso.add_css_class("error");
-    } else {
-        aviso.remove_css_class("error");
-    }
+    campo: Option<Campo>,
 }
 
 /// Se actualiza en el lugar: rehacerla en cada evento cortaría el arrastre de su slider.

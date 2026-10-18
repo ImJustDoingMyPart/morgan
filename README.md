@@ -68,7 +68,9 @@ holds, never past the edge of the screen, and scrolls inside when it has to.
     password is reported and isn't saved. A saved one is forgotten by swiping it right, like
     a notification.
   - **Bluetooth**: the adapter and the paired devices, each connected or disconnected on
-    its own.
+    its own; swiping one right forgets it. Below them, the devices nearby (searched for
+    while the center is open): picking one pairs and connects it, and if it asks to
+    confirm or type a code, the box shows up right there.
   - **Do not disturb**, **Caffeine** (the screen stays on) and **Night light**.
   - **Power**: power-saver, balanced or performance.
   - **AI quotas**: what's left of the Claude Code, Codex and Gemini (Antigravity) limits.

@@ -9,6 +9,16 @@
 "Caffeine" = "Caffeine"
 "Contraseña" = "Password"
 "olvidar" = "forget"
+
+# centro/bt.rs
+"Emparejando…" = "Pairing…"
+"No se pudo emparejar" = "Couldn't pair"
+"¿Es el mismo código que muestra el dispositivo?" = "Is it the same code the device shows?"
+"Se escribe en el dispositivo, seguido de Enter" = "Type it on the device, then Enter"
+"Código" = "Code"
+"El que muestra el dispositivo" = "The one the device shows"
+"PIN" = "PIN"
+"Suele ser 0000 o 1234" = "It's usually 0000 or 1234"
 "Tiene de 8 a 63 caracteres" = "It has 8 to 63 characters"
 "Conectando…" = "Connecting…"
 "Contraseña incorrecta" = "Wrong password"
