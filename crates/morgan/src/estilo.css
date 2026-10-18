@@ -1047,7 +1047,10 @@ window.blank-window {
 .launcher-lista > row {
     padding: 6px 10px;
     border-radius: 4px;
-    background: transparent;
+    /* Casi transparente y no transparente: así la fila dibuja un fondo del alto entero, y al
+     * sacarla GTK repinta todo ese recuadro. Sin fondo repinta solo lo que mide el texto, y
+     * las colas de la g o la Q quedan pegadas en la lista. */
+    background: alpha(@surface, 0.004);
     color: @on_surface;
     outline: none;
 }

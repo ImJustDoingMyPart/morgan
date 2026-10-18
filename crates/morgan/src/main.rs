@@ -179,7 +179,7 @@ fn main() -> ExitCode {
             luz: luz.clone(),
             brillo,
             centro: centro.clone(),
-            launcher: Launcher::new(app),
+            launcher: Launcher::new(app, &agenda),
             fondos: fondos.clone(),
             ventanas: ventanas::Ventanas::new(app, hyprland.clone()),
             menu: Menu::new(
@@ -280,17 +280,10 @@ fn main() -> ExitCode {
         servicios.menu.al_fondos(move || f.abrir(true));
         let l = servicios.launcher.clone();
         servicios.menu.al_launcher(move |modo| l.abrir(modo));
-        let (m, a) = (servicios.menu.clone(), agenda.clone());
+        let m = servicios.menu.clone();
         servicios.launcher.al_menu(move |p| match p {
             launcher::ParaElMenu::Ciudad(u) => m.poner_ubicacion(u),
-            launcher::ParaElMenu::Calendario(url) => {
-                if let Some(url) = url
-                    && let Err(e) = a.poner_url(&url)
-                {
-                    eprintln!("morgan: agenda: {e}");
-                }
-                m.abrir(NivelMenu::Clima);
-            }
+            launcher::ParaElMenu::Calendario => m.abrir(NivelMenu::Clima),
         });
         servicios.menu.precalentar();
         let m = servicios.menu.clone();

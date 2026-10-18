@@ -78,6 +78,7 @@ struct Inner {
     atajos: RefCell<Catalogo>,
     ciudades: RefCell<Catalogo>,
     calendario: RefCell<Catalogo>,
+    agenda: crate::agenda::Agenda,
     al_menu: RefCell<Option<AlMenu>>,
     visibles: RefCell<Vec<usize>>,
     uso_apps: RefCell<Uso>,
@@ -91,7 +92,7 @@ struct Inner {
 
 pub enum ParaElMenu {
     Ciudad(Option<crate::config::Clima>),
-    Calendario(Option<String>),
+    Calendario,
 }
 
 type AlMenu = Rc<dyn Fn(ParaElMenu)>;
@@ -120,7 +121,11 @@ enum Accion {
     /// La referencia del bind se vuelve a buscar al ejecutarlo.
     Atajo(String, String),
     Ciudad(crate::clima::Lugar),
+    /// Lo pegado, tal cual: se busca así en el historial del portapapeles.
     Calendario(String),
+    QuitarCalendario(String),
+    /// Una fila que explica.
+    Ninguna,
 }
 
 struct Uso {
@@ -151,7 +156,7 @@ enum Icono<'a> {
 }
 
 impl Launcher {
-    pub fn new(app: &gtk::Application) -> Self {
+    pub fn new(app: &gtk::Application, agenda: &crate::agenda::Agenda) -> Self {
         let window = gtk::ApplicationWindow::new(app);
         window.add_css_class("morgan");
         window.add_css_class("blank-window");
@@ -180,7 +185,6 @@ impl Launcher {
         separador.add_css_class("separador");
         entrada.append(&separador);
         let texto = gtk::Text::new();
-        texto.set_placeholder_text(Some("Buscar…"));
         texto.set_hexpand(true);
         entrada.append(&texto);
         tarjeta.append(&entrada);
@@ -237,6 +241,7 @@ impl Launcher {
             atajos: RefCell::default(),
             ciudades: RefCell::default(),
             calendario: RefCell::default(),
+            agenda: agenda.clone(),
             al_menu: RefCell::default(),
             visibles: RefCell::default(),
             uso_apps: RefCell::new(uso_apps),
@@ -293,6 +298,11 @@ impl Launcher {
         let ya_abierto = i.abierto.replace(true);
         i.modo.set(modo);
         i.prompt.set_label(modo.prompt());
+        i.texto.set_placeholder_text(Some(match modo {
+            Modo::Ciudad => tr!("Nombre de la ciudad…"),
+            Modo::Calendario => tr!("Dirección iCal secreta…"),
+            _ => tr!("Buscar…"),
+        }));
         i.turno.set(i.turno.get() + 1);
         // Cada apertura (o cambio de modo) empieza de cero.
         self.vaciar();
@@ -315,9 +325,7 @@ impl Launcher {
             Modo::Ciudad => {
                 self.inner.ciudades.replace(Catalogo::default());
             }
-            Modo::Calendario => {
-                self.inner.calendario.replace(Catalogo::default());
-            }
+            Modo::Calendario => self.url_pegada(),
         }
         if !ya_abierto {
             i.bajada.arrancar();
@@ -334,6 +342,11 @@ impl Launcher {
         }
         i.turno.set(i.turno.get() + 1);
         i.window.set_visible(false);
+        // Lo pegado no se queda en un campo escondido.
+        if i.modo.get() == Modo::Calendario {
+            i.texto.set_text("");
+            i.calendario.replace(Catalogo::default());
+        }
     }
 
     fn catalogo(&self, modo: Modo) -> &RefCell<Catalogo> {
@@ -363,7 +376,7 @@ impl Launcher {
                     // Desde el menú: Escape vuelve a él, como en la banda de fondos.
                     match modo {
                         Modo::Ciudad => yo.volver_al_menu(ParaElMenu::Ciudad(None)),
-                        Modo::Calendario => yo.volver_al_menu(ParaElMenu::Calendario(None)),
+                        Modo::Calendario => yo.volver_al_menu(ParaElMenu::Calendario),
                         _ => {}
                     }
                     return glib::Propagation::Stop;
@@ -581,26 +594,115 @@ impl Launcher {
         }
     }
 
-    /// La URL completa no se muestra: es una credencial.
+    /// Sin texto, para qué sirve y los que ya están; con texto, si sirve. La URL completa no
+    /// se muestra: es una credencial.
     fn url_pegada(&self) {
         let texto = self.inner.texto.text().trim().to_owned();
+        let display = self.display();
         let mut c = Catalogo {
             cargado: true,
             ..Default::default()
         };
-        if let Some(dominio) = dominio_de_calendario(&texto) {
-            let display = self.display();
+        let agregar = |c: &mut Catalogo, icono, nombre: &str, generico: Option<String>, accion| {
             c.agregar(
-                Entrada::new("Usar este calendario", "Usar este calendario", &[]),
-                fila(
-                    &display,
-                    Icono::Nombre("x-office-calendar-symbolic"),
-                    "Usar este calendario".into(),
-                    Some(dominio),
-                ),
+                Entrada::new(nombre, nombre, &[]),
+                fila(&display, Icono::Nombre(icono), nombre.to_owned(), generico),
+                accion,
+            );
+        };
+        if texto.is_empty() {
+            let calendarios = crate::agenda::calendarios();
+            agregar(
+                &mut c,
+                "x-office-calendar-symbolic",
+                tr!("Muestra los eventos de un calendario en línea"),
+                Some(tr!("solo lectura").into()),
+                Accion::Ninguna,
+            );
+            agregar(
+                &mut c,
+                "edit-paste-symbolic",
+                tr!("Pegar acá la dirección iCal secreta"),
+                Some(tr!("Google, Outlook, iCloud…").into()),
+                Accion::Ninguna,
+            );
+            agregar(
+                &mut c,
+                "dialog-information-symbolic",
+                tr!("En Google: Integrar el calendario"),
+                Some(tr!("Dirección secreta en formato iCal").into()),
+                Accion::Ninguna,
+            );
+            for cal in calendarios {
+                let leido = match cal.leido.and_then(|d| d.format("%H:%M").ok()) {
+                    Some(h) => trf!("en uso · leído a las {}", h),
+                    None => tr!("en uso · todavía sin leer").into(),
+                };
+                agregar(
+                    &mut c,
+                    "list-remove-symbolic",
+                    &trf!("Quitar {}", cal.nombre),
+                    Some(leido),
+                    Accion::QuitarCalendario(cal.id),
+                );
+            }
+        } else if let Some(dominio) = crate::agenda::dominio(&texto) {
+            agregar(
+                &mut c,
+                "list-add-symbolic",
+                tr!("Agregar este calendario"),
+                Some(dominio),
                 Accion::Calendario(texto),
             );
+        } else {
+            agregar(
+                &mut c,
+                "dialog-warning-symbolic",
+                tr!("No es una dirección de calendario"),
+                Some(tr!("empieza con https:// o webcal://").into()),
+                Accion::Ninguna,
+            );
         }
+        self.inner.calendario.replace(c);
+        self.mostrar(Orden::Original, false);
+    }
+
+    /// Se prueba antes de guardarla; mientras, una fila lo dice, y si falla, por qué.
+    fn agregar_calendario(&self, texto: String) {
+        let i = &self.inner;
+        i.turno.set(i.turno.get() + 1);
+        let turno = i.turno.get();
+        self.aviso_calendario("content-loading-symbolic", tr!("Probando la dirección…"), None);
+        let yo = self.clone();
+        glib::MainContext::default().spawn_local(async move {
+            let r = yo.inner.agenda.agregar(&texto).await;
+            if yo.inner.turno.get() != turno || !yo.abierto() {
+                return;
+            }
+            match r {
+                Ok(()) => {
+                    yo.cerrar();
+                    yo.volver_al_menu(ParaElMenu::Calendario);
+                }
+                Err(e) => yo.aviso_calendario(
+                    "dialog-warning-symbolic",
+                    tr!("No se agregó"),
+                    Some(e),
+                ),
+            }
+        });
+    }
+
+    fn aviso_calendario(&self, icono: &'static str, nombre: &str, generico: Option<String>) {
+        let mut c = Catalogo {
+            cargado: true,
+            ..Default::default()
+        };
+        c.agregar(
+            Entrada::new(nombre, nombre, &[]),
+            fila(&self.display(), Icono::Nombre(icono), nombre.to_owned(), generico),
+            Accion::Ninguna,
+        );
         self.inner.calendario.replace(c);
         self.mostrar(Orden::Original, false);
     }
@@ -727,6 +829,9 @@ impl Launcher {
         else {
             return;
         };
+        if matches!(accion, Accion::Ninguna) {
+            return;
+        }
         // El destello de la elegida (`.elegida` en la hoja) se pinta y recién ahí se cierra:
         // un cuadro, y la capa se lo lleva fundiéndose. Un segundo Enter en ese cuadro no
         // repite la acción: el launcher ya está cerrado cuando le toca.
@@ -740,6 +845,11 @@ impl Launcher {
     fn ejecutar(&self, accion: Accion) {
         let i = &self.inner;
         if !i.abierto.get() {
+            return;
+        }
+        // Queda abierto mientras se prueba.
+        if let Accion::Calendario(texto) = accion {
+            self.agregar_calendario(texto);
             return;
         }
         self.cerrar();
@@ -764,7 +874,13 @@ impl Launcher {
                 latitud: Some(l.latitud),
                 longitud: Some(l.longitud),
             }))),
-            Accion::Calendario(url) => self.volver_al_menu(ParaElMenu::Calendario(Some(url))),
+            Accion::QuitarCalendario(id) => {
+                if let Err(e) = i.agenda.quitar(&id) {
+                    eprintln!("morgan: agenda: {e}");
+                }
+                self.volver_al_menu(ParaElMenu::Calendario);
+            }
+            Accion::Calendario(_) | Accion::Ninguna => {}
             // Releídos al ejecutar: entre abrir y elegir, Hyprland pudo releer la config y
             // la referencia de entonces ser de otra acción.
             Accion::Atajo(descripcion, teclas) => {
@@ -784,17 +900,6 @@ impl Launcher {
             }
         }
     }
-}
-
-fn dominio_de_calendario(texto: &str) -> Option<String> {
-    let resto = texto
-        .strip_prefix("https://")
-        .or_else(|| texto.strip_prefix("webcal://"))?;
-    if texto.contains(char::is_whitespace) {
-        return None;
-    }
-    let dominio = resto.split('/').next().filter(|d| d.contains('.'))?;
-    Some(dominio.to_owned())
 }
 
 fn dir_rofimoji() -> Option<PathBuf> {

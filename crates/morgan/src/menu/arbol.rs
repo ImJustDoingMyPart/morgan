@@ -413,7 +413,7 @@ pub fn pagina_fija(
                     tr!("Calendario"),
                     &match crate::agenda::resumen_calendarios() {
                         Some(r) => trf!("los eventos del calendario · {}", r),
-                        None => tr!("sin calendario · pegá la URL iCal secreta de Google").into(),
+                        None => tr!("sin calendario · los eventos de Google, Outlook o cualquier iCal").into(),
                     },
                     Control::Boton(Que::Calendario),
                 ),
