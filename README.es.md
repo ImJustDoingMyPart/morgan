@@ -138,7 +138,7 @@ la lista es además un buen punto de partida.
 | `cliphist` (con `wl-clipboard`) | El historial del portapapeles en el launcher |
 | `libqalculate` | La calculadora |
 | `cava` | El ecualizador detrás del reproductor del centro de control |
-| `wtype` y `rofimoji` | Escribir símbolos y emoji desde el launcher, y sus nombres |
+| `wtype` | Escribir emoji desde el launcher |
 | `libcanberra` y un tema de sonidos | Los sonidos del sistema |
 | Íconos Papirus y `papirus-folders` | El color de las carpetas, que sigue al tema |
 | `uwsm` | Lanzar las apps como unidades de systemd (sin él, morgan usa un scope propio) |

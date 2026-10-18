@@ -71,7 +71,6 @@ opcionales=(
     "wtype|wtype|launcher: escribir símbolos"
     "qalc|libqalculate|calculadora"
     "cava|cava|ecualizador del reproductor en el centro de control"
-    "rofimoji|rofimoji|launcher: datos de los símbolos"
     "canberra-gtk-play|libcanberra|sonidos del sistema"
     "uwsm|uwsm|lanzar apps como unidades de systemd (sin uwsm, en un scope propio)"
     "gsr-ui-cli|gpu-screen-recorder-ui|indicador y control de grabación"

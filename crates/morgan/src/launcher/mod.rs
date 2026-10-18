@@ -39,17 +39,6 @@ const DEVOLVER_FOCO: Duration = Duration::from_millis(250);
 
 const PAUSA_CIUDAD: Duration = Duration::from_millis(300);
 
-const ARCHIVOS_SIMBOLOS: &[&str] = &[
-    "emojis_smileys_emotion",
-    "emojis_people_body",
-    "emojis_animals_nature",
-    "emojis_food_drink",
-    "emojis_activities",
-    "emojis_travel_places",
-    "emojis_objects",
-    "emojis_symbols",
-    "emojis_flags",
-];
 
 #[derive(Clone)]
 pub struct Launcher {
@@ -501,24 +490,15 @@ impl Launcher {
             cargado: true,
             ..Default::default()
         };
-        let Some(dir) = dir_rofimoji() else {
-            eprintln!("morgan: launcher: no están los datos de rofimoji");
-            self.inner.simbolos.replace(c);
-            return;
-        };
-        for nombre in ARCHIVOS_SIMBOLOS {
-            let Ok(texto) = std::fs::read_to_string(dir.join(format!("{nombre}.csv"))) else {
-                continue;
-            };
-            for s in fuentes::simbolos(&texto) {
-                let vista = format!("{}  {}", s.caracter, s.nombre);
-                let generico = (!s.claves.is_empty()).then(|| s.claves.clone());
-                c.agregar(
-                    Entrada::new(&s.caracter, &vista, &[&s.claves]),
-                    fila(&display, Icono::Ninguno, vista, generico),
-                    Accion::Simbolo(s.caracter),
-                );
-            }
+        let ingles = morgan_idioma::actual() == morgan_idioma::Idioma::En;
+        for s in fuentes::simbolos(fuentes::SIMBOLOS, ingles) {
+            let vista = format!("{}  {}", s.caracter, s.nombre);
+            let generico = (!s.claves.is_empty()).then(|| s.claves.clone());
+            c.agregar(
+                Entrada::new(&s.caracter, &vista, &[&s.claves, &s.otro]),
+                fila(&display, Icono::Ninguno, vista, generico),
+                Accion::Simbolo(s.caracter),
+            );
         }
         self.inner.simbolos.replace(c);
     }
@@ -900,15 +880,6 @@ impl Launcher {
             }
         }
     }
-}
-
-fn dir_rofimoji() -> Option<PathBuf> {
-    std::fs::read_dir("/usr/lib")
-        .ok()?
-        .flatten()
-        .filter(|d| d.file_name().to_string_lossy().starts_with("python3"))
-        .map(|d| d.path().join("site-packages/picker/data"))
-        .find(|p| p.is_dir())
 }
 
 fn fila(display: &gdk::Display, icono: Icono, nombre: String, generico: Option<String>) -> Fila {

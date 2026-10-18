@@ -1,27 +1,38 @@
 
 use serde::Deserialize;
 
-/// Un símbolo de los CSV de rofimoji: `😀 grinning face <small>(face, grin)</small>`.
+/// Un emoji de `simbolos.tsv` (Unicode y CLDR, ver `dev/simbolos.py`), con el nombre y las
+/// palabras clave en el idioma de la sesión; el nombre en el otro también se busca.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Simbolo {
     pub caracter: String,
     pub nombre: String,
     pub claves: String,
+    pub otro: String,
 }
 
-pub fn simbolos(texto: &str) -> Vec<Simbolo> {
+pub const SIMBOLOS: &str = include_str!("simbolos.tsv");
+
+/// `emoji \t nombre es \t claves es \t nombre en \t claves en`; `#` es comentario.
+pub fn simbolos(texto: &str, ingles: bool) -> Vec<Simbolo> {
     texto
         .lines()
+        .filter(|l| !l.starts_with('#'))
         .filter_map(|l| {
-            let (caracter, resto) = l.split_once(' ')?;
-            let (nombre, claves) = match resto.split_once(" <small>(") {
-                Some((n, c)) => (n, c.trim_end_matches(")</small>")),
-                None => (resto, ""),
+            let c: Vec<&str> = l.split('\t').collect();
+            let [caracter, nombre_es, claves_es, nombre_en, claves_en] = c.as_slice() else {
+                return None;
+            };
+            let (nombre, claves, otro) = if ingles {
+                (nombre_en, claves_en, nombre_es)
+            } else {
+                (nombre_es, claves_es, nombre_en)
             };
             (!caracter.is_empty()).then(|| Simbolo {
-                caracter: caracter.into(),
-                nombre: nombre.trim().into(),
-                claves: claves.into(),
+                caracter: (*caracter).into(),
+                nombre: (*nombre).into(),
+                claves: (*claves).into(),
+                otro: (*otro).into(),
             })
         })
         .collect()
@@ -128,30 +139,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lee_los_csv_de_rofimoji() {
-        let s = simbolos(
-            "😀 grinning face <small>(face, grin)</small>\n👩‍💻 woman technologist\n\n→ rightwards arrow <small>(arrow)</small>\n",
-        );
+    fn lee_la_tabla_de_simbolos() {
+        let t = "# comentario\n😀\tcara sonriendo\tcara, feliz\tgrinning face\tface, grin\nroto\n";
+        let es = simbolos(t, false);
         assert_eq!(
-            s,
-            [
-                Simbolo {
-                    caracter: "😀".into(),
-                    nombre: "grinning face".into(),
-                    claves: "face, grin".into()
-                },
-                Simbolo {
-                    caracter: "👩‍💻".into(),
-                    nombre: "woman technologist".into(),
-                    claves: "".into()
-                },
-                Simbolo {
-                    caracter: "→".into(),
-                    nombre: "rightwards arrow".into(),
-                    claves: "arrow".into()
-                },
-            ]
+            es,
+            [Simbolo {
+                caracter: "😀".into(),
+                nombre: "cara sonriendo".into(),
+                claves: "cara, feliz".into(),
+                otro: "grinning face".into(),
+            }]
         );
+        assert_eq!(simbolos(t, true)[0].nombre, "grinning face");
+        assert_eq!(simbolos(t, true)[0].otro, "cara sonriendo");
+    }
+
+    #[test]
+    fn la_tabla_embebida_esta_entera() {
+        let s = simbolos(SIMBOLOS, false);
+        assert!(s.len() > 1800, "{}", s.len());
+        assert!(s.iter().all(|x| !x.nombre.is_empty()));
+        assert!(s.iter().any(|x| x.caracter == "👍" && x.nombre == "pulgar hacia arriba"));
     }
 
     #[test]

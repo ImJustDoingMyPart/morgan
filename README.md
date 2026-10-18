@@ -134,7 +134,7 @@ list is also a good set of tools to start from.
 | `cliphist` (with `wl-clipboard`) | Clipboard history in the launcher |
 | `libqalculate` | The calculator |
 | `cava` | The equalizer behind the media player in the control center |
-| `wtype` and `rofimoji` | Typing symbols and emoji from the launcher, and their names |
+| `wtype` | Typing emoji from the launcher |
 | `libcanberra` and a sound theme | System sounds |
 | Papirus icons and `papirus-folders` | Folder colors that follow the theme |
 | `uwsm` | Launching apps as systemd units (without it, morgan uses a scope of its own) |
