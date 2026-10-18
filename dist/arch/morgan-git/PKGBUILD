@@ -28,7 +28,7 @@ depends=(
     'curl'
     'wl-clipboard'
 )
-makedepends=('cargo' 'git')
+makedepends=('cargo' 'git' 'hyprland-protocols')
 optdepends=(
     'matugen: temas (también los curados: las plantillas pasan por matugen)'
     'awww: fondos de pantalla'

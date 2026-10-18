@@ -87,6 +87,8 @@ revisar_dependencias() {
         pkg-config --exists "$m" || faltan+=("$m")
     done
     ((${#faltan[@]} == 0)) || error "faltan bibliotecas para compilar: ${faltan[*]}"
+    [[ -f /usr/share/hyprland-protocols/protocols/hyprland-toplevel-export-v1.xml ]] ||
+        error "faltan los protocolos de Hyprland para compilar (paquete hyprland-protocols)"
 
     command -v Hyprland >/dev/null || error "falta Hyprland"
     local v
