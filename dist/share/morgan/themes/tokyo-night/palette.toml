@@ -2,24 +2,24 @@
 # y night.lua, que pisa los fondos) y, para la terminal, kovidgoyal/kitty-themes
 # (tokyo_night_night.conf). Vocabulario y reglas: crates/morgan-temas/src/paleta.rs.
 
-fondo0 = "#0c0e14"  # bg_dark1
-fondo1 = "#16161e"  # bg_dark
-fondo  = "#1a1b26"  # bg
-fondo2 = "#292e42"  # bg_highlight
-fondo3 = "#3b4261"  # fg_gutter
-fondo4 = "#414868"  # terminal_black
+bg0 = "#0c0e14"  # bg_dark1
+bg1 = "#16161e"  # bg_dark
+bg  = "#1a1b26"  # bg
+bg2 = "#292e42"  # bg_highlight
+bg3 = "#3b4261"  # fg_gutter
+bg4 = "#414868"  # terminal_black
 
-texto   = "#c0caf5"  # fg
-texto2  = "#a9b1d6"  # fg_dark
-apagado = "#565f89"  # comment
+text   = "#c0caf5"  # fg
+text2  = "#a9b1d6"  # fg_dark
+muted = "#565f89"  # comment
 
-primario   = "#7aa2f7"  # blue
-secundario = "#bb9af7"  # magenta
-terciario  = "#7dcfff"  # cyan
+primary   = "#7aa2f7"  # blue
+secondary = "#bb9af7"  # magenta
+tertiary  = "#7dcfff"  # cyan
 
-rojo     = "#f7768e"
-amarillo = "#e0af68"
-verde    = "#9ece6a"
+red     = "#f7768e"
+yellow = "#e0af68"
+green    = "#9ece6a"
 
 terminal = [
   "#15161e", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#a9b1d6",

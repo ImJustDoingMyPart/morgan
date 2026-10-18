@@ -193,7 +193,7 @@ impl Banda {
         window.add_css_class("morgan");
         window.add_css_class("fondos");
         window.init_layer_shell();
-        window.set_namespace(Some("morgan-fondos"));
+        window.set_namespace(Some("morgan-wallpapers"));
         window.set_layer(Layer::Overlay);
         window.set_keyboard_mode(KeyboardMode::Exclusive);
         for borde in [Edge::Bottom, Edge::Left, Edge::Right] {

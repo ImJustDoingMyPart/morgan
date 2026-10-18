@@ -130,6 +130,8 @@ instalar() {
 
     paso "Tema y plantillas en $compartido"
     mkdir -p "$compartido"
+    # Hasta 0.1.1 se llamaban así; ya no se leen. Son de install.sh, no del usuario.
+    rm -rf "$compartido/temas" "$compartido/plantillas"
     cp -r "$raiz/dist/share/morgan/." "$compartido/"
 
     paso "Unidades de systemd y D-Bus"

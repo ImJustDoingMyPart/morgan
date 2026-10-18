@@ -6,24 +6,24 @@
 # La terminal es la que ya tenía el tema (portada de su alacritty.toml), no la de
 # kitty-themes, que difiere en color0 (#665c54) y color3 (#e78a4e, el naranja).
 
-fondo0 = "#1b1b1b"  # bg_dim
-fondo1 = "#1d2021"  # bg0 de la variante hard
-fondo  = "#282828"  # bg0
-fondo2 = "#32302f"  # bg1
-fondo3 = "#45403d"  # bg3
-fondo4 = "#5a524c"  # bg5
+bg0 = "#1b1b1b"  # bg_dim
+bg1 = "#1d2021"  # bg0 de la variante hard
+bg  = "#282828"  # bg0
+bg2 = "#32302f"  # bg1
+bg3 = "#45403d"  # bg3
+bg4 = "#5a524c"  # bg5
 
-texto   = "#d4be98"  # fg0
-texto2  = "#a89984"  # grey2
-apagado = "#928374"  # grey1
+text   = "#d4be98"  # fg0
+text2  = "#a89984"  # grey2
+muted = "#928374"  # grey1
 
-primario   = "#7daea3"  # blue
-secundario = "#d8a657"  # yellow
-terciario  = "#d3869b"  # purple
+primary   = "#7daea3"  # blue
+secondary = "#d8a657"  # yellow
+tertiary  = "#d3869b"  # purple
 
-rojo     = "#ea6962"
-amarillo = "#d8a657"
-verde    = "#a9b665"
+red     = "#ea6962"
+yellow = "#d8a657"
+green    = "#a9b665"
 
 terminal = [
   "#3c3836", "#ea6962", "#a9b665", "#d8a657", "#7daea3", "#d3869b", "#89b482", "#d4be98",

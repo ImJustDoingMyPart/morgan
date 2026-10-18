@@ -31,7 +31,7 @@ use anillo::Anillo;
 use captura::Capturador;
 use modelo::{Dir, Lienzo, Medidas};
 
-const SUBMAP: &str = "morgan-ventanas";
+const SUBMAP: &str = "morgan-windows";
 /// Un toque no lo dibuja.
 const DEMORA: Duration = Duration::from_millis(150);
 /// Antes de la [`DEMORA`], para que lleguen con el lienzo. Un toque más corto no captura nada:
@@ -407,7 +407,7 @@ impl Vista {
         let window = gtk::ApplicationWindow::new(&v.inner.app);
         window.add_css_class("morgan");
         window.init_layer_shell();
-        window.set_namespace(Some("morgan-ventanas"));
+        window.set_namespace(Some("morgan-windows"));
         window.set_layer(Layer::Overlay);
         window.set_keyboard_mode(KeyboardMode::Exclusive);
         for borde in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {

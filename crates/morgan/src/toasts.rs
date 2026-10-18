@@ -54,7 +54,7 @@ impl Toasts {
         window.add_css_class("morgan");
         window.add_css_class("floating-notifications");
         window.init_layer_shell();
-        window.set_namespace(Some("morgan-notificaciones"));
+        window.set_namespace(Some("morgan-notifications"));
         window.set_layer(Layer::Overlay);
         window.set_keyboard_mode(KeyboardMode::None);
         for borde in [Edge::Top, Edge::Bottom, Edge::Right] {

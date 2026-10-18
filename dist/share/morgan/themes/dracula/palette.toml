@@ -1,0 +1,27 @@
+# Dracula. Fuente: dracula/visual-studio-code (src/dracula.yml: la paleta y los fondos
+# BGDarker…BGLighter) y, para la terminal, kovidgoyal/kitty-themes (Dracula.conf).
+# Vocabulario y reglas: crates/morgan-temas/src/paleta.rs.
+
+bg0 = "#191a21"  # BGDarker
+bg1 = "#21222c"  # BGDark
+bg  = "#282a36"  # Background
+bg2 = "#343746"  # BGLight
+bg3 = "#424450"  # BGLighter
+bg4 = "#44475a"  # Selection
+
+text   = "#f8f8f2"                      # Foreground
+text2  = ["#f8f8f2", "#6272a4", 0.6]    # Dracula no tiene un texto secundario: entre los dos
+muted = "#6272a4"                      # Comment
+
+primary   = "#bd93f9"  # Purple
+secondary = "#ff79c6"  # Pink
+tertiary  = "#8be9fd"  # Cyan
+
+red     = "#ff5555"
+yellow = "#f1fa8c"
+green    = "#50fa7b"
+
+terminal = [
+  "#21222c", "#ff5555", "#50fa7b", "#f1fa8c", "#bd93f9", "#ff79c6", "#8be9fd", "#f8f8f2",
+  "#6272a4", "#ff6e6e", "#69ff94", "#ffffa5", "#d6acff", "#ff92df", "#a4ffff", "#ffffff",
+]

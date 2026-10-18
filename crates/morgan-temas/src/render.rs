@@ -19,7 +19,7 @@ const CUOTAS: [(&str, &str); 3] =
 /// Las plantillas por nombre de archivo; la del usuario tapa a la del paquete.
 pub fn plantillas(r: &Rutas) -> BTreeMap<String, PathBuf> {
     let mut v = BTreeMap::new();
-    for dir in r.fuentes("plantillas").into_iter().rev() {
+    for dir in r.fuentes("templates").into_iter().rev() {
         let Ok(it) = std::fs::read_dir(&dir) else { continue };
         for e in it.flatten() {
             if e.path().is_file()

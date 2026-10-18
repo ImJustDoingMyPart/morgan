@@ -333,7 +333,7 @@ impl Ventana {
         window.add_css_class("morgan");
         window.add_css_class("barra");
         window.init_layer_shell();
-        window.set_namespace(Some("morgan-barra"));
+        window.set_namespace(Some("morgan-bar"));
         window.set_layer(Layer::Top);
         window.set_keyboard_mode(KeyboardMode::None);
         window.set_monitor(Some(monitor));

@@ -116,7 +116,7 @@ impl Centro {
         window.add_css_class("morgan");
         window.add_css_class("blank-window");
         window.init_layer_shell();
-        window.set_namespace(Some("morgan-centro"));
+        window.set_namespace(Some("morgan-center"));
         window.set_layer(Layer::Top);
         window.set_keyboard_mode(KeyboardMode::Exclusive);
         for borde in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {

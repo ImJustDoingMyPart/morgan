@@ -1,7 +1,7 @@
 
 -- ─── Lienzo de ventanas (morgan) ───
 -- Quien sabe cuándo se suelta {mod} es Hyprland, no morgan: la tecla entra al submap
--- `morgan-ventanas` acá mismo (sin carrera con morgan) y pide el lienzo; adentro, la misma
+-- `morgan-windows` acá mismo (sin carrera con morgan) y pide el lienzo; adentro, la misma
 -- tecla pide un paso más y soltar {mod} sale del submap y le avisa a morgan. El submap no
 -- tiene flechas ni Escape: van a la capa del lienzo. {escape} sale a mano si algo se traba.
 --
@@ -17,7 +17,7 @@ local function soltar_ventanas()
         timer_ventanas:set_enabled(false)
         timer_ventanas = nil
     end
-    if hl.get_current_submap() ~= "morgan-ventanas" then
+    if hl.get_current_submap() ~= "morgan-windows" then
         return
     end
     hl.dispatch(hl.dsp.submap("reset"))
@@ -29,7 +29,7 @@ local function vigilar_ventanas()
         timer_ventanas:set_enabled(false)
     end
     timer_ventanas = hl.timer(function()
-        if hl.get_current_submap() ~= "morgan-ventanas" then
+        if hl.get_current_submap() ~= "morgan-windows" then
             if timer_ventanas then
                 timer_ventanas:set_enabled(false)
                 timer_ventanas = nil
@@ -43,7 +43,7 @@ local function vigilar_ventanas()
 end
 
 hl.unbind("{tecla}")
-hl.define_submap("morgan-ventanas", function()
+hl.define_submap("morgan-windows", function()
     hl.bind("{tecla}", function()
         vigilar_ventanas()
         hl.dispatch(hl.dsp.event("morgan windows"))
@@ -54,14 +54,14 @@ end)
 -- state 0 es soltar; los códigos son los de xkb (evdev + 8).
 hl.on("input.keyboard.key", function(keycode, _time, state)
     if state == 0 and (keycode == {codigo_l} or keycode == {codigo_r}) then
-        if hl.get_current_submap() == "morgan-ventanas" then
+        if hl.get_current_submap() == "morgan-windows" then
             soltar_ventanas()
         end
     end
 end)
 
 hl.bind("{tecla}", function()
-    hl.dispatch(hl.dsp.submap("morgan-ventanas"))
+    hl.dispatch(hl.dsp.submap("morgan-windows"))
     vigilar_ventanas()
     hl.dispatch(hl.dsp.event("morgan windows"))
 end, { desc = "{desc}" })

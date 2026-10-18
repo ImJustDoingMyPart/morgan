@@ -21,7 +21,9 @@ use crate::comando;
 use crate::config;
 use crate::osd::{Aviso, Osd};
 
-const UNIDAD: &str = "morgan-luz";
+const UNIDAD: &str = "morgan-nightlight";
+/// El nombre hasta 0.1.1: una luz prendida con él antes de actualizar también se apaga.
+const UNIDAD_VIEJA: &str = "morgan-luz";
 
 /// La velocidad 5 son 500 ms, con un poco de margen.
 const FUNDIDO: Duration = Duration::from_millis(600);
@@ -119,6 +121,7 @@ impl Luz {
             glib::timeout_future(FUNDIDO).await;
             if i.orden.get() == orden {
                 comando::salida(&["systemctl", "--user", "stop", UNIDAD]).await?;
+                let _ = comando::salida(&["systemctl", "--user", "stop", UNIDAD_VIEJA]).await;
             }
         }
         // Un pedido posterior ya puso (o va a poner) su estado.
@@ -197,9 +200,12 @@ impl Luz {
 }
 
 async fn unidad_activa() -> bool {
-    comando::salida(&["systemctl", "--user", "is-active", "--quiet", UNIDAD])
-        .await
-        .is_ok()
+    for u in [UNIDAD, UNIDAD_VIEJA] {
+        if comando::salida(&["systemctl", "--user", "is-active", "--quiet", u]).await.is_ok() {
+            return true;
+        }
+    }
+    false
 }
 
 /// Con el entorno de la sesión gráfica, que el gestor de systemd no tiene por qué tener.

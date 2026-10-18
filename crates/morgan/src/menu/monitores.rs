@@ -1,7 +1,7 @@
 //! Monitores desde el menú: un dibujo a escala para ubicarlos, y por salida su nombre,
 //! resolución, frecuencia, escala, rotación, posición y encendida.
 //!
-//! Lo que se elige se guarda en `monitores.toml` (al lado de `hyprland.toml`) y va a
+//! Lo que se elige se guarda en `monitors.toml` (al lado de `hyprland.toml`) y va a
 //! `morgan.lua` como un `hl.monitor` por salida con **solo los campos cambiados**: Hyprland
 //! junta las reglas de una misma salida, así que lo que el usuario puso a mano (VRR,
 //! profundidad de color, HDR) sigue valiendo. Lo puesto sale de `hyprctl monitors all`.

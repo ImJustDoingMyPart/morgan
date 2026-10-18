@@ -141,7 +141,13 @@ list is also a good set of tools to start from.
 
 **Apps that follow the theme**: morgan ships templates for kitty, GTK, Qt, btop, yazi,
 starship, Vesktop (Discord) and Obsidian. You choose which ones it applies in Appearance.
-Games launched from Steam turn on game mode by themselves.
+Your own themes go in `~/.config/morgan/themes/<name>/palette.toml`, your own templates in
+`~/.config/morgan/templates/`, and extra apps in `~/.config/morgan/themes.toml`. Games
+launched from Steam turn on game mode by themselves.
+
+For your own Hyprland rules, morgan's layers are `morgan-bar`, `morgan-center`,
+`morgan-calendar`, `morgan-tray`, `morgan-notifications`, `morgan-osd`, `morgan-launcher`,
+`morgan-calculator`, `morgan-menu`, `morgan-wallpapers` and `morgan-windows`.
 
 ## Before you install: stop what morgan replaces
 

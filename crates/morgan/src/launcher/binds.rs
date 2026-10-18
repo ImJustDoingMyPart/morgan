@@ -68,7 +68,7 @@ pub fn propios(a: &Atajos) -> Vec<Propio> {
 
 /// Ahí Hyprland no resuelve ningún bind (salvo los `submap_universal`) y la combinación le
 /// llega entera al menú.
-pub const SUBMAP_GRABAR: &str = "morgan-grabar"; // no-tr
+pub const SUBMAP_GRABAR: &str = "morgan-record"; // no-tr
 
 /// Con `false` sale de él si es el puesto (al arrancar morgan, por si quedó adentro).
 pub fn submap_grabar(entrar: bool) -> String {
@@ -271,7 +271,7 @@ fn partes_propio(p: &AtajoPropio, buscar: &dyn Fn(&str) -> Option<App>) -> Optio
 
 /// El submap de un modo: el índice, así renombrarlo no cambia nada.
 pub fn submap_modo(m: usize) -> String {
-    format!("morgan-modo-{m}") // no-tr
+    format!("morgan-mode-{m}") // no-tr
 }
 
 /// Los atajos propios y los modos: `morgan_buscar` va una vez para los dos.
@@ -398,7 +398,7 @@ pub fn lua_con(
     // tecla que nadie aprieta.
     out.push_str(concat!(
         "\n-- Mientras el menú graba una tecla (Atajos), sin binds.\n", // no-tr
-        "hl.define_submap(\"morgan-grabar\", function()\n",              // no-tr
+        "hl.define_submap(\"morgan-record\", function()\n",              // no-tr
         "    hl.bind(\"SUPER + CTRL + ALT + SHIFT + F24\", hl.dsp.submap(\"reset\"))\n", // no-tr
         "end)\n",
     ));
@@ -629,19 +629,19 @@ mod tests {
         ];
         let l = lua_propios(&[], &modos, &app_de_prueba);
         let esperado = concat!(
-            "hl.define_submap(\"morgan-modo-0\", function()\n",
+            "hl.define_submap(\"morgan-mode-0\", function()\n",
             "    hl.bind(\"Escape\", hl.dsp.submap(\"reset\"), { desc = \"Salir del modo\" })\n",
             "    hl.bind(\"H\", hl.dsp.exec_cmd(\"uno\"), { desc = \"uno\" })\n",
             "end)\n",
-            "atajo(\"SUPER + R\", hl.dsp.submap(\"morgan-modo-0\"), { desc = \"Modo: Ventanas\" })\n",
-            "hl.define_submap(\"morgan-modo-1\", function()\n",
+            "atajo(\"SUPER + R\", hl.dsp.submap(\"morgan-mode-0\"), { desc = \"Modo: Ventanas\" })\n",
+            "hl.define_submap(\"morgan-mode-1\", function()\n",
             "    hl.bind(\"Escape\", hl.dsp.submap(\"reset\"), { desc = \"Salir del modo\" })\n",
             "    hl.bind(\"F\", function() hl.dispatch(morgan_buscar({ \"firefox\" }, \"uwsm app -- 'firefox.desktop'\")) hl.dispatch(hl.dsp.submap(\"reset\")) end, { desc = \"Firefox\" })\n",
             "end)\n",
-            "atajo(\"SUPER + O\", hl.dsp.submap(\"morgan-modo-1\"), { desc = \"Modo: Abrir\" })\n",
+            "atajo(\"SUPER + O\", hl.dsp.submap(\"morgan-mode-1\"), { desc = \"Modo: Abrir\" })\n",
         );
         assert!(l.contains(esperado), "{l}");
-        assert!(!l.contains("morgan-modo-2"));
+        assert!(!l.contains("morgan-mode-2"));
         assert!(l.contains("local function morgan_buscar"));
     }
 }

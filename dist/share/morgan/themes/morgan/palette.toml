@@ -4,24 +4,24 @@
 # Vocabulario y reglas: crates/morgan-temas/src/paleta.rs. Los fondos, del más oscuro al
 # más claro.
 
-fondo0 = "#0f1115"
-fondo1 = "#14171c"
-fondo  = "#181b21"
-fondo2 = "#1f232a"
-fondo3 = "#272c34"
-fondo4 = "#333942"
+bg0 = "#0f1115"
+bg1 = "#14171c"
+bg  = "#181b21"
+bg2 = "#1f232a"
+bg3 = "#272c34"
+bg4 = "#333942"
 
-texto   = "#dfe3ea"
-texto2  = ["#dfe3ea", "#6b7480", 0.7]
-apagado = "#6b7480"
+text   = "#dfe3ea"
+text2  = ["#dfe3ea", "#6b7480", 0.7]
+muted = "#6b7480"
 
-primario   = "#8fb8ff"
-secundario = "#a9c4d9"
-terciario  = "#e0a3ff"
+primary   = "#8fb8ff"
+secondary = "#a9c4d9"
+tertiary  = "#e0a3ff"
 
-rojo     = "#ef6f6c"
-amarillo = "#e8c27a"
-verde    = "#8ccf9a"
+red     = "#ef6f6c"
+yellow = "#e8c27a"
+green    = "#8ccf9a"
 
 # Negro, rojo, verde, amarillo, azul, magenta, cian, blanco; después, los brillantes.
 terminal = [

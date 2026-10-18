@@ -12,11 +12,37 @@ use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 
-/// Lo que un `paleta.toml` tiene que definir. Los fondos van del más oscuro al más claro.
+/// Lo que un `palette.toml` tiene que definir. Los fondos van del más oscuro al más claro.
 pub const PALETA: [&str; 15] = [
+    "bg0", "bg1", "bg", "bg2", "bg3", "bg4", "text", "text2", "muted", "primary", "secondary",
+    "tertiary", "red", "yellow", "green",
+];
+
+/// El vocabulario de antes de 0.1.2 (`paleta.toml`, en castellano), en el orden de `PALETA`:
+/// un tema del usuario escrito así se sigue leyendo.
+const VIEJO: [&str; 15] = [
     "fondo0", "fondo1", "fondo", "fondo2", "fondo3", "fondo4", "texto", "texto2", "apagado",
     "primario", "secundario", "terciario", "rojo", "amarillo", "verde",
 ];
+
+fn nuevo(k: &str) -> Option<&'static str> {
+    VIEJO.iter().position(|v| *v == k).map(|i| PALETA[i])
+}
+
+/// Las claves viejas y los nombres viejos usados como valor (un color que nombra a otro) pasan
+/// al vocabulario de ahora.
+fn traducir(p: toml::Table) -> toml::Table {
+    fn valor(v: toml::Value) -> toml::Value {
+        match v {
+            toml::Value::String(s) => toml::Value::String(nuevo(&s).map_or(s, str::to_owned)),
+            toml::Value::Array(a) => toml::Value::Array(a.into_iter().map(valor).collect()),
+            otro => otro,
+        }
+    }
+    p.into_iter()
+        .map(|(k, v)| (nuevo(&k).map_or(k, str::to_owned), valor(v)))
+        .collect()
+}
 
 /// Los 16 ANSI del tema generado (Material no tiene "rojo" ni "verde": van los roles de
 /// contraste parecido).
@@ -75,14 +101,15 @@ fn resolver(p: &toml::Table, v: &toml::Value, vistos: &[&str]) -> Result<String,
 }
 
 pub fn roles_curado(texto: &str) -> Result<BTreeMap<String, String>, String> {
-    let p: toml::Table = texto.parse().map_err(|e| format!("paleta.toml: {e}"))?;
+    let p: toml::Table = texto.parse().map_err(|e| format!("palette.toml: {e}"))?;
+    let p = traducir(p);
     let faltan: Vec<&str> = PALETA.into_iter().filter(|k| !p.contains_key(*k)).collect();
     if !faltan.is_empty() {
-        return Err(format!("a paleta.toml le faltan: {}", faltan.join(", ")));
+        return Err(format!("a palette.toml le faltan: {}", faltan.join(", ")));
     }
     let c = |k: &str| resolver(&p, &p[k], &[]);
-    let (f0, f, tx) = (c("fondo0")?, c("fondo")?, c("texto")?);
-    let primario = c("primario")?;
+    let (f0, f, tx) = (c("bg0")?, c("bg")?, c("text")?);
+    let primario = c("primary")?;
     let mut r: BTreeMap<String, String> = BTreeMap::new();
     let mut poner = |k: &str, v: &str| r.insert(k.to_owned(), v.to_owned());
     for (k, v) in [
@@ -90,17 +117,17 @@ pub fn roles_curado(texto: &str) -> Result<BTreeMap<String, String>, String> {
         ("surface", &f),
         ("surface_container_lowest", &f0),
         ("surface_dim", &f0),
-        ("surface_container_low", &c("fondo1")?),
-        ("surface_container", &c("fondo2")?),
-        ("surface_container_high", &c("fondo3")?),
-        ("surface_variant", &c("fondo3")?),
-        ("surface_container_highest", &c("fondo4")?),
-        ("surface_bright", &c("fondo4")?),
+        ("surface_container_low", &c("bg1")?),
+        ("surface_container", &c("bg2")?),
+        ("surface_container_high", &c("bg3")?),
+        ("surface_variant", &c("bg3")?),
+        ("surface_container_highest", &c("bg4")?),
+        ("surface_bright", &c("bg4")?),
         ("on_background", &tx),
         ("on_surface", &tx),
-        ("on_surface_variant", &c("texto2")?),
-        ("outline", &c("apagado")?),
-        ("outline_variant", &c("fondo4")?),
+        ("on_surface_variant", &c("text2")?),
+        ("outline", &c("muted")?),
+        ("outline_variant", &c("bg4")?),
         ("inverse_surface", &tx),
         ("inverse_on_surface", &f),
         ("inverse_primary", &mezcla(&primario, &f, 0.5)),
@@ -108,9 +135,9 @@ pub fn roles_curado(texto: &str) -> Result<BTreeMap<String, String>, String> {
         ("scrim", "#000000"),
         ("surface_tint", &primario),
         ("source_color", &primario),
-        ("quota_ok", &c("verde")?),
-        ("quota_warn", &c("amarillo")?),
-        ("quota_crit", &c("rojo")?),
+        ("quota_ok", &c("green")?),
+        ("quota_warn", &c("yellow")?),
+        ("quota_crit", &c("red")?),
     ] {
         poner(k, v);
     }
@@ -118,9 +145,9 @@ pub fn roles_curado(texto: &str) -> Result<BTreeMap<String, String>, String> {
     // es el acento hundido en el fondo; "fixed", el acento aclarado hacia el texto.
     for (rol, col) in [
         ("primary", primario.clone()),
-        ("secondary", c("secundario")?),
-        ("tertiary", c("terciario")?),
-        ("error", c("rojo")?),
+        ("secondary", c("secondary")?),
+        ("tertiary", c("tertiary")?),
+        ("error", c("red")?),
     ] {
         poner(rol, &col);
         poner(&format!("on_{rol}"), &f0);
@@ -221,6 +248,10 @@ terminal = [
     #[test]
     fn errores() {
         assert!(roles_curado("fondo0 = \"#000000\"").unwrap_err().contains("faltan"));
+        // El vocabulario de ahora da lo mismo que el de antes (con el que está escrita NORD).
+        let ahora = toml::to_string(&traducir(NORD.parse().unwrap())).unwrap();
+        assert!(ahora.contains("bg0 = ") && !ahora.contains("fondo"), "{ahora}");
+        assert_eq!(roles_curado(&ahora), roles_curado(NORD));
         let ciclo = NORD.replace("apagado = \"fondo4\"", "apagado = \"apagado\"");
         assert!(roles_curado(&ciclo).unwrap_err().contains("sin resolver"));
         let corto = NORD.replace("\"#eceff4\",", "");

@@ -1,0 +1,26 @@
+# Kanagawa (variante wave). Fuente: rebelot/kanagawa.nvim (lua/kanagawa/colors.lua) y, para
+# la terminal, kovidgoyal/kitty-themes (kanagawa.conf). Vocabulario y reglas: crates/morgan-temas/src/paleta.rs.
+
+bg0 = "#16161d"  # sumiInk0
+bg1 = "#181820"  # sumiInk1
+bg  = "#1f1f28"  # sumiInk3
+bg2 = "#2a2a37"  # sumiInk4
+bg3 = "#363646"  # sumiInk5
+bg4 = "#54546d"  # sumiInk6
+
+text   = "#dcd7ba"  # fujiWhite
+text2  = "#c8c093"  # oldWhite
+muted = "#727169"  # fujiGray
+
+primary   = "#7e9cd8"  # crystalBlue
+secondary = "#957fb8"  # oniViolet
+tertiary  = "#7fb4ca"  # springBlue
+
+red     = "#e46876"  # waveRed
+yellow = "#e6c384"  # carpYellow
+green    = "#98bb6c"  # springGreen
+
+terminal = [
+  "#16161d", "#c34043", "#76946a", "#c0a36e", "#7e9cd8", "#957fb8", "#6a9589", "#c8c093",
+  "#727169", "#e82424", "#98bb6c", "#e6c384", "#7fb4ca", "#938aa9", "#7aa89f", "#dcd7ba",
+]

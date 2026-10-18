@@ -11,8 +11,8 @@
 set -euo pipefail
 
 config="${XDG_CONFIG_HOME:-$HOME/.config}/morgan"
-lista="$config/calendarios"
-guardada="$config/calendarios.antes-de-la-muestra"
+lista="$config/calendars"
+guardada="$config/calendars.antes-de-la-muestra"
 ics="${XDG_RUNTIME_DIR:?}/morgan-muestra.ics"
 
 # Un evento con hora (hora local, sin zona) o de día entero si no lleva hora.

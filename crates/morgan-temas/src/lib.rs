@@ -1,6 +1,6 @@
 //! El motor de temas de morgan.
 //!
-//! Un tema es un `paleta.toml` (curado) o el wallpaper pasado por matugen (`matugen`). Los
+//! Un tema es un `palette.toml` (curado) o el wallpaper pasado por matugen (`matugen`). Los
 //! dos caminos terminan en el mismo `matugen json` con las mismas plantillas, así un tema
 //! sale completo para todas las apps por construcción. Se renderiza solo el tema activo, en
 //! un directorio fijo (`render`); las apps miran ahí por las integraciones (`integraciones`).
@@ -9,9 +9,12 @@
 //!
 //! | Qué | Del usuario | Del paquete |
 //! |---|---|---|
-//! | temas curados | `~/.config/morgan/temas/<tema>/paleta.toml` | `<datos>/morgan/temas/…` |
-//! | plantillas | `~/.config/morgan/plantillas/<archivo>` | `<datos>/morgan/plantillas/…` |
-//! | integraciones propias | `~/.config/morgan/temas.toml` | las de `integraciones::PROPIAS` |
+//! | temas curados | `~/.config/morgan/themes/<tema>/palette.toml` | `<datos>/morgan/themes/…` |
+//! | plantillas | `~/.config/morgan/templates/<archivo>` | `<datos>/morgan/templates/…` |
+//! | integraciones propias | `~/.config/morgan/themes.toml` | las de `integraciones::PROPIAS` |
+//!
+//! Los nombres de antes de 0.1.2 (`temas/`, `plantillas/`, `paleta.toml`, `temas.toml`) los
+//! renombra `migrar` al arrancar morgan.
 //!
 //! `<datos>` es `$XDG_DATA_HOME` y después cada `$XDG_DATA_DIRS`. Lo renderizado y el tema
 //! activo van en `$XDG_STATE_HOME/morgan/`.
@@ -29,7 +32,7 @@ use std::process::Command;
 pub const MATUGEN: &str = "matugen";
 
 /// La paleta del tema propio, embebida: morgan tiene colores aunque no haya nada renderizado.
-const PALETA_POR_DEFECTO: &str = include_str!("../../../dist/share/morgan/temas/morgan/paleta.toml");
+const PALETA_POR_DEFECTO: &str = include_str!("../../../dist/share/morgan/themes/morgan/palette.toml");
 
 const ROLES_MORGAN: [&str; 9] = [
     "surface_container_low",
@@ -108,10 +111,10 @@ impl Rutas {
 
 pub fn catalogo(r: &Rutas) -> Vec<String> {
     let mut v = BTreeSet::new();
-    for dir in r.fuentes("temas") {
+    for dir in r.fuentes("themes") {
         let Ok(it) = std::fs::read_dir(&dir) else { continue };
         for e in it.flatten() {
-            if e.path().join("paleta.toml").is_file()
+            if e.path().join("palette.toml").is_file()
                 && let Some(n) = e.file_name().to_str()
             {
                 v.insert(n.to_owned());
@@ -141,9 +144,9 @@ pub fn aplicar(r: &Rutas, tema: &str, imagen: Option<&Path>) -> Result<Informe, 
         render::datos_matugen(r, imagen)?
     } else {
         let paleta = r
-            .fuentes("temas")
+            .fuentes("themes")
             .into_iter()
-            .map(|d| d.join(tema).join("paleta.toml"))
+            .map(|d| d.join(tema).join("palette.toml"))
             .find(|p| p.is_file())
             .ok_or_else(|| format!("no existe el tema '{tema}'"))?;
         let texto = std::fs::read_to_string(&paleta).map_err(|e| format!("{}: {e}", paleta.display()))?;
@@ -151,7 +154,7 @@ pub fn aplicar(r: &Rutas, tema: &str, imagen: Option<&Path>) -> Result<Informe, 
     };
     let plantillas = render::plantillas(r);
     if plantillas.is_empty() {
-        return Err("no hay plantillas (~/.config/morgan/plantillas)".into());
+        return Err("no hay plantillas (~/.config/morgan/templates)".into());
     }
     render::renderizar(r, &plantillas, &datos)?;
     escribir(&r.archivo_activo(), &format!("{tema}\n"))?;
@@ -222,7 +225,7 @@ mod tests {
     fn los_colores_por_defecto_cubren_la_plantilla_de_morgan() {
         let css = colores_por_defecto();
         assert_eq!(css.lines().count(), ROLES_MORGAN.len(), "la paleta resuelve todo");
-        let plantilla = include_str!("../../../dist/share/morgan/plantillas/morgan.css");
+        let plantilla = include_str!("../../../dist/share/morgan/templates/morgan.css");
         let pedidos: Vec<&str> = plantilla
             .split("{{colors.")
             .skip(1)

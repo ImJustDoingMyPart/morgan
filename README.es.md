@@ -144,8 +144,14 @@ la lista es además un buen punto de partida.
 | `uwsm` | Lanzar las apps como unidades de systemd (sin él, morgan usa un scope propio) |
 
 **Apps que siguen al tema**: morgan trae plantillas para kitty, GTK, Qt, btop, yazi,
-starship, Vesktop (Discord) y Obsidian. Cuáles aplica se elige en Apariencia. Los juegos
+starship, Vesktop (Discord) y Obsidian. Cuáles aplica se elige en Apariencia. Los temas
+propios van en `~/.config/morgan/themes/<nombre>/palette.toml`, las plantillas propias en
+`~/.config/morgan/templates/` y otras apps en `~/.config/morgan/themes.toml`. Los juegos
 lanzados desde Steam prenden el modo juego solos.
+
+Para reglas de Hyprland propias, las capas de morgan son `morgan-bar`, `morgan-center`,
+`morgan-calendar`, `morgan-tray`, `morgan-notifications`, `morgan-osd`, `morgan-launcher`,
+`morgan-calculator`, `morgan-menu`, `morgan-wallpapers` y `morgan-windows`.
 
 ## Antes de instalar: parar lo que morgan reemplaza
 

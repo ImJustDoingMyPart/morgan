@@ -1,0 +1,28 @@
+# Nord. Fuente: nordtheme/nord (src/nord.css, nord0…nord15) y, para la terminal,
+# kovidgoyal/kitty-themes (Nord.conf). Vocabulario y reglas: crates/morgan-temas/src/paleta.rs.
+#
+# Nord no tiene fondos más oscuros que nord0: los tres primeros escalones son el mismo.
+
+bg0 = "#2e3440"  # nord0
+bg1 = "#2e3440"  # nord0
+bg  = "#2e3440"  # nord0
+bg2 = "#3b4252"  # nord1
+bg3 = "#434c5e"  # nord2
+bg4 = "#4c566a"  # nord3
+
+text   = "#d8dee9"                      # nord4
+text2  = ["#d8dee9", "#4c566a", 0.7]    # sin texto secundario propio: nord4 hacia nord3
+muted = "#4c566a"                      # nord3
+
+primary   = "#88c0d0"  # nord8, el acento principal de Nord
+secondary = "#8fbcbb"  # nord7
+tertiary  = "#81a1c1"  # nord9
+
+red     = "#bf616a"  # nord11
+yellow = "#ebcb8b"  # nord13
+green    = "#a3be8c"  # nord14
+
+terminal = [
+  "#3b4252", "#bf616a", "#a3be8c", "#ebcb8b", "#81a1c1", "#b48ead", "#88c0d0", "#e5e9f0",
+  "#4c566a", "#bf616a", "#a3be8c", "#d08770", "#5e81ac", "#b48ead", "#8fbcbb", "#eceff4",
+]

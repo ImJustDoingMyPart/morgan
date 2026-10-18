@@ -1,0 +1,26 @@
+# Catppuccin Mocha. Fuente: catppuccin/palette (palette.json, "mocha") y, para la terminal,
+# kovidgoyal/kitty-themes (Catppuccin-Mocha.conf). Vocabulario y reglas: crates/morgan-temas/src/paleta.rs.
+
+bg0 = "#11111b"  # crust
+bg1 = "#181825"  # mantle
+bg  = "#1e1e2e"  # base
+bg2 = "#313244"  # surface0
+bg3 = "#45475a"  # surface1
+bg4 = "#585b70"  # surface2
+
+text   = "#cdd6f4"  # text
+text2  = "#a6adc8"  # subtext0
+muted = "#6c7086"  # overlay0
+
+primary   = "#cba6f7"  # mauve
+secondary = "#89b4fa"  # blue
+tertiary  = "#f5c2e7"  # pink
+
+red     = "#f38ba8"
+yellow = "#f9e2af"
+green    = "#a6e3a1"
+
+terminal = [
+  "#45475a", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#f5c2e7", "#94e2d5", "#bac2de",
+  "#585b70", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#f5c2e7", "#94e2d5", "#a6adc8",
+]

@@ -21,7 +21,7 @@ const DIAS: i64 = 30;
 const MAX_EVENTOS: usize = 25;
 
 fn archivo_urls() -> PathBuf {
-    glib::user_config_dir().join("morgan/calendarios")
+    glib::user_config_dir().join("morgan/calendars")
 }
 
 fn dir_cache() -> PathBuf {

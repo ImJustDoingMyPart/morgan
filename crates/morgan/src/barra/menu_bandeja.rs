@@ -40,7 +40,7 @@ impl MenuBandeja {
         window.add_css_class("morgan");
         window.add_css_class("blank-window");
         window.init_layer_shell();
-        window.set_namespace(Some("morgan-bandeja"));
+        window.set_namespace(Some("morgan-tray"));
         window.set_layer(Layer::Top);
         window.set_keyboard_mode(KeyboardMode::Exclusive);
         window.set_monitor(barra.monitor().as_ref());

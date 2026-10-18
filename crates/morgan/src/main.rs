@@ -34,6 +34,7 @@ mod ipc;
 mod launcher;
 mod luz;
 mod menu;
+mod migracion;
 mod mezclador;
 mod mpris;
 mod notificaciones;
@@ -92,6 +93,11 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    if let Some(dir) = config_path.parent() {
+        for r in migracion::nombres_viejos(dir) {
+            eprintln!("morgan: renombrado (nombre de antes de 0.1.2): {r}");
+        }
+    }
     let config = match config::load(&config_path) {
         Ok(c) => c,
         Err(e) => {

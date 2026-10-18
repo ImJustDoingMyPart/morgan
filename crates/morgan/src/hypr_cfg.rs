@@ -50,7 +50,7 @@ pub fn ruta_cambios(ruta_config: &Path) -> PathBuf {
 }
 
 pub fn ruta_monitores(ruta_config: &Path) -> PathBuf {
-    ruta_config.with_file_name("monitores.toml")
+    ruta_config.with_file_name("monitors.toml")
 }
 
 /// Blur con `ignore_alpha` 0,5: cada capa cubre la salida y el umbral recorta el desenfoque a
@@ -58,17 +58,17 @@ pub fn ruta_monitores(ruta_config: &Path) -> PathBuf {
 /// entera, que cubre la salida, y lo que se ve asomaría tarde.
 const CAPAS: &str = r#"-- Las capas de morgan: blur recortado a lo que se ve, y cómo entra cada una.
 for ns, regla in pairs({
-    ["morgan-centro"]         = { animation = "fade",         ignore_alpha = 0.5 },
-    ["morgan-calendario"]     = { animation = "fade",         ignore_alpha = 0.5 },
-    ["morgan-bandeja"]        = { animation = "fade",         ignore_alpha = 0.5 },
-    ["morgan-calculadora"]    = { animation = "fade",         ignore_alpha = 0.5 },
-    ["morgan-notificaciones"] = { animation = "fade",         ignore_alpha = 0.5 },
-    ["morgan-osd"]            = { animation = "slide bottom", ignore_alpha = 0.5 },
-    ["morgan-launcher"]       = { animation = "fade",         ignore_alpha = 0.5 },
-    ["morgan-menu"]           = { animation = "fade",         ignore_alpha = 0.5 },
-    ["morgan-fondos"]         = { animation = "slide bottom", ignore_alpha = 0.5 },
-    ["morgan-ventanas"]       = { animation = "fade",         ignore_alpha = 0.5 },
-    ["morgan-barra"]          = {},
+    ["morgan-center"]        = { animation = "fade",         ignore_alpha = 0.5 },
+    ["morgan-calendar"]      = { animation = "fade",         ignore_alpha = 0.5 },
+    ["morgan-tray"]          = { animation = "fade",         ignore_alpha = 0.5 },
+    ["morgan-calculator"]    = { animation = "fade",         ignore_alpha = 0.5 },
+    ["morgan-notifications"] = { animation = "fade",         ignore_alpha = 0.5 },
+    ["morgan-osd"]           = { animation = "slide bottom", ignore_alpha = 0.5 },
+    ["morgan-launcher"]      = { animation = "fade",         ignore_alpha = 0.5 },
+    ["morgan-menu"]          = { animation = "fade",         ignore_alpha = 0.5 },
+    ["morgan-wallpapers"]    = { animation = "slide bottom", ignore_alpha = 0.5 },
+    ["morgan-windows"]       = { animation = "fade",         ignore_alpha = 0.5 },
+    ["morgan-bar"]           = {},
 }) do
     hl.layer_rule({
         name         = ns,

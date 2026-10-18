@@ -1,22 +1,24 @@
 //! Cómo llega cada archivo del tema activo a su app, y cómo se le avisa a la que ya corre.
 //!
 //! Las propias (`PROPIAS`) son las de apps comunes y valen si la app está instalada. Las del
-//! usuario van en `~/.config/morgan/temas.toml`:
+//! usuario van en `~/.config/morgan/themes.toml`:
 //!
 //! ```toml
-//! apagadas = ["vesktop"]                    # propias que no se tocan
-//! despues = [["mi-script", "--recargar"]]  # comandos al terminar, sin esperarlos
+//! disabled = ["vesktop"]                    # propias que no se tocan
+//! after = [["mi-script", "--recargar"]]     # comandos al terminar, sin esperarlos
 //!
-//! [[integracion]]
-//! plantilla = "obsidian.css"
-//! enlazar = ["~/algo/theme.css"]            # symlinks al archivo renderizado
-//! copiar = ["~/vaults/*/.obsidian/snippets/theme.css"]   # para apps que no siguen symlinks
-//! json = [{ destino = "~/.app/settings.json", claves = [["workbench.colorCustomizations"]] }]
-//! aviso = ["hyprctl", "reload", "config-only"]
+//! [[integration]]
+//! template = "obsidian.css"
+//! link = ["~/algo/theme.css"]               # symlinks al archivo renderizado
+//! copy = ["~/vaults/*/.obsidian/snippets/theme.css"]   # para apps que no siguen symlinks
+//! json = [{ target = "~/.app/settings.json", keys = [["workbench.colorCustomizations"]] }]
+//! notify = ["hyprctl", "reload", "config-only"]
 //! ```
 //!
 //! `json` copia esas claves (cada una, un camino de claves) del archivo renderizado al
-//! destino sin tocarle el resto; `*` en `copiar` es un nombre cualquiera (no los ocultos).
+//! destino sin tocarle el resto; `*` en `copy` es un nombre cualquiera (no los ocultos). Las
+//! claves de antes de 0.1.2, en castellano (`apagadas`, `integracion`, `enlazar`…), se
+//! siguen leyendo.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -78,37 +80,40 @@ const PROPIAS: &[Propia] = &[
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct DelUsuario {
-    #[serde(default)]
+    #[serde(default, rename = "disabled", alias = "apagadas")]
     apagadas: Vec<String>,
-    #[serde(default)]
+    #[serde(default, rename = "after", alias = "despues")]
     despues: Vec<Vec<String>>,
-    #[serde(default)]
+    #[serde(default, rename = "integration", alias = "integracion")]
     integracion: Vec<Integracion>,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Integracion {
+    #[serde(rename = "template", alias = "plantilla")]
     plantilla: String,
-    #[serde(default)]
+    #[serde(default, rename = "link", alias = "enlazar")]
     enlazar: Vec<String>,
-    #[serde(default)]
+    #[serde(default, rename = "copy", alias = "copiar")]
     copiar: Vec<String>,
     #[serde(default)]
     json: Vec<Json>,
-    #[serde(default)]
+    #[serde(default, rename = "notify", alias = "aviso")]
     aviso: Vec<String>,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Json {
+    #[serde(rename = "target", alias = "destino")]
     destino: String,
+    #[serde(rename = "keys", alias = "claves")]
     claves: Vec<Vec<String>>,
 }
 
 fn del_usuario(r: &Rutas, inf: &mut Informe) -> DelUsuario {
-    let ruta = r.config.join("morgan/temas.toml");
+    let ruta = r.config.join("morgan/themes.toml");
     match std::fs::read_to_string(&ruta) {
         Ok(s) => toml::from_str(&s).unwrap_or_else(|e| {
             inf.avisos.push(format!("{}: {e}", ruta.display()));
@@ -145,7 +150,7 @@ pub fn desplegar(r: &Rutas) -> Informe {
     for i in &usuario.integracion {
         let src = render.join(&i.plantilla);
         if !src.is_file() {
-            inf.avisos.push(format!("temas.toml: no hay plantilla {}", i.plantilla));
+            inf.avisos.push(format!("themes.toml: no hay plantilla {}", i.plantilla));
             continue;
         }
         for d in &i.enlazar {

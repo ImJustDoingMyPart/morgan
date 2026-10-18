@@ -55,7 +55,7 @@ impl Calendario {
         window.add_css_class("morgan");
         window.add_css_class("blank-window");
         window.init_layer_shell();
-        window.set_namespace(Some("morgan-calendario"));
+        window.set_namespace(Some("morgan-calendar"));
         window.set_layer(Layer::Top);
         window.set_keyboard_mode(KeyboardMode::Exclusive);
         for borde in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {

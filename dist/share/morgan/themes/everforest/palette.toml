@@ -1,0 +1,27 @@
+# Everforest (oscuro, fondo medium). Fuente: sainnhe/everforest (autoload/everforest.vim) y,
+# para la terminal, kovidgoyal/kitty-themes (everforest_dark_medium.conf).
+# Vocabulario y reglas: crates/morgan-temas/src/paleta.rs.
+
+bg0 = "#1e2326"  # bg_dim de la variante hard
+bg1 = "#232a2e"  # bg_dim
+bg  = "#2d353b"  # bg0
+bg2 = "#343f44"  # bg1
+bg3 = "#3d484d"  # bg2
+bg4 = "#475258"  # bg3
+
+text   = "#d3c6aa"  # fg
+text2  = "#9da9a0"  # grey2
+muted = "#859289"  # grey1
+
+primary   = "#a7c080"  # green, el acento de Everforest
+secondary = "#7fbbb3"  # blue
+tertiary  = "#83c092"  # aqua
+
+red     = "#e67e80"
+yellow = "#dbbc7f"
+green    = "#a7c080"
+
+terminal = [
+  "#343f44", "#e67e80", "#a7c080", "#dbbc7f", "#7fbbb3", "#d699b6", "#83c092", "#859289",
+  "#868d80", "#e67e80", "#a7c080", "#dbbc7f", "#7fbbb3", "#d699b6", "#83c092", "#9da9a0",
+]

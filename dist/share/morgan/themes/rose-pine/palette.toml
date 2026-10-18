@@ -4,24 +4,24 @@
 #
 # base es el fondo más oscuro de Rosé Pine: los dos primeros escalones son el mismo.
 
-fondo0 = "#191724"  # base
-fondo1 = "#191724"  # base
-fondo  = "#191724"  # base
-fondo2 = "#1f1d2e"  # surface
-fondo3 = "#26233a"  # overlay
-fondo4 = "#403d52"  # highlight med
+bg0 = "#191724"  # base
+bg1 = "#191724"  # base
+bg  = "#191724"  # base
+bg2 = "#1f1d2e"  # surface
+bg3 = "#26233a"  # overlay
+bg4 = "#403d52"  # highlight med
 
-texto   = "#e0def4"  # text
-texto2  = "#908caa"  # subtle
-apagado = "#6e6a86"  # muted
+text   = "#e0def4"  # text
+text2  = "#908caa"  # subtle
+muted = "#6e6a86"  # muted
 
-primario   = "#c4a7e7"  # iris
-secundario = "#9ccfd8"  # foam
-terciario  = "#ebbcba"  # rose
+primary   = "#c4a7e7"  # iris
+secondary = "#9ccfd8"  # foam
+tertiary  = "#ebbcba"  # rose
 
-rojo     = "#eb6f92"  # love
-amarillo = "#f6c177"  # gold
-verde    = "#31748f"  # pine (Rosé Pine no tiene verde: pine es el que usa su terminal)
+red     = "#eb6f92"  # love
+yellow = "#f6c177"  # gold
+green    = "#31748f"  # pine (Rosé Pine no tiene verde: pine es el que usa su terminal)
 
 terminal = [
   "#26233a", "#eb6f92", "#31748f", "#f6c177", "#9ccfd8", "#c4a7e7", "#ebbcba", "#e0def4",
