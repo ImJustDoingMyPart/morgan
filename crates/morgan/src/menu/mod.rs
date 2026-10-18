@@ -703,8 +703,7 @@ impl Menu {
         match cat {
             Categoria::Shell
             | Categoria::Pantalla
-            | Categoria::Notificaciones
-            | Categoria::Juego => {
+            | Categoria::Notificaciones => {
                 let apps = self.inner.s.notificaciones.apps();
                 let notas = if cat == Categoria::Shell {
                     lectura::notas(&self.dir_notas()).await

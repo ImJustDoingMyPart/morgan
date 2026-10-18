@@ -19,13 +19,12 @@ pub enum Categoria {
     Pantalla,
     Notificaciones,
     Sonido,
-    Juego,
     Aplicaciones,
     Sistema,
 }
 
 impl Categoria {
-    pub const TODAS: [Categoria; 10] = [
+    pub const TODAS: [Categoria; 9] = [
         Categoria::Apariencia,
         Categoria::Shell,
         Categoria::Compositor,
@@ -33,7 +32,6 @@ impl Categoria {
         Categoria::Pantalla,
         Categoria::Notificaciones,
         Categoria::Sonido,
-        Categoria::Juego,
         Categoria::Aplicaciones,
         Categoria::Sistema,
     ];
@@ -49,7 +47,6 @@ impl Categoria {
             Categoria::Sonido => tr!("Sonido"),
             Categoria::Pantalla => tr!("Pantalla y energía"),
             Categoria::Notificaciones => tr!("Notificaciones"),
-            Categoria::Juego => tr!("Modo juego"),
         }
     }
 
@@ -64,7 +61,6 @@ impl Categoria {
             Categoria::Sonido => 0xF057E,
             Categoria::Pantalla => 0xF0379,
             Categoria::Notificaciones => 0xF009A,
-            Categoria::Juego => 0xF0297,
         };
         char::from_u32(c).unwrap_or('?')
     }
@@ -94,8 +90,7 @@ impl Categoria {
             Categoria::Sistema => &[tr_const!("Equipo"), tr_const!("Snapshots"), tr_const!("Privacidad")],
             Categoria::Sonido => &[tr_const!("Volumen"), tr_const!("Salidas"), tr_const!("Tema"), tr_const!("Sonidos del sistema")],
             Categoria::Pantalla => &[tr_const!("Luz nocturna"), tr_const!("Inactividad")],
-            Categoria::Notificaciones => &[tr_const!("Generales"), tr_const!("Por app")],
-            Categoria::Juego => &[tr_const!("Al volver")],
+            Categoria::Notificaciones => &[tr_const!("Generales"), tr_const!("Modo juego"), tr_const!("Por app")],
         }
     }
 }
@@ -498,6 +493,7 @@ pub fn pagina_fija(
                     },
                 ),
             ],
+            juego(c),
             por_app(apps_historial, c),
         ],
         Categoria::Pantalla => vec![luz(c), vec![
@@ -525,21 +521,21 @@ pub fn pagina_fija(
                 ),
             ),
         ]],
-        Categoria::Juego => {
-            let r = c.juego.resumen;
-            vec![
-                vec![ajuste(
-                    tr!("Resumen al volver"),
-                    tr!("al salir del juego, un solo aviso con lo que llegó mientras tanto"),
-                    Control::Casilla {
-                        activa: r,
-                        que: Que::Config(Cambio::Resumen(!r)),
-                    },
-                )],
-            ]
-        }
     };
     Some(armar(cat, filas))
+}
+
+/// El modo juego es automático: lo único que se elige es qué pasa con lo que llegó mientras.
+fn juego(c: &Config) -> Vec<Fila> {
+    let r = c.juego.resumen;
+    vec![ajuste(
+        tr!("Resumen al volver"),
+        tr!("al salir del juego, un solo aviso con lo que llegó mientras tanto"),
+        Control::Casilla {
+            activa: r,
+            que: Que::Config(Cambio::Resumen(!r)),
+        },
+    )]
 }
 
 pub type MuestrasCursor = std::collections::HashMap<String, Rc<[Muestra]>>;
@@ -1552,7 +1548,7 @@ mod tests {
     #[test]
     fn resumen_alterna() {
         let mut c = Config::default();
-        let casilla = |c: &Config| match &pagina_fija(Categoria::Juego, c, &[], &DatosNotas::default()).unwrap()[0].filas[0]
+        let casilla = |c: &Config| match &pagina_fija(Categoria::Notificaciones, c, &[], &DatosNotas::default()).unwrap()[1].filas[0]
         {
             Fila::Ajuste {
                 control: Control::Casilla { activa, que },
