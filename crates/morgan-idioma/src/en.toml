@@ -9,6 +9,9 @@
 "Caffeine" = "Caffeine"
 "Contraseña" = "Password"
 "olvidar" = "forget"
+"copiar la clave" = "copy the password"
+"Clave copiada" = "Password copied"
+"No se pudo leer la clave" = "Couldn't read the password"
 
 # centro/bt.rs
 "Emparejando…" = "Pairing…"

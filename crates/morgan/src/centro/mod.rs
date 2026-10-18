@@ -764,15 +764,26 @@ impl Centro {
             for c in wifis {
                 let yo = self.clone();
                 let ruta = c.ruta.clone();
-                items.push(conexion(c).deslizable(Accion {
-                    glifo: "󰆴",
-                    texto: tr!("olvidar"),
-                    se_va: true,
-                    f: Rc::new(move || {
-                        let yo2 = yo.clone();
-                        yo.inner.red.olvidar(&ruta, move || yo2.pintar_red(true));
-                    }),
-                }));
+                let yo2 = self.clone();
+                let ruta2 = c.ruta.clone();
+                items.push(
+                    conexion(c)
+                        .deslizable(Accion {
+                            glifo: "󰆴",
+                            texto: tr!("olvidar"),
+                            se_va: true,
+                            f: Rc::new(move || {
+                                let yo2 = yo.clone();
+                                yo.inner.red.olvidar(&ruta, move || yo2.pintar_red(true));
+                            }),
+                        })
+                        .deslizable_izquierda(Accion {
+                            glifo: "󰆏",
+                            texto: tr!("copiar la clave"),
+                            se_va: false,
+                            f: Rc::new(move || yo2.copiar_clave(&ruta2)),
+                        }),
+                );
             }
         }
         let antes = items.len();
@@ -800,6 +811,27 @@ impl Centro {
             .opciones()
             .insert_child_after(&campo.raiz, Some(&lista.fila(boton)));
         campo.enfocar();
+    }
+
+    /// Al portapapeles con `--sensitive`: el historial (cliphist) no la guarda.
+    fn copiar_clave(&self, ruta: &zbus::zvariant::OwnedObjectPath) {
+        let osd = self.inner.osd.clone();
+        self.inner.red.clave(ruta, move |clave| {
+            let aviso = match clave {
+                Some(c) => {
+                    comando::lanzar_con_entrada(&["wl-copy", "--sensitive"], c.as_bytes());
+                    crate::osd::Aviso::estado("󰆏", "Wi-Fi", tr!("Clave copiada"), true, 2000)
+                }
+                None => crate::osd::Aviso::estado(
+                    "󰆏",
+                    "Wi-Fi",
+                    tr!("No se pudo leer la clave"),
+                    false,
+                    2000,
+                ),
+            };
+            osd.mostrar(&aviso);
+        });
     }
 
     /// Una abierta conecta al click; una con clave abre el campo debajo (o lo cierra).

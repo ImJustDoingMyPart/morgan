@@ -357,6 +357,33 @@ impl Red {
         });
     }
 
+    /// La clave guardada de una Wi-Fi. NetworkManager la da solo si polkit deja (en una
+    /// sesión local activa, sí; si no, la pide).
+    pub fn clave(&self, ruta: &OwnedObjectPath, listo: impl FnOnce(Option<String>) + 'static) {
+        let ruta = ruta.clone();
+        glib::MainContext::default().spawn_local(async move {
+            let r = async {
+                let s: HashMap<String, HashMap<String, OwnedValue>> = sistema::proxy(
+                    NM,
+                    ruta,
+                    "org.freedesktop.NetworkManager.Settings.Connection",
+                )
+                .await?
+                .call("GetSecrets", &("802-11-wireless-security",))
+                .await?;
+                Ok::<_, zbus::Error>(
+                    s.get("802-11-wireless-security")
+                        .and_then(|w| w.get("psk"))
+                        .and_then(|v| <&str>::try_from(&**v).ok().map(str::to_owned)),
+                )
+            };
+            listo(r.await.unwrap_or_else(|e| {
+                eprintln!("morgan: red: clave: {e}");
+                None
+            }));
+        });
+    }
+
     /// Con la clave, si la pide. `listo` llega una vez, cuando conectó o cuando ya no va a
     /// conectar (y la conexión creada se borró).
     pub fn conectar_nueva(

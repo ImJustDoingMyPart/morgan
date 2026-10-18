@@ -14,8 +14,9 @@ pub struct Item {
     pub texto: String,
     pub marcada: Option<bool>,
     pub accion: Rc<dyn Fn()>,
-    /// Deslizar a la derecha, como una notificación.
+    /// Deslizar a la derecha y a la izquierda, como una notificación.
     pub derecha: Option<Accion>,
+    pub izquierda: Option<Accion>,
 }
 
 impl Item {
@@ -31,11 +32,17 @@ impl Item {
             marcada,
             accion: Rc::new(f),
             derecha: None,
+            izquierda: None,
         }
     }
 
     pub fn deslizable(mut self, a: Accion) -> Self {
         self.derecha = Some(a);
+        self
+    }
+
+    pub fn deslizable_izquierda(mut self, a: Accion) -> Self {
+        self.izquierda = Some(a);
         self
     }
 }
@@ -119,11 +126,13 @@ impl Desplegable {
         self.revealer.set_visible(!items.is_empty());
         let mut botones = Vec::new();
         for mut it in items {
-            let derecha = it.derecha.take();
+            let (derecha, izquierda) = (it.derecha.take(), it.izquierda.take());
             let b = opcion(it);
-            match derecha {
-                Some(a) => self.opciones.append(&Deslizable::new(&b, Some(a), None)),
-                None => self.opciones.append(&b),
+            if derecha.is_some() || izquierda.is_some() {
+                self.opciones
+                    .append(&Deslizable::new(&b, derecha, izquierda));
+            } else {
+                self.opciones.append(&b);
             }
             botones.push(b);
         }
