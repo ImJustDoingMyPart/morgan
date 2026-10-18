@@ -406,3 +406,14 @@
 "Quitar la regla" = "Remove the rule"
 "Nueva regla" = "New rule"
 "para las ventanas de una app: workspace, flotante, tamaño, opacidad" = "for an app's windows: workspace, floating, size, opacity"
+
+# launcher/mod.rs (carpetas de emoji)
+"Caras y emociones" = "Smileys & emotion"
+"Personas y cuerpo" = "People & body"
+"Animales y naturaleza" = "Animals & nature"
+"Comida y bebida" = "Food & drink"
+"Viajes y lugares" = "Travel & places"
+"Actividades" = "Activities"
+"Objetos" = "Objects"
+"Banderas" = "Flags"
+"{} emoji" = "{} emoji"

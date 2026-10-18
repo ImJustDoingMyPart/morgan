@@ -9,18 +9,20 @@ pub struct Simbolo {
     pub nombre: String,
     pub claves: String,
     pub otro: String,
+    /// El grupo de Unicode, en inglés («Smileys & Emotion»).
+    pub grupo: String,
 }
 
 pub const SIMBOLOS: &str = include_str!("simbolos.tsv");
 
-/// `emoji \t nombre es \t claves es \t nombre en \t claves en`; `#` es comentario.
+/// `emoji \t nombre es \t claves es \t nombre en \t claves en \t grupo`; `#` es comentario.
 pub fn simbolos(texto: &str, ingles: bool) -> Vec<Simbolo> {
     texto
         .lines()
         .filter(|l| !l.starts_with('#'))
         .filter_map(|l| {
             let c: Vec<&str> = l.split('\t').collect();
-            let [caracter, nombre_es, claves_es, nombre_en, claves_en] = c.as_slice() else {
+            let [caracter, nombre_es, claves_es, nombre_en, claves_en, grupo] = c.as_slice() else {
                 return None;
             };
             let (nombre, claves, otro) = if ingles {
@@ -33,6 +35,7 @@ pub fn simbolos(texto: &str, ingles: bool) -> Vec<Simbolo> {
                 nombre: (*nombre).into(),
                 claves: (*claves).into(),
                 otro: (*otro).into(),
+                grupo: (*grupo).into(),
             })
         })
         .collect()
@@ -140,7 +143,7 @@ mod tests {
 
     #[test]
     fn lee_la_tabla_de_simbolos() {
-        let t = "# comentario\n😀\tcara sonriendo\tcara, feliz\tgrinning face\tface, grin\nroto\n";
+        let t = "# comentario\n😀\tcara sonriendo\tcara, feliz\tgrinning face\tface, grin\tSmileys & Emotion\nroto\n";
         let es = simbolos(t, false);
         assert_eq!(
             es,
@@ -149,6 +152,7 @@ mod tests {
                 nombre: "cara sonriendo".into(),
                 claves: "cara, feliz".into(),
                 otro: "grinning face".into(),
+                grupo: "Smileys & Emotion".into(),
             }]
         );
         assert_eq!(simbolos(t, true)[0].nombre, "grinning face");

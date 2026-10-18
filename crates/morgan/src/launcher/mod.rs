@@ -45,6 +45,24 @@ pub struct Launcher {
     inner: Rc<Inner>,
 }
 
+/// Los grupos de Unicode, en su orden: sin texto, los emoji se ven por carpeta. Una lista con
+/// los ~1900 juntos traba el scroll (el `ListBox` acomoda todas sus filas en cada cuadro).
+const GRUPOS: [(&str, &str); 9] = [
+    ("Smileys & Emotion", tr_const!("Caras y emociones")), // no-tr
+    ("People & Body", tr_const!("Personas y cuerpo")), // no-tr
+    ("Animals & Nature", tr_const!("Animales y naturaleza")), // no-tr
+    ("Food & Drink", tr_const!("Comida y bebida")), // no-tr
+    ("Travel & Places", tr_const!("Viajes y lugares")), // no-tr
+    ("Activities", tr_const!("Actividades")), // no-tr
+    ("Objects", tr_const!("Objetos")), // no-tr
+    ("Symbols", tr_const!("Símbolos")), // no-tr
+    ("Flags", tr_const!("Banderas")), // no-tr
+];
+/// Los usados, arriba de las carpetas.
+const RECIENTES: usize = 8;
+/// Una búsqueda corta («a») no vuelve a traer la lista entera.
+const TOPE_BUSQUEDA: usize = 200;
+
 struct Inner {
     window: gtk::ApplicationWindow,
     tarjeta: gtk::Box,
@@ -72,6 +90,8 @@ struct Inner {
     visibles: RefCell<Vec<usize>>,
     uso_apps: RefCell<Uso>,
     uso_simbolos: RefCell<Uso>,
+    /// La carpeta de emoji abierta, si hay.
+    carpeta: Cell<Option<usize>>,
     /// Sube con cada carga o cálculo pedido: una respuesta vieja que llega tarde se descarta.
     turno: Cell<u64>,
     /// Sin `enter`, el primer movimiento solo marca el punto de partida.
@@ -91,14 +111,21 @@ struct Catalogo {
     entradas: Vec<Entrada>,
     filas: Vec<Fila>,
     acciones: Vec<Accion>,
+    /// Solo en los emoji: el grupo de cada uno.
+    grupos: Vec<Option<usize>>,
     cargado: bool,
 }
 
 impl Catalogo {
     fn agregar(&mut self, entrada: Entrada, fila: Fila, accion: Accion) {
+        self.agregar_en(entrada, fila, accion, None);
+    }
+
+    fn agregar_en(&mut self, entrada: Entrada, fila: Fila, accion: Accion, grupo: Option<usize>) {
         self.entradas.push(entrada);
         self.filas.push(fila);
         self.acciones.push(accion);
+        self.grupos.push(grupo);
     }
 }
 
@@ -106,6 +133,8 @@ impl Catalogo {
 enum Accion {
     App(String),
     Simbolo(String),
+    /// Una carpeta de emoji: la abre, no cierra el launcher.
+    Carpeta(usize),
     Recorte(String),
     /// La referencia del bind se vuelve a buscar al ejecutarlo.
     Atajo(String, String),
@@ -235,6 +264,7 @@ impl Launcher {
             visibles: RefCell::default(),
             uso_apps: RefCell::new(uso_apps),
             uso_simbolos: RefCell::new(uso_simbolos),
+            carpeta: Cell::new(None),
             turno: Cell::new(0),
             puntero: Cell::new(None),
             _monitor: monitor.clone(),
@@ -292,6 +322,7 @@ impl Launcher {
             Modo::Calendario => tr!("Dirección iCal secreta…"),
             _ => tr!("Buscar…"),
         }));
+        i.carpeta.set(None);
         i.turno.set(i.turno.get() + 1);
         // Cada apertura (o cambio de modo) empieza de cero.
         self.vaciar();
@@ -359,6 +390,23 @@ impl Launcher {
         let yo = self.clone();
         teclas.connect_key_pressed(move |_, tecla, _, _| {
             let paso = match tecla {
+                // En una carpeta de emoji, Escape vuelve a las carpetas.
+                gdk::Key::Escape if yo.cerrar_carpeta() => return glib::Propagation::Stop,
+                gdk::Key::Left | gdk::Key::BackSpace
+                    if yo.inner.modo.get() == Modo::Simbolos
+                        && yo.inner.texto.text().is_empty()
+                        && yo.cerrar_carpeta() =>
+                {
+                    return glib::Propagation::Stop;
+                }
+                gdk::Key::Right
+                    if yo.inner.modo.get() == Modo::Simbolos && yo.inner.texto.text().is_empty() =>
+                {
+                    if let Some(g) = yo.carpeta_elegida() {
+                        yo.abrir_carpeta(g);
+                    }
+                    return glib::Propagation::Stop;
+                }
                 gdk::Key::Escape => {
                     let modo = yo.inner.modo.get();
                     yo.cerrar();
@@ -491,13 +539,30 @@ impl Launcher {
             ..Default::default()
         };
         let ingles = morgan_idioma::actual() == morgan_idioma::Idioma::En;
+        let mut muestra: [Option<String>; GRUPOS.len()] = Default::default();
+        let mut cuantos = [0usize; GRUPOS.len()];
         for s in fuentes::simbolos(fuentes::SIMBOLOS, ingles) {
+            let grupo = GRUPOS.iter().position(|(g, _)| *g == s.grupo);
+            if let Some(g) = grupo {
+                cuantos[g] += 1;
+                muestra[g].get_or_insert_with(|| s.caracter.clone());
+            }
             let vista = format!("{}  {}", s.caracter, s.nombre);
             let generico = (!s.claves.is_empty()).then(|| s.claves.clone());
-            c.agregar(
+            c.agregar_en(
                 Entrada::new(&s.caracter, &vista, &[&s.claves, &s.otro]),
                 fila(&display, Icono::Ninguno, vista, generico),
                 Accion::Simbolo(s.caracter),
+                grupo,
+            );
+        }
+        for (g, (_, nombre)) in GRUPOS.iter().enumerate() {
+            let nombre = morgan_idioma::t(nombre);
+            let vista = format!("{}  {nombre}", muestra[g].as_deref().unwrap_or("·"));
+            c.agregar(
+                Entrada::new(&format!("carpeta:{g}"), &vista, &[]), // no-tr
+                fila(&display, Icono::Ninguno, vista, Some(trf!("{} emoji", cuantos[g]))),
+                Accion::Carpeta(g),
             );
         }
         self.inner.simbolos.replace(c);
@@ -562,10 +627,7 @@ impl Launcher {
                 let uso = self.inner.uso_apps.borrow();
                 self.mostrar(Orden::Uso(&uso.historial), true);
             }
-            Modo::Simbolos => {
-                let uso = self.inner.uso_simbolos.borrow();
-                self.mostrar(Orden::Uso(&uso.historial), true);
-            }
+            Modo::Simbolos => self.mostrar_simbolos(),
             Modo::Portapapeles => self.mostrar(Orden::Original, true),
             // Ya vienen ordenados por descripción.
             Modo::Atajos => self.mostrar(Orden::Original, true),
@@ -737,8 +799,42 @@ impl Launcher {
         } else {
             String::new()
         };
+        let visibles = busqueda::filtrar(&self.catalogo(i.modo.get()).borrow().entradas, &consulta, orden);
+        self.pintar(visibles, &consulta, 0);
+    }
+
+    /// Con texto, los que coinciden de todos los grupos (hasta un tope); sin texto, la carpeta
+    /// abierta o, si no hay, los usados y las carpetas.
+    fn mostrar_simbolos(&self) {
+        let i = &self.inner;
+        let consulta = i.texto.text().to_string();
+        let uso = i.uso_simbolos.borrow();
+        let c = i.simbolos.borrow();
+        let es_carpeta = |&v: &usize| matches!(c.acciones[v], Accion::Carpeta(_));
+        let visibles: Vec<usize> = if !consulta.trim().is_empty() {
+            busqueda::filtrar(&c.entradas, &consulta, Orden::Uso(&uso.historial))
+                .into_iter()
+                .filter(|v| !es_carpeta(v))
+                .take(TOPE_BUSQUEDA)
+                .collect()
+        } else if let Some(g) = i.carpeta.get() {
+            (0..c.grupos.len()).filter(|&v| c.grupos[v] == Some(g)).collect()
+        } else {
+            let mut usados: Vec<usize> = (0..c.entradas.len())
+                .filter(|&v| !es_carpeta(&v) && uso.historial.usos(&c.entradas[v].id) > 0)
+                .collect();
+            usados.sort_by_key(|&v| std::cmp::Reverse(uso.historial.usos(&c.entradas[v].id)));
+            usados.truncate(RECIENTES);
+            usados.extend((0..c.acciones.len()).filter(es_carpeta));
+            usados
+        };
+        drop((uso, c));
+        self.pintar(visibles, &consulta, 0);
+    }
+
+    fn pintar(&self, visibles: Vec<usize>, consulta: &str, elegida: i32) {
+        let i = &self.inner;
         let c = self.catalogo(i.modo.get()).borrow();
-        let visibles = busqueda::filtrar(&c.entradas, &consulta, orden);
         let color = color_hex(&i.resaltado.color());
         // Las filas se reusan: una que se saca elegida vuelve con su marca, y `select_row`
         // la ignora por creerla ya elegida (la lista queda sin elegida y Enter no hace nada).
@@ -746,12 +842,55 @@ impl Launcher {
         for &v in &visibles {
             let f = &c.filas[v];
             f.row.remove_css_class("elegida");
-            f.etiqueta.set_markup(&markup(f, &consulta, &color));
+            f.etiqueta.set_markup(&markup(f, consulta, &color));
             i.lista.append(&f.row);
         }
         i.visibles.replace(visibles);
-        i.lista.select_row(i.lista.row_at_index(0).as_ref());
+        i.lista.select_row(i.lista.row_at_index(elegida).as_ref());
         i.desliz.poner(0.0);
+        if let Some(r) = i.lista.row_at_index(elegida) {
+            self.mostrar_fila(&r);
+        }
+    }
+
+    fn abrir_carpeta(&self, g: usize) {
+        let i = &self.inner;
+        i.carpeta.set(Some(g));
+        i.texto
+            .set_placeholder_text(Some(morgan_idioma::t(GRUPOS[g].1)));
+        i.texto.set_text("");
+        self.mostrar_simbolos();
+    }
+
+    /// De vuelta a las carpetas, con la que estaba abierta elegida.
+    fn cerrar_carpeta(&self) -> bool {
+        let i = &self.inner;
+        let Some(g) = i.carpeta.take() else {
+            return false;
+        };
+        i.texto.set_placeholder_text(Some(tr!("Buscar…")));
+        i.texto.set_text("");
+        self.mostrar_simbolos();
+        let id = format!("carpeta:{g}"); // no-tr
+        let posicion = {
+            let c = i.simbolos.borrow();
+            i.visibles.borrow().iter().position(|&v| c.entradas[v].id == id)
+        };
+        if let Some(r) = posicion.and_then(|p| i.lista.row_at_index(p as i32)) {
+            i.lista.select_row(Some(&r));
+            self.mostrar_fila(&r);
+        }
+        true
+    }
+
+    fn carpeta_elegida(&self) -> Option<usize> {
+        let i = &self.inner;
+        let p = usize::try_from(i.lista.selected_row()?.index()).ok()?;
+        let v = *i.visibles.borrow().get(p)?;
+        match i.simbolos.borrow().acciones.get(v)? {
+            Accion::Carpeta(g) => Some(*g),
+            _ => None,
+        }
     }
 
     /// Con vuelta al otro extremo solo cuando se avanza de a una.
@@ -832,6 +971,10 @@ impl Launcher {
             self.agregar_calendario(texto);
             return;
         }
+        if let Accion::Carpeta(g) = accion {
+            self.abrir_carpeta(g);
+            return;
+        }
         self.cerrar();
         match accion {
             Accion::App(id) => {
@@ -860,7 +1003,7 @@ impl Launcher {
                 }
                 self.volver_al_menu(ParaElMenu::Calendario);
             }
-            Accion::Calendario(_) | Accion::Ninguna => {}
+            Accion::Calendario(_) | Accion::Carpeta(_) | Accion::Ninguna => {}
             // Releídos al ejecutar: entre abrir y elegir, Hyprland pudo releer la config y
             // la referencia de entonces ser de otra acción.
             Accion::Atajo(descripcion, teclas) => {

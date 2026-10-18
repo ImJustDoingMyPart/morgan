@@ -7,7 +7,7 @@ Baja la lista de Unicode (emoji-test.txt: cuáles y en qué orden) y las anotaci
 en castellano y en inglés (nombre y palabras clave), las dos con la Licencia de Unicode v3,
 y escribe una línea por emoji:
 
-    emoji \t nombre es \t claves es \t nombre en \t claves en
+    emoji \t nombre es \t claves es \t nombre en \t claves en \t grupo
 
 Solo los totalmente calificados y sin los tonos de piel ni de pelo (salen en otro lugar del
 teclado del sistema; acá serían seis filas iguales por cada persona). Lo bajado va a
@@ -69,8 +69,11 @@ def main() -> None:
         nombre = f"{idioma}{'-derivadas' if derivadas else ''}.json"
         nombres[idioma].update(anotaciones(bajar(url, carpeta / nombre)))
 
-    filas, faltan = [], 0
+    filas, faltan, grupo = [], 0, ""
     for linea in lista.splitlines():
+        if linea.startswith("# group:"):
+            grupo = linea.split(":", 1)[1].strip()
+            continue
         if not linea or linea.startswith("#") or "; fully-qualified" not in linea:
             continue
         emoji = linea.split("#", 1)[1].split()[0]
@@ -86,6 +89,7 @@ def main() -> None:
             emoji,
             limpio(es[0]), claves(es[0], es[1]),
             limpio(en[0]), claves(en[0], en[1]),
+            grupo,
         ]))
 
     cabecera = (
