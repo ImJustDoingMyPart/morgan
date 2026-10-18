@@ -338,6 +338,25 @@ impl Red {
 }
 
 impl Red {
+    /// Borra la conexión guardada (y con ella la clave); si estaba activa, se cae.
+    pub fn olvidar(&self, ruta: &OwnedObjectPath, listo: impl FnOnce() + 'static) {
+        let ruta = ruta.clone();
+        let yo = self.clone();
+        glib::MainContext::default().spawn_local(async move {
+            let r = async {
+                sistema::proxy(NM, ruta, "org.freedesktop.NetworkManager.Settings.Connection")
+                    .await?
+                    .call::<_, _, ()>("Delete", &())
+                    .await
+            };
+            if let Err(e) = r.await {
+                eprintln!("morgan: red: olvidar: {e}");
+            }
+            yo.releer().await;
+            listo();
+        });
+    }
+
     /// Con la clave, si la pide. `listo` llega una vez, cuando conectó o cuando ya no va a
     /// conectar (y la conexión creada se borró).
     pub fn conectar_nueva(

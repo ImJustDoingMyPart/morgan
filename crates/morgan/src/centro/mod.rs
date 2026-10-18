@@ -33,6 +33,7 @@ use crate::luz::Luz;
 use crate::osd::Osd;
 use crate::red::{self, Red, Visible};
 use crate::toasts::Toasts;
+use crate::deslizable::Accion;
 use desplegable::{Desplegable, Grupo, Item};
 use nivel::Nivel;
 use tarjetas::{Tarjeta, Tarjetas};
@@ -751,7 +752,19 @@ impl Centro {
             }));
         }
         if e.wifi == Some(true) {
-            items.extend(wifis.into_iter().map(conexion));
+            for c in wifis {
+                let yo = self.clone();
+                let ruta = c.ruta.clone();
+                items.push(conexion(c).deslizable(Accion {
+                    glifo: "󰆴",
+                    texto: tr!("olvidar"),
+                    se_va: true,
+                    f: Rc::new(move || {
+                        let yo2 = yo.clone();
+                        yo.inner.red.olvidar(&ruta, move || yo2.pintar_red(true));
+                    }),
+                }));
+            }
         }
         let antes = items.len();
         for v in &e.visibles {
@@ -772,8 +785,9 @@ impl Centro {
         let Some(boton) = botones.get(antes + n) else {
             return;
         };
+        boton.add_css_class("abierto");
         let campo = self.campo_clave();
-        lista.opciones().insert_child_after(&campo, Some(boton));
+        lista.opciones().insert_child_after(&campo, Some(&lista.fila(boton)));
         if let Some((texto, _)) = i.clave.borrow().as_ref().and_then(|p| p.campo.as_ref()) {
             texto.grab_focus();
         }
@@ -800,15 +814,13 @@ impl Centro {
         self.pintar_red(true);
     }
 
-    /// El campo del launcher, con un candado de prompt y un ojo para ver lo escrito.
+    /// El campo del launcher como un renglón más, colgado del de la red: empieza en la
+    /// columna del nombre y el ojo va en la del tilde. Sin candado: ya está en el glifo.
     fn campo_clave(&self) -> gtk::Box {
         let caja = gtk::Box::new(gtk::Orientation::Vertical, 0);
         caja.add_css_class("cc-clave");
-        let entrada = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        let entrada = gtk::Box::new(gtk::Orientation::Horizontal, 10);
         entrada.add_css_class("launcher-entrada");
-        let candado = gtk::Label::new(Some("\u{F033E}"));
-        candado.add_css_class("prompt");
-        entrada.append(&candado);
         let texto = gtk::Text::new();
         texto.set_placeholder_text(Some(tr!("Contraseña")));
         texto.set_visibility(false);

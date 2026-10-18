@@ -68,7 +68,7 @@ más allá del borde de la pantalla, y si no entra se desplaza por dentro.
   - **Red**: cable y VPN, con las conexiones guardadas, y la radio Wi-Fi; con la radio
     prendida, debajo, las Wi-Fi guardadas y las que están a la vista: una abierta conecta
     al click y una con clave la pide ahí mismo; si la clave no sirve, lo dice y no queda
-    guardada.
+    guardada. Una guardada se olvida deslizándola a la derecha, como una notificación.
   - **Bluetooth**: el adaptador y los dispositivos emparejados, cada uno se conecta o se
     desconecta por separado.
   - **No molestar**, **Caffeine** (la pantalla no se apaga) y **Luz nocturna**.

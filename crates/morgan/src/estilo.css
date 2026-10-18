@@ -657,21 +657,24 @@ window.blank-window {
     opacity: 1;
 }
 
-/* La clave de una Wi-Fi nueva: el campo del launcher debajo de su renglón. */
+/* La clave de una Wi-Fi nueva: un renglón más debajo del de la red, con la caja del
+ * launcher. El texto arranca en la columna de los nombres (4 del renglón + 36 del glifo +
+ * 10) y el ojo queda en la del tilde; el alto es el de un renglón. */
 .cc-clave {
-    margin: 4px 0;
+    margin: 2px 0 2px 38px;
 }
 
 .cc-clave .launcher-entrada {
     margin-bottom: 0;
+    padding: 6px 4px 6px 12px;
 }
 
-.cc-clave .launcher-entrada .prompt {
-    margin-right: 8px;
+.cc-clave .launcher-entrada text {
+    font-size: 14px;
 }
 
 .cc-clave .aviso {
-    margin: 4px 12px 0 12px;
+    margin: 4px 12px 2px 12px;
     font-size: 12px;
     opacity: 0.5;
 }
@@ -1380,7 +1383,8 @@ tooltip label {
     margin-top: 8px;
 }
 
-.menu-bandeja .cc-opcion.abierto {
+.menu-bandeja .cc-opcion.abierto,
+.cc-lista .cc-opcion.abierto {
     background: alpha(@primary, 0.2);
 }
 

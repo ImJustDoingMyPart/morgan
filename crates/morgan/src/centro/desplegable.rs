@@ -7,11 +7,15 @@ use std::rc::Rc;
 use gtk::glib;
 use gtk::prelude::*;
 
+use crate::deslizable::{Accion, Deslizable};
+
 pub struct Item {
     pub glifo: String,
     pub texto: String,
     pub marcada: Option<bool>,
     pub accion: Rc<dyn Fn()>,
+    /// Deslizar a la derecha, como una notificación.
+    pub derecha: Option<Accion>,
 }
 
 impl Item {
@@ -26,7 +30,13 @@ impl Item {
             texto: texto.into(),
             marcada,
             accion: Rc::new(f),
+            derecha: None,
         }
+    }
+
+    pub fn deslizable(mut self, a: Accion) -> Self {
+        self.derecha = Some(a);
+        self
     }
 }
 
@@ -108,12 +118,28 @@ impl Desplegable {
         // Sin opciones (una sola salida, y es la puesta), no hay nada que desplegar.
         self.revealer.set_visible(!items.is_empty());
         let mut botones = Vec::new();
-        for it in items {
+        for mut it in items {
+            let derecha = it.derecha.take();
             let b = opcion(it);
-            self.opciones.append(&b);
+            match derecha {
+                Some(a) => self.opciones.append(&Deslizable::new(&b, Some(a), None)),
+                None => self.opciones.append(&b),
+            }
             botones.push(b);
         }
         botones
+    }
+
+    /// El renglón de la lista que lleva al botón: él mismo o lo que lo hace deslizable.
+    pub fn fila(&self, boton: &gtk::Button) -> gtk::Widget {
+        let mut w: gtk::Widget = boton.clone().upcast();
+        while let Some(p) = w.parent() {
+            if p == *self.opciones.upcast_ref::<gtk::Widget>() {
+                break;
+            }
+            w = p;
+        }
+        w
     }
 }
 

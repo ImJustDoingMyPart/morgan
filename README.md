@@ -65,7 +65,8 @@ holds, never past the edge of the screen, and scrolls inside when it has to.
   - **Network**: wired and VPN, with the saved connections, and the Wi-Fi radio; with the
     radio on, below it, the saved Wi-Fi networks and the ones in range: an open one
     connects on click and a secured one asks for its password right there; a wrong
-    password is reported and isn't saved.
+    password is reported and isn't saved. A saved one is forgotten by swiping it right, like
+    a notification.
   - **Bluetooth**: the adapter and the paired devices, each connected or disconnected on
     its own.
   - **Do not disturb**, **Caffeine** (the screen stays on) and **Night light**.
