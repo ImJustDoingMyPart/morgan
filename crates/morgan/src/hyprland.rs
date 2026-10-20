@@ -8,7 +8,6 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
-use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -16,6 +15,8 @@ use gtk::gio;
 use gtk::gio::prelude::*;
 use gtk::glib;
 use serde::Deserialize;
+
+use morgan_ipc::hyprland::{dir_from, pedir_ya};
 
 /// `activewindowv2` aparte: solo cuenta si cambió la dirección.
 const EVENTOS: &[&str] = &[
@@ -319,12 +320,6 @@ impl Hyprland {
     }
 }
 
-pub fn dir_from(env: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
-    let runtime = env("XDG_RUNTIME_DIR").filter(|v| !v.is_empty())?;
-    let firma = env("HYPRLAND_INSTANCE_SIGNATURE").filter(|v| !v.is_empty())?;
-    Some(PathBuf::from(runtime).join("hypr").join(firma))
-}
-
 async fn conectar(path: &Path) -> Result<gio::SocketConnection, glib::Error> {
     gio::SocketClient::new()
         .connect_future(&gio::UnixSocketAddress::new(path))
@@ -343,17 +338,6 @@ pub async fn pedir(dir: &Path, comando: &str) -> Result<String, glib::Error> {
         .await
         .unwrap_or_else(|_| Err(std::io::Error::other("el hilo del pedido entró en pánico")))
         .map_err(|e| glib::Error::new(gio::IOErrorEnum::Failed, &e.to_string()))
-}
-
-fn pedir_ya(ruta: &Path, comando: &str) -> std::io::Result<String> {
-    use std::io::{Read, Write};
-    let mut s = std::os::unix::net::UnixStream::connect(ruta)?;
-    s.write_all(comando.as_bytes())?;
-    // Tope por si no contesta: el hilo no queda colgado para siempre.
-    s.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
-    let mut respuesta = Vec::new();
-    s.read_to_end(&mut respuesta)?;
-    Ok(String::from_utf8_lossy(&respuesta).into_owned())
 }
 
 /// `ultima` descarta los `activewindowv2` de cambio de título.
@@ -516,44 +500,6 @@ pub fn leer_proc(pid: u32) -> Option<(u32, Vec<u8>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn el_pedido_llega_entero_sin_el_main_loop() {
-        let dir = std::env::temp_dir().join(format!("morgan-pedir-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let ruta = dir.join(".socket.sock");
-        let escucha = std::os::unix::net::UnixListener::bind(&ruta).unwrap();
-        // Como Hyprland: lee el pedido apenas acepta, contesta y cierra.
-        let hypr = std::thread::spawn(move || {
-            use std::io::{Read, Write};
-            let (mut c, _) = escucha.accept().unwrap();
-            let mut b = [0u8; 64];
-            let n = c.read(&mut b).unwrap();
-            c.write_all(b"ok").unwrap();
-            String::from_utf8_lossy(&b[..n]).into_owned()
-        });
-        assert_eq!(pedir_ya(&ruta, "j/monitors").unwrap(), "ok");
-        assert_eq!(hypr.join().unwrap(), "j/monitors");
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn dir_de_la_instancia() {
-        let env = |k: &str| match k {
-            "XDG_RUNTIME_DIR" => Some("/run/user/1000".into()),
-            "HYPRLAND_INSTANCE_SIGNATURE" => Some("abc_1_2".into()),
-            _ => None,
-        };
-        assert_eq!(
-            dir_from(env),
-            Some(PathBuf::from("/run/user/1000/hypr/abc_1_2"))
-        );
-        assert_eq!(dir_from(|_| None), None);
-        assert_eq!(
-            dir_from(|k| (k == "XDG_RUNTIME_DIR").then(|| "/run".into())),
-            None
-        );
-    }
 
     #[test]
     fn juego_por_la_ventana_y_no_por_el_workspace() {

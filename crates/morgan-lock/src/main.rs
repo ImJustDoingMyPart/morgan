@@ -11,6 +11,7 @@ mod lienzo;
 mod logind;
 mod pam;
 mod vista;
+mod xray;
 
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
@@ -97,18 +98,29 @@ fn main() -> ExitCode {
     });
     let (b, s) = (bucle.clone(), salida.clone());
     instancia.connect_failed(move |_| {
+        xray::poner(false);
         eprintln!("morgan-lock: no se pudo bloquear (¿otro bloqueo activo?)");
         s.set(ExitCode::FAILURE);
         b.quit();
     });
+    // Antes de `lock()`: el primer cuadro ya tiene que verse sobre el escritorio (xray.rs).
+    // Si no, se apaga igual: uno que se cayó a mitad de un fundido lo pudo dejar prendido.
+    let cruzado = !(o.logind && ya_bloqueada());
+    xray::poner(cruzado);
     let l = logind.clone();
     instancia.connect_locked(move |_| {
         if let Some(l) = l.borrow().clone() {
             marcar(l, true);
         }
+        if cruzado {
+            glib::timeout_add_local_once(Duration::from_millis(vista::ENTRADA_MS + 50), || {
+                xray::poner_luego(false)
+            });
+        }
     });
     let (l, b) = (logind.clone(), bucle.clone());
     instancia.connect_unlocked(move |_| {
+        xray::poner(false);
         let l = l.borrow().clone();
         let b = b.clone();
         glib::spawn_future_local(async move {
@@ -240,8 +252,26 @@ fn verificar(vista: &Vista, instancia: &lock::Instance, servicio: String, usuari
 }
 
 fn desbloquear(vista: &Vista, instancia: &lock::Instance) {
+    xray::poner_luego(true);
     let inst = instancia.clone();
     vista.salir(move || inst.unlock());
+}
+
+/// `LockedHint` de la sesión, con tope: el bloqueo no espera al bus. Sin respuesta a tiempo
+/// se da por bloqueada, que es lo seguro (sin fundido cruzado).
+fn ya_bloqueada() -> bool {
+    glib::MainContext::default().block_on(futures_lite::future::or(
+        async {
+            match Logind::conectar().await {
+                Ok(l) => l.bloqueada().await.unwrap_or(true),
+                Err(_) => true,
+            }
+        },
+        async {
+            glib::timeout_future(Duration::from_millis(200)).await;
+            true
+        },
+    ))
 }
 
 type Temporizador = Rc<RefCell<Option<glib::SourceId>>>;

@@ -12,6 +12,8 @@ use crate::lienzo::{Lienzo, Paleta};
 use morgan_ipc::bloqueo::Bloqueo;
 
 const FALLO_MS: u64 = 2000;
+/// Los de `estilo.css`: la animación `entrar` y la transición de `.saliendo`.
+pub const ENTRADA_MS: u64 = 200;
 const SALIDA_MS: u64 = 200;
 const DESTELLO_MS: u64 = 380;
 

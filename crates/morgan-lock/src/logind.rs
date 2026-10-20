@@ -42,6 +42,10 @@ impl Logind {
             .await
     }
 
+    pub async fn bloqueada(&self) -> zbus::Result<bool> {
+        self.proxy_sesion().await?.get_property("LockedHint").await
+    }
+
     pub async fn esperar_unlock(&self) -> zbus::Result<()> {
         let p = self.proxy_sesion().await?;
         let mut s = p.receive_signal("Unlock").await?;

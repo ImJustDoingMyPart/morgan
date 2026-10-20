@@ -1,6 +1,7 @@
 //! Sin GTK, para que `morganctl` arranque rápido desde los binds.
 
 pub mod bloqueo;
+pub mod hyprland;
 
 use std::ffi::OsString;
 use std::fmt;
