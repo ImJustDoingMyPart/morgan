@@ -114,6 +114,12 @@ impl Fondos {
         self.inner.pedido.set(self.inner.pedido.get() + 1);
         if let Some(b) = self.inner.abierta.take() {
             b.window.destroy();
+            // glibc se queda con lo que se liberó al decodificar las miniaturas (~12 MB en el
+            // anidado) en vez de devolverlo. Un segundo después, cuando GTK ya soltó las
+            // texturas de la ventana.
+            glib::timeout_add_local_once(Duration::from_secs(1), || unsafe {
+                libc::malloc_trim(0);
+            });
         }
     }
 
