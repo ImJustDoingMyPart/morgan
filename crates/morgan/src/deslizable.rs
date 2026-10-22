@@ -149,10 +149,17 @@ mod imp {
                 obj.snapshot_child(f, s);
                 s.pop();
             }
+            // GTK 4.24 arma el nodo de opacidad aun en 1, y ese nodo aísla el fondo: la región
+            // de `backdrop-filter` que se le declara a Hyprland queda vacía y la tarjeta, sin blur.
             if let Some(h) = self.hijo.borrow().as_ref() {
-                s.push_opacity(opacidad(dx, ancho));
-                obj.snapshot_child(h, s);
-                s.pop();
+                let o = opacidad(dx, ancho);
+                if o < 1.0 {
+                    s.push_opacity(o);
+                    obj.snapshot_child(h, s);
+                    s.pop();
+                } else {
+                    obj.snapshot_child(h, s);
+                }
             }
         }
     }
