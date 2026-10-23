@@ -17,6 +17,7 @@ mod fondo;
 mod logind;
 mod pam;
 mod pintor;
+mod sombra;
 mod texto;
 mod xray;
 

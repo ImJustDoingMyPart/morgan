@@ -57,9 +57,16 @@ pub fn dibujar(
     color: impl Fn(u8) -> Color,
     alfa: f32,
 ) {
-    let x0 = (cx - l.width() as f64 / 2.0).round();
-    let y0 = (cy - l.height() as f64 / 2.0).round();
-    dibujar_en(s, l, Affine::translate((x0, y0)), color, alfa);
+    dibujar_en(s, l, Affine::translate(esquina(l, cx, cy)), color, alfa);
+}
+
+/// Dónde cae la esquina de `l` centrado en (`cx`, `cy`): en un píxel entero, para que el
+/// hinting no se pierda.
+pub fn esquina(l: &Layout<u8>, cx: f64, cy: f64) -> (f64, f64) {
+    (
+        (cx - l.width() as f64 / 2.0).round(),
+        (cy - l.height() as f64 / 2.0).round(),
+    )
 }
 
 /// Con la esquina del layout donde la ponga `tr` (para escalarlo, como los símbolos).

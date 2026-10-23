@@ -16,6 +16,7 @@ use vello::peniko::{self, BlendMode, Fill, Gradient, ImageBrush, ImageData, Imag
 
 use crate::caracteres;
 use crate::escena::*;
+use crate::sombra::Sombra;
 use crate::texto;
 use morgan_ipc::bloqueo::Escritura;
 
@@ -62,6 +63,8 @@ pub struct Rotulos {
     pub reloj: parley::Layout<u8>,
     pub fecha: parley::Layout<u8>,
     pub aviso: Option<parley::Layout<u8>>,
+    /// Las sombras del reloj, la fecha y el aviso; las pone el render (necesitan la GPU).
+    pub sombras: [Option<Sombra>; 3],
     /// El texto del campo y su layout: cambia poco, se guarda el último.
     pub campo: Option<(String, parley::Layout<u8>)>,
     /// Los de la escritura `symbols`, armados la primera vez que salen.
@@ -87,6 +90,7 @@ impl Rotulos {
         }
         .map(|a| t.armar(&[(&a, ROL_TEXTO)], texto::pt(13.0), escala));
         Rotulos {
+            sombras: [None, None, None],
             version: e.version_textos,
             reloj,
             fecha,
@@ -157,10 +161,11 @@ pub fn pintar(
 
     let (cx, cy) = (w * escala / 2.0, h * escala / 2.0);
     let color = |r| rol(&e.paleta, r);
-    texto::dibujar(s, &rot.reloj, cx, cy - Y_RELOJ * escala, color, 1.0);
-    texto::dibujar(s, &rot.fecha, cx, cy - Y_FECHA * escala, color, 1.0);
+    let [sr, sf, sa] = &rot.sombras;
+    con_sombra(s, &rot.reloj, sr, cx, cy - Y_RELOJ * escala, color);
+    con_sombra(s, &rot.fecha, sf, cx, cy - Y_FECHA * escala, color);
     if let Some(a) = &rot.aviso {
-        texto::dibujar(s, a, cx, cy - Y_AVISO * escala, color, 1.0);
+        con_sombra(s, a, sa, cx, cy - Y_AVISO * escala, color);
     }
 
     // El campo en sus coordenadas: (0, 0) es su esquina, en píxeles lógicos.
@@ -173,6 +178,26 @@ pub fn pintar(
 
     s.pop_layer();
 }
+
+fn con_sombra(
+    s: &mut Scene,
+    l: &parley::Layout<u8>,
+    sombra: &Option<Sombra>,
+    cx: f64,
+    cy: f64,
+    color: impl Fn(u8) -> Color,
+) {
+    if let Some(sm) = sombra {
+        let (x, y) = texto::esquina(l, cx, cy);
+        let brocha = ImageBrush::new(sm.imagen.clone());
+        s.draw_image(&brocha, Affine::translate((x - sm.margen, y - sm.margen)));
+    }
+    texto::dibujar(s, l, cx, cy, color, 1.0);
+}
+
+/// Cuánto se desenfoca y qué tan oscura es cada sombra (reloj, fecha, aviso): los
+/// `text-shadow` de 8 y 3 px al 60 % de la versión con GTK.
+pub const SOMBRAS: [(f32, f32); 3] = [(4.0, 0.6), (1.5, 0.6), (1.5, 0.6)];
 
 fn sacudida(t: f32) -> f32 {
     const K: [(f32, f32); 7] = [

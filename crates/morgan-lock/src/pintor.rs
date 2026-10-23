@@ -153,7 +153,12 @@ fn display(conn: &Connection) -> Display {
 }
 
 fn abrir_gpu(conn: &Connection) -> Gpu {
-    let desc = wgpu::InstanceDescriptor::new_with_display_handle_from_env(Box::new(display(conn)));
+    abrir(wgpu::InstanceDescriptor::new_with_display_handle_from_env(
+        Box::new(display(conn)),
+    ))
+}
+
+fn abrir(desc: wgpu::InstanceDescriptor) -> Gpu {
     let instancia = wgpu::Instance::new(desc);
     let adaptador = futures_lite::future::block_on(
         instancia.request_adapter(&wgpu::RequestAdapterOptions::default()),
@@ -373,6 +378,7 @@ impl Pintor {
         if s.rotulos.as_ref().is_none_or(|r| r.version != version) {
             let mut r = Rotulos::armar(textos, estado, s.escala as f32);
             r.version = version;
+            sombras(gpu, &mut r, s.escala as f32);
             s.rotulos = Some(r);
         }
         let Some(rot) = s.rotulos.as_mut() else {
@@ -457,6 +463,23 @@ impl Pintor {
     }
 }
 
+/// Las sombras del texto necesitan la GPU: van acá y no en `Rotulos::armar`.
+fn sombras(gpu: &mut Gpu, r: &mut Rotulos, escala: f32) {
+    let capas = [Some(&r.reloj), Some(&r.fecha), r.aviso.as_ref()];
+    for (i, (l, (sigma, alfa))) in capas.into_iter().zip(dibujo::SOMBRAS).enumerate() {
+        r.sombras[i] = l.and_then(|l| {
+            crate::sombra::hacer(
+                &gpu.device,
+                &gpu.cola,
+                &mut gpu.vello,
+                l,
+                sigma * escala,
+                alfa,
+            )
+        });
+    }
+}
+
 impl Dispatch<wl_callback::WlCallback, u32> for Pintor {
     fn event(
         p: &mut Self,
@@ -471,5 +494,85 @@ impl Dispatch<wl_callback::WlCallback, u32> for Pintor {
         {
             s.esperando = false;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::escena::{MS, Paleta};
+    use morgan_ipc::bloqueo::Bloqueo;
+
+    /// Una pantalla entera sin compositor, para mirarla: con un juego abierto no se puede
+    /// levantar el anidado.
+    ///
+    ///   MORGAN_LOCK_CAPTURA=/ruta.png cargo test -p morgan-lock -- --ignored captura
+    #[test]
+    #[ignore = "necesita GPU; escribe en MORGAN_LOCK_CAPTURA"]
+    fn captura_sin_compositor() {
+        let ruta = std::env::var_os("MORGAN_LOCK_CAPTURA").expect("MORGAN_LOCK_CAPTURA");
+        let mut gpu = abrir(wgpu::InstanceDescriptor::new_without_display_handle());
+        let css = crate::config_dir()
+            .and_then(|d| std::fs::read_to_string(d.join("morgan/theme.css")).ok())
+            .unwrap_or_default();
+        let mut e = Estado::new(Paleta::desde_css(&css), Bloqueo::default());
+        e.aplicar(Cambio::Reloj {
+            hora: "21".into(),
+            minutos: "37".into(),
+            fecha: "jueves 22 de octubre".into(),
+        });
+        let t = 10_000 * MS;
+        e.t_entrada = Some(0);
+        e.avanzar(t);
+        let fondo = crate::cargar_fondo();
+        let mut textos = Textos::new();
+        let mut rot = Rotulos::armar(&mut textos, &e, 1.0);
+        sombras(&mut gpu, &mut rot, 1.0);
+        let (w, h) = (2560, 1440);
+        let mut escena = Scene::new();
+        dibujo::pintar(
+            &mut escena,
+            &e,
+            &mut rot,
+            &mut textos,
+            fondo.as_ref(),
+            (w, h),
+            1.0,
+            t,
+        );
+        let tex = gpu.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let params = RenderParams {
+            base_color: vello::peniko::Color::BLACK,
+            width: w,
+            height: h,
+            antialiasing_method: AaConfig::Area,
+        };
+        gpu.vello
+            .render_to_texture(
+                &gpu.device,
+                &gpu.cola,
+                &escena,
+                &tex.create_view(&Default::default()),
+                &params,
+            )
+            .unwrap();
+        let px = crate::sombra::leer(&gpu.device, &gpu.cola, &tex, w, h).unwrap();
+        let f = std::io::BufWriter::new(std::fs::File::create(ruta).unwrap());
+        let mut enc = png::Encoder::new(f, w, h);
+        enc.set_color(png::ColorType::Rgba);
+        enc.write_header().unwrap().write_image_data(&px).unwrap();
     }
 }
