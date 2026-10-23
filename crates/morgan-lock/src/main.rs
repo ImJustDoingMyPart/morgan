@@ -55,7 +55,9 @@ use wayland_client::{Connection, QueueHandle};
 use morgan_ipc::bloqueo::Bloqueo;
 
 use crate::clave::Clave;
-use crate::escena::{Cambio, DESTELLO_MS, ENTRADA_MS, Estado, FALLO_MS, Paleta, SALIDA_MS, ahora};
+use crate::escena::{
+    Borde, Cambio, DESTELLO_MS, ENTRADA_MS, Estado, FALLO_MS, Paleta, SALIDA_MS, ahora,
+};
 use crate::logind::Logind;
 use crate::pam::Resultado;
 use crate::pintor::{Hilo, Orden};
@@ -155,7 +157,7 @@ fn main() -> ExitCode {
             .and_then(|p| std::fs::read_to_string(p).ok())
             .unwrap_or_default(),
     );
-    let estilo = estilo();
+    let (estilo, borde) = estilo();
 
     let logind = o.logind.then(|| lanzar_logind(avisos.clone()));
     let session_lock_state = SessionLockState::new(&globales, &qh);
@@ -175,7 +177,9 @@ fn main() -> ExitCode {
     });
     xray::poner(cruzado);
 
-    let pintor = pintor::lanzar(conn.clone(), Estado::new(paleta, estilo), fondo);
+    let mut estado = Estado::new(paleta, estilo);
+    estado.borde = borde;
+    let pintor = pintor::lanzar(conn.clone(), estado, fondo);
 
     let mut app = App {
         conn: conn.clone(),
@@ -530,22 +534,35 @@ fn config_dir() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
 }
 
-/// `[lock]` de la config de morgan. Cualquier problema (sin archivo, TOML roto, un valor
-/// desconocido) deja los defaults y bloquea igual: la config no puede impedir el bloqueo.
-fn estilo() -> Bloqueo {
+/// `[lock]` de la config de morgan, y la sombra de `[appearance]`. Cualquier problema (sin
+/// archivo, TOML roto, un valor desconocido) deja los defaults y bloquea igual: la config no
+/// puede impedir el bloqueo.
+fn estilo() -> (Bloqueo, Borde) {
     let Some(ruta) = config_dir().map(|d| d.join("morgan/config.toml")) else {
-        return Bloqueo::default();
+        return (Bloqueo::default(), Borde::Sombra);
     };
     let Ok(texto) = std::fs::read_to_string(&ruta) else {
-        return Bloqueo::default();
+        return (Bloqueo::default(), Borde::Sombra);
     };
-    leer_estilo(&texto).unwrap_or_else(|e| {
+    let estilo = leer_estilo(&texto).unwrap_or_else(|e| {
         eprintln!(
             "morgan-lock: {}: [lock]: {e}; con los valores de fábrica",
             ruta.display()
         );
         Bloqueo::default()
-    })
+    });
+    (estilo, leer_borde(&texto))
+}
+
+/// `[appearance] shadow`: la misma que la de las ventanas y los paneles de morgan.
+fn leer_borde(texto: &str) -> Borde {
+    let tabla: toml::Table = texto.parse().unwrap_or_default();
+    let id = tabla
+        .get("appearance")
+        .and_then(|a| a.get("shadow"))
+        .and_then(|s| s.as_str())
+        .unwrap_or("black");
+    Borde::de(id)
 }
 
 fn leer_estilo(texto: &str) -> Result<Bloqueo, String> {
@@ -922,6 +939,20 @@ delegate_dispatch2!(App);
 mod tests {
     use super::*;
     use morgan_ipc::bloqueo::Escritura;
+
+    #[test]
+    fn el_borde_sigue_a_la_sombra() {
+        assert_eq!(
+            leer_borde("[appearance]\nshadow = \"glow\"\n"),
+            Borde::Brillo
+        );
+        assert_eq!(
+            leer_borde("[appearance]\nshadow = \"black\"\n"),
+            Borde::Sombra
+        );
+        assert_eq!(leer_borde(""), Borde::Sombra);
+        assert_eq!(leer_borde("no es toml ["), Borde::Sombra);
+    }
 
     #[test]
     fn el_estilo_sale_de_su_seccion_y_lo_roto_no_impide_leer() {

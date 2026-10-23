@@ -9,6 +9,8 @@ use gtk::gio::{self, FileMonitorEvent, FileMonitorFlags};
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
+use morgan_motor::forma::Borde;
+
 use crate::config::Shell;
 
 #[derive(Clone)]
@@ -22,12 +24,14 @@ struct Inner {
     provider: gtk::CssProvider,
     pendiente: Cell<bool>,
     estado: RefCell<Estado>,
-    /// Lo que no es GTK (el OSD) recibe los colores cargados y la opacidad de las tarjetas.
-    cargado: RefCell<(String, f64)>,
+    /// Lo que no es GTK (el OSD) recibe los colores cargados, la opacidad de las tarjetas y lo
+    /// de afuera del anillo.
+    cargado: RefCell<(String, f64, Borde)>,
+    shell: RefCell<Shell>,
     oyentes: RefCell<Vec<Oyente>>,
 }
 
-type Oyente = Box<dyn Fn(&str, f64)>;
+type Oyente = Box<dyn Fn(&str, f64, Borde)>;
 
 #[derive(Default)]
 struct Estado {
@@ -39,7 +43,8 @@ struct Estado {
 }
 
 impl Tema {
-    pub fn new(display: &gdk::Display, link: PathBuf, shell: &Shell) -> Self {
+    /// `borde`: lo de afuera del anillo de los paneles, que sigue a la sombra de las ventanas.
+    pub fn new(display: &gdk::Display, link: PathBuf, shell: &Shell, borde: Borde) -> Self {
         let provider = gtk::CssProvider::new();
         provider.connect_parsing_error(|_, section, error| {
             eprintln!("morgan: tema: {section}: {error}");
@@ -50,12 +55,13 @@ impl Tema {
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
         let inner = Rc::new(Inner {
-            estructura: RefCell::new(estructura(shell)),
+            estructura: RefCell::new(estructura(shell, borde)),
             link,
             provider,
             pendiente: Cell::new(false),
             estado: RefCell::default(),
-            cargado: RefCell::new((String::new(), shell.opacidad)),
+            cargado: RefCell::new((String::new(), shell.opacidad, borde)),
+            shell: RefCell::new(shell.clone()),
             oyentes: RefCell::default(),
         });
         let link_monitor = monitor(&inner.link, Rc::downgrade(&inner));
@@ -64,19 +70,33 @@ impl Tema {
         Tema { inner }
     }
 
-    /// Los colores cargados (`@define-color`) y la opacidad de las tarjetas.
-    pub fn actual(&self) -> (String, f64) {
+    /// Los colores cargados (`@define-color`), la opacidad de las tarjetas y el borde.
+    pub fn actual(&self) -> (String, f64, Borde) {
         self.inner.cargado.borrow().clone()
     }
 
-    /// `f` corre con cada cambio de colores o de opacidad.
-    pub fn al_cambiar(&self, f: impl Fn(&str, f64) + 'static) {
+    /// `f` corre con cada cambio de colores, de opacidad o de borde.
+    pub fn al_cambiar(&self, f: impl Fn(&str, f64, Borde) + 'static) {
         self.inner.oyentes.borrow_mut().push(Box::new(f));
     }
 
     pub fn set_shell(&self, shell: &Shell) {
+        self.inner.shell.replace(shell.clone());
         self.inner.cargado.borrow_mut().1 = shell.opacidad;
-        self.inner.estructura.replace(estructura(shell));
+        self.rehacer();
+    }
+
+    pub fn set_borde(&self, borde: Borde) {
+        self.inner.cargado.borrow_mut().2 = borde;
+        self.rehacer();
+    }
+
+    fn rehacer(&self) {
+        let (shell, borde) = (
+            self.inner.shell.borrow().clone(),
+            self.inner.cargado.borrow().2,
+        );
+        self.inner.estructura.replace(estructura(&shell, borde));
         self.inner.estado.borrow_mut().colores = None;
         self.inner.refrescar();
     }
@@ -139,13 +159,13 @@ impl Inner {
 
 impl Inner {
     fn cargar(&self, colores: &str) {
-        let opacidad = {
+        let (opacidad, borde) = {
             let mut c = self.cargado.borrow_mut();
             c.0 = colores.to_owned();
-            c.1
+            (c.1, c.2)
         };
         for f in self.oyentes.borrow().iter() {
-            f(colores, opacidad);
+            f(colores, opacidad, borde);
         }
     }
 }
@@ -176,11 +196,43 @@ fn recarga(event: FileMonitorEvent) -> bool {
     )
 }
 
-fn estructura(shell: &Shell) -> String {
+/// Con la sombra negra, lo de afuera del anillo de los paneles y de los toasts es el de
+/// `forma::Borde::Sombra` (una línea negra y una sombra suave) en vez del brillo de la hoja.
+const BORDE_SOMBRA: &str = "
+.control-center,
+.launcher {
+    box-shadow:
+        0 0 0 1px black,
+        0 0 6px 1px alpha(black, 0.5);
+}
+
+.floating-notifications .notification-row .notification-background .notification {
+    box-shadow:
+        0 0 0 2px mix(@primary, @tertiary, 0.5),
+        1px 1px 0 1px @tertiary,
+        -1px -1px 0 1px @primary,
+        0 0 0 3px black,
+        0 0 6px 3px alpha(black, 0.5);
+}
+
+.floating-notifications .notification-row .notification-background .notification.critical {
+    box-shadow:
+        0 0 0 2px @error,
+        0 0 0 3px black,
+        0 0 6px 3px alpha(black, 0.5);
+}
+";
+
+fn estructura(shell: &Shell, borde: Borde) -> String {
     let o = shell.opacidad;
+    let extra = if borde == Borde::Sombra {
+        BORDE_SOMBRA
+    } else {
+        ""
+    };
     format!(
         "@define-color morgan_fondo alpha(@surface_container_low, {o});\n\
-         @define-color morgan_barra alpha(@surface, {o});\n{}",
+         @define-color morgan_barra alpha(@surface, {o});\n{}{extra}",
         crate::animaciones::escalar_css(include_str!("estilo.css"))
     )
 }
@@ -191,12 +243,34 @@ mod tests {
 
     #[test]
     fn opacidad_en_la_hoja() {
-        let hoja = estructura(&Shell { opacidad: 0.85, ..Shell::default() });
+        let hoja = estructura(
+            &Shell {
+                opacidad: 0.85,
+                ..Shell::default()
+            },
+            Borde::Brillo,
+        );
         assert!(
             hoja.starts_with("@define-color morgan_fondo alpha(@surface_container_low, 0.85);\n")
         );
         assert!(hoja.contains("@define-color morgan_barra alpha(@surface, 0.85);\n"));
-        assert!(estructura(&Shell { opacidad: 1.0, ..Shell::default() }).contains(", 1);"));
+        assert!(
+            estructura(
+                &Shell {
+                    opacidad: 1.0,
+                    ..Shell::default()
+                },
+                Borde::Brillo
+            )
+            .contains(", 1);")
+        );
+    }
+
+    #[test]
+    fn la_sombra_negra_reemplaza_el_brillo() {
+        let shell = Shell::default();
+        assert!(!estructura(&shell, Borde::Brillo).contains(BORDE_SOMBRA));
+        assert!(estructura(&shell, Borde::Sombra).ends_with(BORDE_SOMBRA));
     }
 
     #[test]

@@ -61,7 +61,7 @@ impl Contexto {
             menu: RefCell::default(),
         });
         let debil = Rc::downgrade(&ctx);
-        tema.al_cambiar(move |css, _| {
+        tema.al_cambiar(move |css, _, _| {
             if let Some(ctx) = debil.upgrade() {
                 ctx.color.set(color_de(css));
                 ctx.enviar();

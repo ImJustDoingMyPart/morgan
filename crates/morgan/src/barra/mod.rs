@@ -52,14 +52,14 @@ pub fn lanzar(
     tema: &Tema,
     fijos: &BTreeMap<String, Vec<NonZeroU32>>,
 ) -> (Sender<Orden>, async_channel::Receiver<Evento>) {
-    let (css, opacidad) = tema.actual();
+    let (css, opacidad, _) = tema.actual();
     let fijos = fijos
         .iter()
         .map(|(m, v)| (m.clone(), v.iter().map(|i| i64::from(i.get())).collect()))
         .collect();
     let (tx, rx) = hilo::lanzar(Paleta::desde_css(&css), opacidad as f32, fijos);
     let t = tx.clone();
-    tema.al_cambiar(move |css, opacidad| {
+    tema.al_cambiar(move |css, opacidad, _| {
         let _ = t.send(Orden::Tema(Paleta::desde_css(css), opacidad as f32));
     });
     (tx, rx)

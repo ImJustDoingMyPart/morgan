@@ -41,6 +41,7 @@ pub(crate) fn seg(us: i64) -> f32 {
 }
 
 pub(crate) use morgan_motor::curva::{acotar, bezier, ease_out};
+pub use morgan_motor::forma::Borde;
 
 pub use morgan_motor::color::{BLANCO, Color, Paleta, con_alfa, mezclar};
 
@@ -154,6 +155,8 @@ pub enum Cambio {
 pub struct Estado {
     pub paleta: Paleta,
     pub estilo: Bloqueo,
+    /// Lo de afuera del anillo de la caja: sigue a la sombra de las ventanas.
+    pub borde: Borde,
     pub modo: Modo,
     pub t_modo: i64,
     pub t_fallo: i64,
@@ -184,6 +187,7 @@ impl Estado {
         Estado {
             paleta,
             estilo,
+            borde: Borde::Sombra,
             modo: Modo::Normal,
             t_modo: 0,
             t_fallo: i64::MIN / 2,

@@ -348,19 +348,20 @@ fn campo(
     let (alfa, extra) = match e.modo {
         Modo::Fallo(_) if estilo.rojo => {
             let k = (-seg(t - e.t_fallo) / 0.38).exp();
-            (0.45 + 0.55 * k, k)
+            (BRILLO + (1.0 - BRILLO) * k, k)
         }
         Modo::Saliendo if estilo.destello => {
             let k = (-(seg(t - e.t_acierto) - 0.2).max(0.0) / 0.3).exp();
-            (0.45 + 0.55 * k, 0.6 * k)
+            (BRILLO + (1.0 - BRILLO) * k, 0.6 * k)
         }
-        _ => (0.45, 0.0),
+        _ => (BRILLO, 0.0),
     };
     caja(
         s,
         tr,
         &p,
         &par,
+        e.borde,
         alfa,
         extra,
         rot.hundido.as_ref(),
@@ -460,6 +461,9 @@ fn campo(
     }
 }
 
+/// El brillo del anillo en reposo (con GTK era 0,45; más tenue, Roberto, 2026-10-23).
+const BRILLO: f32 = 0.35;
+
 /// `box-shadow` de GTK sobre el campo.
 fn sombra(s: &mut Scene, tr: Affine, c: Color, dx: f64, dy: f64, spread: f64, blur: f64) {
     let r = Rect::new(0.0, 0.0, ANCHO as f64, ALTO as f64);
@@ -480,17 +484,33 @@ fn caja(
     tr: Affine,
     p: &Paleta,
     par: &[Color; 2],
+    borde: Borde,
     alfa: f32,
     extra: f32,
     hundido: Option<&(ImageData, ImageData)>,
     escala: f64,
 ) {
     let (w, h) = (ANCHO as f64, ALTO as f64);
-    sombra(s, tr, [0.0, 0.0, 0.0, 0.5], 0.0, 0.0, 4.0, 10.0);
-    sombra(s, tr, con_alfa(&p.surface, 0.85), 0.0, 0.0, 1.0, 0.0);
     let blur = 5.0 + 8.0 * extra as f64;
-    sombra(s, tr, con_alfa(&par[0], alfa), -1.0, -1.0, 2.0, blur);
-    sombra(s, tr, con_alfa(&par[1], alfa), 1.0, 1.0, 2.0, blur);
+    match borde {
+        // La sombra oscura de abajo y el brillo del anillo encima, sin línea.
+        Borde::Brillo => {
+            sombra(s, tr, [0.0, 0.0, 0.0, 0.5], 0.0, 0.0, 4.0, 10.0);
+            sombra(s, tr, con_alfa(&par[0], alfa), -1.0, -1.0, 1.5, blur);
+            sombra(s, tr, con_alfa(&par[1], alfa), 1.0, 1.0, 1.5, blur);
+        }
+        // La de los paneles, un poco más ancha (la caja es más grande); el color asoma solo
+        // en el destello del error y del acierto.
+        Borde::Sombra => {
+            sombra(s, tr, [0.0, 0.0, 0.0, 0.5], 0.0, 0.0, 1.0, 8.0);
+            let destello = alfa - BRILLO;
+            if destello > 0.0 {
+                sombra(s, tr, con_alfa(&par[0], destello), -1.0, -1.0, 1.5, blur);
+                sombra(s, tr, con_alfa(&par[1], destello), 1.0, 1.0, 1.5, blur);
+            }
+            sombra(s, tr, [0.0, 0.0, 0.0, 1.0], 0.0, 0.0, 1.0, 0.0);
+        }
+    }
 
     let fuera = RoundedRect::new(0.0, 0.0, w, h, RADIO);
     s.fill(

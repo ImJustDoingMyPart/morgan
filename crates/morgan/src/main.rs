@@ -141,7 +141,12 @@ fn main() -> ExitCode {
                 }
             });
         }
-        let tema = Tema::new(&display, theme_path.clone(), &config.shell);
+        let tema = Tema::new(
+            &display,
+            theme_path.clone(),
+            &config.shell,
+            morgan_motor::forma::Borde::de(&config.apariencia.sombra),
+        );
         let hyprland = Hyprland::new();
         let notificaciones = Notificaciones::new(&config, hyprland.clone());
         let toasts = toasts::Toasts::new(app, &notificaciones, &hyprland);

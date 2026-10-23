@@ -1685,6 +1685,8 @@ impl Menu {
         // Lo que vale es lo que quedó en el archivo, releído.
         let c = config::load(&i.s.ruta_config).map_err(|e| e.to_string())?;
         i.s.tema.set_shell(&c.shell);
+        i.s.tema
+            .set_borde(morgan_motor::forma::Borde::de(&c.apariencia.sombra));
         i.s.notificaciones.aplicar_config(&c);
         i.s.idle.aplicar_config(&c.idle);
         i.s.audio.aplicar_config(&c.sonido);
