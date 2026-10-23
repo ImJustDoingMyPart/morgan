@@ -213,6 +213,17 @@ pub fn tinta(l: &Layout<u8>) -> Option<[f64; 4]> {
     caja
 }
 
+/// Dónde va la esquina de `l` para que el centro de su tinta caiga en (`cx`, `cy`), en
+/// píxeles enteros. Así se dibuja todo glifo suelto en su caja: centrado por lo que se ve, no
+/// por el ancho que reserva la fuente (en la Nerd Font el dibujo va corrido adentro).
+pub fn esquina_por_tinta(l: &Layout<u8>, cx: f64, cy: f64) -> (f64, f64) {
+    let (tx, ty) = match tinta(l) {
+        Some([x0, y0, x1, y1]) => ((x0 + x1) / 2.0, (y0 + y1) / 2.0),
+        None => (l.width() as f64 / 2.0, l.height() as f64 / 2.0),
+    };
+    ((cx - tx).round(), (cy - ty).round())
+}
+
 /// El alto de la caja de una etiqueta de GTK con el texto de `l`: ascenso más descenso de la
 /// fuente, sin redondear cada uno (parley los redondea por separado y queda un píxel corto).
 pub fn alto_de_linea(l: &Layout<u8>) -> f64 {

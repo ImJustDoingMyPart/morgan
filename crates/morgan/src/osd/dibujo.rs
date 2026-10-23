@@ -45,8 +45,7 @@ pub struct Rotulos {
     titulo: Layout<u8>,
     porcentaje: Option<Layout<u8>>,
     estado: Option<Layout<u8>>,
-    /// El glifo y el centro de su tinta, en sus coordenadas.
-    glifo: Option<(Layout<u8>, (f64, f64))>,
+    glifo: Option<Layout<u8>>,
 }
 
 /// La tarjeta con su relleno y el lugar del brillo, alrededor de los dos renglones.
@@ -86,14 +85,11 @@ impl Rotulos {
         };
         // Un glifo va como texto; un nombre de ícono del tema no se dibuja (los avisos de
         // morgan y sus scripts mandan glifos).
-        let glifo = a.icono.as_deref().filter(|i| es_glifo(i)).map(|g| {
-            let l = t.armar(&[(g, ROL)], PX_GLIFO, escala);
-            let centro = match texto::tinta(&l) {
-                Some([x0, y0, x1, y1]) => ((x0 + x1) / 2.0, (y0 + y1) / 2.0),
-                None => (l.width() as f64 / 2.0, l.height() as f64 / 2.0),
-            };
-            (l, centro)
-        });
+        let glifo = a
+            .icono
+            .as_deref()
+            .filter(|i| es_glifo(i))
+            .map(|g| t.armar(&[(g, ROL)], PX_GLIFO, escala));
         Rotulos {
             version,
             escala,
@@ -172,12 +168,11 @@ pub fn pintar(
             &rr,
         );
     }
-    if let Some((l, (cx, cy))) = &rot.glifo {
+    if let Some(l) = &rot.glifo {
         let c = if encendido { p.surface } else { p.on_surface };
         let centro = cuadro.center();
-        let x = (centro.x * escala - cx).round();
-        let y = (centro.y * escala - cy).round();
-        texto_en(s, l, (x, y), c);
+        let esq = texto::esquina_por_tinta(l, centro.x * escala, centro.y * escala);
+        texto_en(s, l, esq, c);
     }
 
     // La columna de texto, en píxeles del buffer: los textos ya están armados así.

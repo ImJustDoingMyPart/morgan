@@ -304,6 +304,7 @@ impl Calendario {
         caja.append(&numero);
         let glifo = gtk::Label::new(clima.map(|c| c.glifo.as_str()));
         glifo.add_css_class("glifo");
+        crate::icono::centrar_siempre(&glifo, false);
         caja.append(&glifo);
         let capas = gtk::Overlay::new();
         capas.set_child(Some(&caja));
@@ -360,9 +361,7 @@ impl Calendario {
 fn fila_clima(glifo: &str, titulo: &str, estado: &str) -> gtk::Box {
     let fila = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     fila.add_css_class("cal-clima");
-    let icono = gtk::Label::new(Some(glifo));
-    icono.add_css_class("icono");
-    icono.set_valign(gtk::Align::Center);
+    let (icono, _) = crate::icono::cuadro_de_glifo(glifo, "icono");
     fila.append(&icono);
     let textos = gtk::Box::new(gtk::Orientation::Vertical, 0);
     textos.set_valign(gtk::Align::Center);
@@ -381,9 +380,7 @@ fn fila_clima(glifo: &str, titulo: &str, estado: &str) -> gtk::Box {
 fn fila_evento(e: &Evento, hora: &str) -> gtk::Box {
     let fila = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     fila.add_css_class("cal-evento");
-    let glifo = gtk::Label::new(Some("󰃭"));
-    glifo.add_css_class("icono");
-    glifo.set_valign(gtk::Align::Center);
+    let (glifo, _) = crate::icono::cuadro_de_glifo("󰃭", "icono");
     fila.append(&glifo);
     let textos = gtk::Box::new(gtk::Orientation::Vertical, 0);
     textos.set_valign(gtk::Align::Center);

@@ -64,13 +64,39 @@ fn correccion(logica: (i32, i32, i32, i32), tinta: (i32, i32, i32, i32)) -> (i32
 /// Font tienen la tinta corrida dentro de ese ancho, y cuánto depende de la fuente que
 /// resuelva fontconfig. Se mide la tinta y se compensa con márgenes.
 pub fn centrar_tinta(l: &gtk::Label) {
+    corregir(l, true);
+}
+
+fn corregir(l: &gtk::Label, vertical: bool) {
     let (tinta, logica) = l.layout().pixel_extents();
     let r = |r: gtk::pango::Rectangle| (r.x(), r.y(), r.width(), r.height());
     let (dx, dy) = correccion(r(logica), r(tinta));
     l.set_margin_start((2 * dx).max(0));
     l.set_margin_end((-2 * dx).max(0));
-    l.set_margin_top((2 * dy).max(0));
-    l.set_margin_bottom((-2 * dy).max(0));
+    if vertical {
+        l.set_margin_top((2 * dy).max(0));
+        l.set_margin_bottom((-2 * dy).max(0));
+    }
+}
+
+/// `centrar_tinta` cada vez que hace falta: al mostrarse (recién ahí tiene su fuente y su
+/// tamaño de la hoja) y al cambiar de glifo. `vertical` en falso corrige solo de costado,
+/// para un glifo apilado bajo otro texto, cuya caja no tiene que cambiar de alto.
+pub fn centrar_siempre(l: &gtk::Label, vertical: bool) {
+    l.connect_map(move |l| corregir(l, vertical));
+    l.connect_label_notify(move |l| corregir(l, vertical));
+}
+
+/// Un glifo en su cuadrito: la clase va en la caja, que es la que tiene tamaño y fondo (la
+/// fuente y el color los hereda el glifo); el glifo va centrado por su tinta.
+pub fn cuadro_de_glifo(glifo: &str, clase: &str) -> (gtk::CenterBox, gtk::Label) {
+    let l = gtk::Label::new(Some(glifo));
+    centrar_siempre(&l, true);
+    let caja = gtk::CenterBox::new();
+    caja.add_css_class(clase);
+    caja.set_valign(gtk::Align::Center);
+    caja.set_center_widget(Some(&l));
+    (caja, l)
 }
 
 #[cfg(test)]
