@@ -91,11 +91,15 @@ pub struct Osd {
 impl Osd {
     /// Lanza el hilo del OSD, que sigue los colores de `tema`.
     pub fn new(tema: &Tema) -> Self {
-        let (css, opacidad, _) = tema.actual();
-        let ordenes = hilo::lanzar(Paleta::desde_css(&css), opacidad as f32);
+        let (css, opacidad, borde) = tema.actual();
+        let ordenes = hilo::lanzar(Paleta::desde_css(&css), opacidad as f32, borde);
         let tx = ordenes.clone();
-        tema.al_cambiar(move |css, opacidad, _| {
-            let _ = tx.send(hilo::Orden::Tema(Paleta::desde_css(css), opacidad as f32));
+        tema.al_cambiar(move |css, opacidad, borde| {
+            let _ = tx.send(hilo::Orden::Tema(
+                Paleta::desde_css(css),
+                opacidad as f32,
+                borde,
+            ));
         });
         Osd { ordenes }
     }

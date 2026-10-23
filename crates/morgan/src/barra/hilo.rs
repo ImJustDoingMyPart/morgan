@@ -62,8 +62,9 @@ use crate::hyprland::Espacios;
 const ESPERA_GLOBO: Duration = Duration::from_millis(500);
 
 pub enum Orden {
-    /// Los colores de `theme.css` y la opacidad del fondo.
-    Tema(Paleta, f32),
+    /// Los colores de `theme.css`, la opacidad del fondo y lo de afuera de los paneles (que
+    /// sigue a la sombra de las ventanas).
+    Tema(Paleta, f32, Borde),
     Espacios(Espacios),
     Reloj {
         fecha: String,
@@ -84,8 +85,6 @@ pub enum Orden {
     /// El ícono de la bandeja con su menú abierto.
     Menu(Option<String>),
     Calendario(cal::Orden),
-    /// Lo de afuera de los paneles, que sigue a la sombra de las ventanas.
-    Borde(Borde),
 }
 
 /// Lo que se tocó, para el hilo de GTK.
@@ -111,6 +110,7 @@ pub enum Evento {
 pub fn lanzar(
     paleta: Paleta,
     opacidad: f32,
+    borde: Borde,
     fijos: std::collections::BTreeMap<String, Vec<i64>>,
 ) -> (Sender<Orden>, async_channel::Receiver<Evento>) {
     let (tx, rx) = channel::channel();
@@ -118,7 +118,7 @@ pub fn lanzar(
     let lanzado = std::thread::Builder::new()
         .name("morgan-barra".into())
         .spawn(move || {
-            if let Err(e) = correr(rx, etx, paleta, opacidad, fijos) {
+            if let Err(e) = correr(rx, etx, paleta, opacidad, borde, fijos) {
                 eprintln!("morgan: barra: {e}");
             }
         });
@@ -289,6 +289,7 @@ fn correr(
     eventos: async_channel::Sender<Evento>,
     paleta: Paleta,
     opacidad: f32,
+    borde: Borde,
     fijos: std::collections::BTreeMap<String, Vec<i64>>,
 ) -> Result<(), String> {
     let conn = Connection::connect_to_env().map_err(|e| e.to_string())?;
@@ -327,7 +328,7 @@ fn correr(
         escena: Scene::new(),
         paleta,
         opacidad,
-        borde: Borde::Sombra,
+        borde,
         estado: Estado {
             fijos,
             ..Estado::default()
@@ -366,8 +367,8 @@ impl Hilo {
     fn orden(&mut self, o: Orden) {
         let e = &mut self.estado;
         match o {
-            Orden::Tema(p, o) => {
-                (self.paleta, self.opacidad) = (p, o);
+            Orden::Tema(p, o, b) => {
+                (self.paleta, self.opacidad, self.borde) = (p, o, b);
                 self.ensuciar();
                 return;
             }
@@ -398,11 +399,6 @@ impl Hilo {
             Orden::Menu(m) => e.menu = m,
             Orden::Calendario(o) => {
                 self.orden_calendario(o);
-                return;
-            }
-            Orden::Borde(b) => {
-                self.borde = b;
-                self.ensuciar();
                 return;
             }
         }

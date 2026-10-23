@@ -9,7 +9,7 @@
 //! - cada texto en una caja de píxeles enteros, como las etiquetas de GTK.
 
 use morgan_motor::color::{Color, Paleta, con_alfa, mezclar, pincel};
-use morgan_motor::forma::sombra;
+use morgan_motor::forma::{Borde, sombra};
 use morgan_motor::parley::Layout;
 use morgan_motor::texto::{self, Textos};
 use morgan_motor::vello::Scene;
@@ -106,12 +106,14 @@ fn texto_en(s: &mut Scene, l: &Layout<u8>, (x, y): (f64, f64), c: Color) {
 }
 
 /// La ventana entera, de `ancho` × `alto` lógicos, en píxeles del buffer.
+#[allow(clippy::too_many_arguments)]
 pub fn pintar(
     s: &mut Scene,
     a: &Aviso,
     rot: &Rotulos,
     p: &Paleta,
     opacidad: f32,
+    borde: Borde,
     (ancho, alto): (u32, u32),
     escala: f64,
 ) {
@@ -132,6 +134,7 @@ pub fn pintar(
         tr,
         p,
         opacidad,
+        borde,
         Rect::new(MARGEN, MARGEN, w - MARGEN, h - MARGEN),
     );
 
@@ -210,9 +213,10 @@ pub fn pintar(
 }
 
 /// El fondo y el borde de la tarjeta. El borde es la pila de `box-shadow` de la hoja de GTK,
-/// en su orden (GTK apila la última arriba): brillo primary, brillo tertiary, el anillo de la
-/// mezcla, y los dos medios bordes corridos que lo tiñen hacia cada esquina.
-fn tarjeta(s: &mut Scene, tr: Affine, p: &Paleta, opacidad: f32, r: Rect) {
+/// en su orden (GTK apila la última arriba): brillo primary, brillo tertiary (o la sombra
+/// negra, según `borde`), el anillo de la mezcla, y los dos medios bordes corridos que lo
+/// tiñen hacia cada esquina.
+fn tarjeta(s: &mut Scene, tr: Affine, p: &Paleta, opacidad: f32, borde: Borde, r: Rect) {
     let rr = RoundedRect::from_rect(r, RADIO);
     // Las sombras van solo por fuera: el fondo es translúcido y no tienen que verse a través.
     let mut afuera = BezPath::new();
@@ -220,13 +224,24 @@ fn tarjeta(s: &mut Scene, tr: Affine, p: &Paleta, opacidad: f32, r: Rect) {
     afuera.extend(rr.path_elements(0.1));
     s.push_layer(Fill::EvenOdd, BlendMode::default(), 1.0, tr, &afuera);
     let medio = mezclar(&p.primary, &p.tertiary, 0.5);
-    for (c, d, spread, blur) in [
-        (con_alfa(&p.primary, 0.5), (-1.0, -1.0), 1.0, 4.0),
-        (con_alfa(&p.tertiary, 0.5), (1.0, 1.0), 1.0, 4.0),
+    // Con la sombra negra, en vez de los dos brillos: la sombra suave y una línea negra de
+    // 1 px por fuera del anillo (el de los toasts). La sombra cabe en el margen del brillo.
+    let afuera_del_anillo = match borde {
+        Borde::Brillo => [
+            (con_alfa(&p.primary, 0.5), (-1.0, -1.0), 1.0, 4.0),
+            (con_alfa(&p.tertiary, 0.5), (1.0, 1.0), 1.0, 4.0),
+        ],
+        Borde::Sombra => [
+            ([0.0, 0.0, 0.0, 0.5], (0.0, 0.0), 3.0, 4.0),
+            ([0.0, 0.0, 0.0, 1.0], (0.0, 0.0), 3.0, 0.0),
+        ],
+    };
+    let anillo = [
         (medio, (0.0, 0.0), 2.0, 0.0),
         (p.tertiary, (1.0, 1.0), 1.0, 0.0),
         (p.primary, (-1.0, -1.0), 1.0, 0.0),
-    ] {
+    ];
+    for (c, d, spread, blur) in afuera_del_anillo.into_iter().chain(anillo) {
         sombra(s, tr, r, RADIO, c, d, spread, blur);
     }
     s.pop_layer();

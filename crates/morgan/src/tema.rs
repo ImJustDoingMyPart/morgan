@@ -198,6 +198,7 @@ fn recarga(event: FileMonitorEvent) -> bool {
 
 /// Con la sombra negra, lo de afuera del anillo de los paneles y de los toasts es el de
 /// `forma::Borde::Sombra` (una línea negra y una sombra suave) en vez del brillo de la hoja.
+/// GTK apila la última sombra de la lista arriba: el anillo de los toasts va al final.
 const BORDE_SOMBRA: &str = "
 .control-center,
 .launcher {
@@ -208,18 +209,18 @@ const BORDE_SOMBRA: &str = "
 
 .floating-notifications .notification-row .notification-background .notification {
     box-shadow:
+        0 0 6px 3px alpha(black, 0.5),
+        0 0 0 3px black,
         0 0 0 2px mix(@primary, @tertiary, 0.5),
         1px 1px 0 1px @tertiary,
-        -1px -1px 0 1px @primary,
-        0 0 0 3px black,
-        0 0 6px 3px alpha(black, 0.5);
+        -1px -1px 0 1px @primary;
 }
 
 .floating-notifications .notification-row .notification-background .notification.critical {
     box-shadow:
-        0 0 0 2px @error,
+        0 0 6px 3px alpha(black, 0.5),
         0 0 0 3px black,
-        0 0 6px 3px alpha(black, 0.5);
+        0 0 0 2px @error;
 }
 ";
 

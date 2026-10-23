@@ -307,6 +307,8 @@ mod tests {
     /// levantar el anidado.
     ///
     ///   MORGAN_LOCK_CAPTURA=/ruta.png cargo test -p morgan-lock -- --ignored captura
+    ///
+    /// Con `MORGAN_LOCK_SOMBRA=glow` (o `black`), el borde de esa sombra; si no, el de la config.
     #[test]
     #[ignore = "necesita GPU; escribe en MORGAN_LOCK_CAPTURA"]
     fn captura_sin_compositor() {
@@ -316,6 +318,10 @@ mod tests {
             .and_then(|d| std::fs::read_to_string(d.join("morgan/theme.css")).ok())
             .unwrap_or_default();
         let mut e = Estado::new(Paleta::desde_css(&css), Bloqueo::default());
+        e.borde = match std::env::var("MORGAN_LOCK_SOMBRA") {
+            Ok(id) => crate::escena::Borde::de(&id),
+            Err(_) => crate::estilo().1,
+        };
         e.aplicar(Cambio::Reloj {
             hora: "21".into(),
             minutos: "37".into(),

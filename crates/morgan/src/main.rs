@@ -179,7 +179,7 @@ fn main() -> ExitCode {
         let (hilo_barra, eventos_barra) = barra::lanzar(&tema, &config.barra.fijos);
         let iconos_bandeja = config.barra.iconos_bandeja.clone();
         let tele = config.barra.tele.clone();
-        let calendario = calendario::Calendario::new(hilo_barra.clone(), &agenda, &config);
+        let calendario = calendario::Calendario::new(hilo_barra.clone(), &agenda, &config.clima);
         let calculadora = calculadora::Calculadora::new(app);
         let audio = Audio::new(&config.sonido);
         let sonidos = sonidos::Sonidos::new(&config.sonido);

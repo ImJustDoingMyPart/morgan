@@ -9,6 +9,7 @@
 use std::time::Duration;
 
 use morgan_motor::color::Paleta;
+use morgan_motor::forma::Borde;
 use morgan_motor::gpu::{Gpu, Lienzo};
 use morgan_motor::texto::Textos;
 use morgan_motor::vello::Scene;
@@ -36,18 +37,19 @@ use super::{ALTO, ANCHO, Aviso, tope};
 
 pub enum Orden {
     Mostrar(Aviso),
-    /// Los colores de `theme.css` y la opacidad del fondo de las tarjetas.
-    Tema(Paleta, f32),
+    /// Los colores de `theme.css`, la opacidad del fondo de las tarjetas y lo de afuera del
+    /// anillo (sigue a la sombra de las ventanas).
+    Tema(Paleta, f32, Borde),
 }
 
 /// Si no hay Wayland o la GPU no abre, el hilo termina y las órdenes se pierden: morgan
 /// sigue sin OSD.
-pub fn lanzar(paleta: Paleta, opacidad: f32) -> Sender<Orden> {
+pub fn lanzar(paleta: Paleta, opacidad: f32, borde: Borde) -> Sender<Orden> {
     let (tx, rx) = channel::channel();
     let lanzado = std::thread::Builder::new()
         .name("morgan-osd".into())
         .spawn(move || {
-            if let Err(e) = correr(rx, paleta, opacidad) {
+            if let Err(e) = correr(rx, paleta, opacidad, borde) {
                 eprintln!("morgan: osd: {e}");
             }
         });
@@ -83,6 +85,7 @@ struct Hilo {
     escena: Scene,
     paleta: Paleta,
     opacidad: f32,
+    borde: Borde,
     aviso: Option<Aviso>,
     /// Sube con cada aviso: los textos de cada ventana se rearman cuando cambia.
     version: u64,
@@ -90,7 +93,12 @@ struct Hilo {
     ventanas: Vec<Ventana>,
 }
 
-fn correr(rx: channel::Channel<Orden>, paleta: Paleta, opacidad: f32) -> Result<(), String> {
+fn correr(
+    rx: channel::Channel<Orden>,
+    paleta: Paleta,
+    opacidad: f32,
+    borde: Borde,
+) -> Result<(), String> {
     let conn = Connection::connect_to_env().map_err(|e| e.to_string())?;
     let (globales, mut cola) = registry_queue_init::<Hilo>(&conn).map_err(|e| e.to_string())?;
     let qh = cola.handle();
@@ -118,6 +126,7 @@ fn correr(rx: channel::Channel<Orden>, paleta: Paleta, opacidad: f32) -> Result<
         escena: Scene::new(),
         paleta,
         opacidad,
+        borde,
         aviso: None,
         version: 0,
         ocultar: None,
@@ -140,8 +149,8 @@ impl Hilo {
     fn orden(&mut self, o: Orden) {
         match o {
             Orden::Mostrar(a) => self.mostrar(a),
-            Orden::Tema(p, o) => {
-                (self.paleta, self.opacidad) = (p, o);
+            Orden::Tema(p, o, b) => {
+                (self.paleta, self.opacidad, self.borde) = (p, o, b);
                 for v in &mut self.ventanas {
                     v.sucio = true;
                 }
@@ -252,6 +261,7 @@ impl Hilo {
                 rot,
                 &self.paleta,
                 self.opacidad,
+                self.borde,
                 v.tam,
                 v.escala as f64,
             );
