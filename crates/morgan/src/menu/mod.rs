@@ -252,6 +252,14 @@ impl Menu {
         m.conectar();
         // Por si morgan se cayó grabando una tecla: en el submap de grabar no anda ningún bind.
         comando::lanzar(&["hyprctl", "eval", &binds::submap_grabar(false)]);
+        // La primera apertura no tiene «lo de la vez anterior»: sin esto se dibuja vacía y se
+        // llena un instante después. Se lee al rato de arrancar, no en el arranque mismo.
+        let yo = m.clone();
+        glib::timeout_add_local_once(Duration::from_secs(2), move || {
+            for c in Categoria::TODAS {
+                yo.pedir(c);
+            }
+        });
         m
     }
 

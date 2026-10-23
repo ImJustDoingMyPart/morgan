@@ -136,6 +136,10 @@ impl Calendario {
         let yo = c.clone();
         despues.connect_clicked(move |_| yo.correr_mes(1));
         c.conectar();
+        // Con el clima ya en memoria, la primera apertura lo dibuja de entrada en vez de
+        // cambiar de aspecto cuando llega.
+        let yo = c.clone();
+        glib::MainContext::default().spawn_local(async move { yo.leer_clima().await });
         c
     }
 
