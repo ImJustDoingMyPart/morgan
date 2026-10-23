@@ -40,7 +40,10 @@ pub enum Orden {
     },
     /// Se va una salida: se suelta su superficie de wgpu y se avisa, antes de que el
     /// principal destruya la de Wayland.
-    Quitar { id: u32, listo: mpsc::Sender<()> },
+    Quitar {
+        id: u32,
+        listo: mpsc::Sender<()>,
+    },
     Cambio(Cambio),
     /// Termina el hilo (después del fundido de salida).
     Fin,
@@ -66,48 +69,6 @@ impl Hilo {
         self.mandar(Orden::Fin);
         if let Some(h) = self.hilo.take() {
             let _ = h.join();
-        }
-    }
-}
-
-/// Opciones de medición (`MORGAN_LOCK_MEDIR=1`): tiempos de arranque y huecos entre cuadros.
-#[derive(Default)]
-struct Medida {
-    activa: bool,
-    /// El último cuadro, mientras la animación no se cortó.
-    ultimo: Option<i64>,
-    cuadros: u64,
-    peor_us: i64,
-    lentos: u64,
-}
-
-impl Medida {
-    fn cuadro(&mut self, t: i64) {
-        if let Some(u) = self.ultimo {
-            let d = t - u;
-            self.peor_us = self.peor_us.max(d);
-            if d > 17_000 {
-                self.lentos += 1;
-                if self.activa {
-                    eprintln!(
-                        "morgan-lock-piloto: medida: un cuadro tardó {:.1} ms",
-                        d as f64 / 1000.0
-                    );
-                }
-            }
-        }
-        self.cuadros += 1;
-        self.ultimo = Some(t);
-    }
-
-    fn informe(&self) {
-        if self.activa {
-            eprintln!(
-                "morgan-lock-piloto: medida: {} cuadros animando, peor hueco {:.1} ms, {} de más de 17 ms",
-                self.cuadros,
-                self.peor_us as f64 / 1000.0,
-                self.lentos
-            );
         }
     }
 }
@@ -161,7 +122,6 @@ struct Pintor {
     textos: Textos,
     salidas: Vec<Salida>,
     escena: Scene,
-    medida: Medida,
     fin: LoopSignal,
 }
 
@@ -199,16 +159,13 @@ fn abrir_gpu(conn: &Connection) -> Gpu {
         instancia.request_adapter(&wgpu::RequestAdapterOptions::default()),
     )
     .expect("no hay GPU para dibujar");
-    let (device, cola) = futures_lite::future::block_on(adaptador.request_device(
-        &wgpu::DeviceDescriptor {
+    let (device, cola) =
+        futures_lite::future::block_on(adaptador.request_device(&wgpu::DeviceDescriptor {
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             ..Default::default()
-        },
-    ))
-    .expect("no se pudo abrir la GPU");
-    device.on_uncaptured_error(std::sync::Arc::new(|e| {
-        eprintln!("morgan-lock-piloto: gpu: {e}")
-    }));
+        }))
+        .expect("no se pudo abrir la GPU");
+    device.on_uncaptured_error(std::sync::Arc::new(|e| eprintln!("morgan-lock: gpu: {e}")));
     let vello = Renderer::new(
         &device,
         RendererOptions {
@@ -227,22 +184,9 @@ fn abrir_gpu(conn: &Connection) -> Gpu {
     }
 }
 
-fn correr(
-    conn: Connection,
-    estado: Estado,
-    fondo: JoinHandle<Option<Fondo>>,
-    rx: Channel<Orden>,
-) {
-    let t0 = ahora();
+fn correr(conn: Connection, estado: Estado, fondo: JoinHandle<Option<Fondo>>, rx: Channel<Orden>) {
     let gpu = abrir_gpu(&conn);
     let fondo = fondo.join().ok().flatten();
-    let medir = std::env::var_os("MORGAN_LOCK_MEDIR").is_some();
-    if medir {
-        eprintln!(
-            "morgan-lock-piloto: medida: gpu y vello listos en {:.0} ms",
-            (ahora() - t0) as f64 / 1000.0
-        );
-    }
     let cola = conn.new_event_queue::<Pintor>();
     let qh = cola.handle();
     let mut bucle: EventLoop<Pintor> = EventLoop::try_new().expect("bucle de render");
@@ -266,14 +210,9 @@ fn correr(
         textos: Textos::new(),
         salidas: Vec::new(),
         escena: Scene::new(),
-        medida: Medida {
-            activa: medir,
-            ..Default::default()
-        },
         fin,
     };
     let _ = bucle.run(None, &mut p, |p| p.pintar());
-    p.medida.informe();
     // Las superficies de wgpu se sueltan antes que nada de Wayland (el principal espera).
     p.salidas.clear();
 }
@@ -312,7 +251,14 @@ impl Pintor {
         }
     }
 
-    fn nueva(&mut self, id: u32, wl: WlSurface, ancho: u32, alto: u32, escala: i32) -> Option<Salida> {
+    fn nueva(
+        &mut self,
+        id: u32,
+        wl: WlSurface,
+        ancho: u32,
+        alto: u32,
+        escala: i32,
+    ) -> Option<Salida> {
         let ptr = std::ptr::NonNull::new(wl.id().as_ptr())?.cast();
         let objetivo = wgpu::SurfaceTargetUnsafe::RawHandle {
             raw_display_handle: Some(display(&self.conn).raw()),
@@ -323,7 +269,7 @@ impl Pintor {
         let superficie = match unsafe { self.gpu.instancia.create_surface_unsafe(objetivo) } {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("morgan-lock-piloto: superficie: {e}");
+                eprintln!("morgan-lock: superficie: {e}");
                 return None;
             }
         };
@@ -334,7 +280,7 @@ impl Pintor {
                 wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Rgba8Unorm
             )
         }) else {
-            eprintln!("morgan-lock-piloto: la superficie no tiene un formato sin sRGB");
+            eprintln!("morgan-lock: la superficie no tiene un formato sin sRGB");
             return None;
         };
         let alfa = if cap
@@ -388,7 +334,6 @@ impl Pintor {
         let t = ahora();
         self.estado.avanzar(t);
         let anima = self.estado.animando(t);
-        let mut pinto = false;
         for i in 0..self.salidas.len() {
             let s = &self.salidas[i];
             if s.esperando || !(s.sucio || anima) || s.ancho == 0 || s.alto == 0 {
@@ -397,12 +342,7 @@ impl Pintor {
             if self.estado.t_entrada.is_none() {
                 self.estado.t_entrada = Some(t);
             }
-            pinto |= self.cuadro(i, t);
-        }
-        if pinto && anima {
-            self.medida.cuadro(t);
-        } else if !anima && self.salidas.iter().all(|s| !s.esperando) {
-            self.medida.ultimo = None;
+            self.cuadro(i, t);
         }
         let _ = self.conn.flush();
     }
@@ -477,12 +417,13 @@ impl Pintor {
             .vello
             .render_to_texture(&gpu.device, &gpu.cola, escena, vista, &params)
         {
-            eprintln!("morgan-lock-piloto: vello: {e}");
+            eprintln!("morgan-lock: vello: {e}");
             return false;
         }
 
         let marco = match s.superficie.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(f) | wgpu::CurrentSurfaceTexture::Suboptimal(f) => f,
+            wgpu::CurrentSurfaceTexture::Success(f)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(f) => f,
             wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
                 s.superficie.configure(&gpu.device, &s.config);
                 return false;

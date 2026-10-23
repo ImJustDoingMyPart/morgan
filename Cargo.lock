@@ -1071,34 +1071,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gtk4-session-lock"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26659c1334b67c91fc270ebb5ccfb6f20c92b169164b967bcf9f62d79d1f033f"
-dependencies = [
- "gdk4",
- "glib",
- "glib-sys",
- "gtk4",
- "gtk4-session-lock-sys",
- "libc",
-]
-
-[[package]]
-name = "gtk4-session-lock-sys"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b694670ce8c85cfdafeaec6faf1567bf6abe661be147ba9dab0059564522ba"
-dependencies = [
- "gdk4-sys",
- "glib-sys",
- "gobject-sys",
- "gtk4-sys",
- "libc",
- "system-deps 8.0.0",
-]
-
-[[package]]
 name = "gtk4-sys"
 version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1658,20 +1630,6 @@ dependencies = [
 
 [[package]]
 name = "morgan-lock"
-version = "0.1.1"
-dependencies = [
- "async-channel",
- "futures-lite",
- "glib-unix",
- "gtk4",
- "gtk4-session-lock",
- "morgan-ipc",
- "toml",
- "zbus",
-]
-
-[[package]]
-name = "morgan-lock-piloto"
 version = "0.1.1"
 dependencies = [
  "async-channel",

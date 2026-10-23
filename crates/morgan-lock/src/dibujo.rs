@@ -1,5 +1,5 @@
 //! Una salida entera en una `Scene` de vello: fondo, reloj, fecha, campo y aviso, a partir del
-//! `Estado` y del instante del cuadro. Las medidas y los colores son los de `morgan-lock`
+//! `Estado` y del instante del cuadro. Las medidas y los colores son los de la versión con GTK
 //! (`vista.rs`, `lienzo.rs`, `estilo.css`); lo que GTK hacía con su blur se aproxima:
 //!
 //! - las sombras del campo, con el rectángulo redondeado desenfocado de vello (el mismo
@@ -7,18 +7,20 @@
 //! - el brillo de la onda (un blur de 4 sobre el trazo), con dos trazos más anchos y tenues;
 //! - la sombra del texto (`text-shadow`) todavía no está.
 
+use std::collections::HashMap;
 use std::f32::consts::PI;
 
 use vello::Scene;
 use vello::kurbo::{Affine, BezPath, Cap, Circle, Join, Point, Rect, RoundedRect, Stroke};
 use vello::peniko::{self, BlendMode, Fill, Gradient, ImageBrush, ImageData, ImageQuality};
 
+use crate::caracteres;
 use crate::escena::*;
 use crate::texto;
+use morgan_ipc::bloqueo::Escritura;
 
 pub(crate) const BORDE: f64 = 2.0;
 const RADIO: f64 = 4.0;
-const FALLO_TEXTO_ESPERA: f32 = FALLO_TEXTO;
 const ONDA_X0: f32 = 18.0;
 const ONDA_X1: f32 = ANCHO - 18.0;
 
@@ -62,6 +64,8 @@ pub struct Rotulos {
     pub aviso: Option<parley::Layout<u8>>,
     /// El texto del campo y su layout: cambia poco, se guarda el último.
     pub campo: Option<(String, parley::Layout<u8>)>,
+    /// Los de la escritura `symbols`, armados la primera vez que salen.
+    pub glifos: HashMap<char, parley::Layout<u8>>,
 }
 
 impl Rotulos {
@@ -88,6 +92,7 @@ impl Rotulos {
             fecha,
             aviso,
             campo: None,
+            glifos: HashMap::new(),
         }
     }
 
@@ -121,7 +126,13 @@ pub fn pintar(
     if opacidad <= 0.001 {
         return;
     }
-    s.push_layer(Fill::NonZero, BlendMode::default(), opacidad, Affine::IDENTITY, &todo);
+    s.push_layer(
+        Fill::NonZero,
+        BlendMode::default(),
+        opacidad,
+        Affine::IDENTITY,
+        &todo,
+    );
 
     match fondo {
         Some(f) => {
@@ -217,12 +228,34 @@ fn campo(
     };
     caja(s, tr, &p, &par, alfa, extra);
 
-    if e.onda() {
-        onda(s, tr, e, t, &par);
+    let latido = e.latido().then(|| seg(t - e.t_modo));
+    match estilo.escritura {
+        Escritura::Onda => onda(s, tr, e, t, &par),
+        Escritura::Puntos => caracteres::puntos(s, tr, &e.fila, t, latido, &p),
+        Escritura::Fijo => caracteres::fijos(s, tr, &e.fila, &p),
+        Escritura::Simbolos => {
+            let glifos = &mut rot.glifos;
+            caracteres::simbolos(s, tr, &e.fila, t, latido, &p, |s, g, x, y, esc, c| {
+                let l = glifos.entry(g).or_insert_with(|| {
+                    textos.armar(&[(&g.to_string(), ROL_TEXTO)], texto::pt(13.0), escala)
+                });
+                let centro = tr * Point::new(x as f64, y as f64);
+                let en = Affine::translate(centro.to_vec2())
+                    * Affine::scale(esc as f64)
+                    * Affine::translate((-l.width() as f64 / 2.0, -l.height() as f64 / 2.0));
+                texto::dibujar_en(s, l, en, |_| c, 1.0);
+            });
+        }
     }
 
     // Mientras la onda late al verificar no hay texto: lo dice eso.
-    let espera = if estilo.reaccion { FALLO_TEXTO_ESPERA } else { 0.0 };
+    let espera = match (estilo.reaccion, estilo.escritura) {
+        (false, _) => 0.0,
+        (true, Escritura::Onda) => FALLO_TEXTO,
+        // Las × se apagan en 0,45 s y están donde va el texto.
+        (true, Escritura::Simbolos) => 0.45,
+        (true, _) => 0.25,
+    };
     let texto = match e.modo {
         Modo::Normal if e.n == 0 => Some(("Contraseña".to_owned(), 1.0 - e.visible.valor(t))),
         Modo::Verificando if !estilo.verificar.late() => Some(("Verificando…".to_owned(), 1.0)),
@@ -251,7 +284,16 @@ fn campo(
         let cabeza = PERIMETRO * 0.25 + edad * 520.0;
         let entrada = acotar(edad / 0.15, 0.0, 1.0);
         cometa(s, tr, cabeza, 1.0, 120.0, 0.95 * entrada, &par, 2.2);
-        cometa(s, tr, cabeza + PERIMETRO / 2.0, 1.0, 120.0, 0.95 * entrada, &par, 2.2);
+        cometa(
+            s,
+            tr,
+            cabeza + PERIMETRO / 2.0,
+            1.0,
+            120.0,
+            0.95 * entrada,
+            &par,
+            2.2,
+        );
     }
     for c in &e.chispas {
         let f = seg(t - c.t0) / 0.55;
@@ -282,8 +324,7 @@ fn campo(
 /// `box-shadow` de GTK: el rectángulo agrandado en `spread`, desplazado y desenfocado con
 /// sigma = blur / 2.
 fn sombra(s: &mut Scene, tr: Affine, c: Color, dx: f64, dy: f64, spread: f64, blur: f64) {
-    let r = Rect::new(0.0, 0.0, ANCHO as f64, ALTO as f64)
-        .inflate(spread, spread)
+    let r = Rect::new(0.0, 0.0, ANCHO as f64, ALTO as f64).inflate(spread, spread)
         + vello::kurbo::Vec2::new(dx, dy);
     if blur <= 0.0 {
         let rr = RoundedRect::from_rect(r, RADIO + spread);
@@ -302,7 +343,13 @@ fn caja(s: &mut Scene, tr: Affine, p: &Paleta, par: &[Color; 2], alfa: f32, extr
     sombra(s, tr, con_alfa(&par[1], alfa), 1.0, 1.0, 2.0, blur);
 
     let fuera = RoundedRect::new(0.0, 0.0, w, h, RADIO);
-    s.fill(Fill::NonZero, tr, pincel(&[0.0, 0.0, 0.0, 0.9]), None, &fuera);
+    s.fill(
+        Fill::NonZero,
+        tr,
+        pincel(&[0.0, 0.0, 0.0, 0.9]),
+        None,
+        &fuera,
+    );
     s.fill(
         Fill::NonZero,
         tr,

@@ -3,18 +3,20 @@
 //! principal se traba, la onda sigue. Acá no hay Wayland ni GPU, solo el modelo; lo dibuja
 //! `dibujo.rs`.
 //!
-//! El modelo es el de `morgan-lock/src/lienzo.rs` (los mismos tiempos y constantes), más el
-//! reloj, el aviso y los fundidos de entrada y salida que allá ponían GTK y su hoja.
+//! Los tiempos y las constantes son los de la versión con GTK (hasta 0.1.1), que tenía el
+//! reloj, el aviso y los fundidos en la hoja de estilo.
 
 use std::sync::OnceLock;
 use std::time::Instant;
 
 use morgan_ipc::bloqueo::{Bloqueo, Escritura};
 
+use crate::caracteres::Caracteres;
+
 pub const ANCHO: f32 = 344.0;
 pub const ALTO: f32 = 52.0;
 
-/// Los de `morgan-lock/src/estilo.css`: la animación `entrar` y la transición de `.saliendo`.
+/// Los fundidos de entrada y de salida, y el destello del acierto.
 pub const ENTRADA_MS: i64 = 200;
 pub const SALIDA_MS: i64 = 200;
 pub const DESTELLO_MS: i64 = 380;
@@ -190,17 +192,42 @@ impl Tramo<[Color; 2]> {
 /// Lo que el hilo principal le declara al de render. Cada uno trae su instante.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Cambio {
-    Agregar { n: usize, t: i64 },
-    Quitar { n: usize, todo: bool, t: i64 },
+    Agregar {
+        n: usize,
+        t: i64,
+    },
+    Quitar {
+        n: usize,
+        todo: bool,
+        t: i64,
+    },
     /// El campo se vació por el envío, no por un borrado: sin golpe de onda.
-    Vaciar { t: i64 },
-    Normal { t: i64 },
-    Verificando { t: i64 },
-    Fallo { n: u32, t: i64 },
+    Vaciar {
+        t: i64,
+    },
+    Normal {
+        t: i64,
+    },
+    Verificando {
+        t: i64,
+    },
+    Fallo {
+        n: u32,
+        t: i64,
+    },
     /// El destello, y después el fundido de salida: los dos quedan declarados acá.
-    Acierto { t: i64 },
-    Mayus { si: bool, t: i64 },
-    Reloj { hora: String, minutos: String, fecha: String },
+    Acierto {
+        t: i64,
+    },
+    Mayus {
+        si: bool,
+        t: i64,
+    },
+    Reloj {
+        hora: String,
+        minutos: String,
+        fecha: String,
+    },
     Aviso(Option<String>),
 }
 
@@ -226,6 +253,9 @@ pub struct Estado {
     pub t_entrada: Option<i64>,
     /// Sube con cada cambio de texto: quien arma los textos sabe cuándo rehacerlos.
     pub version_textos: u64,
+    /// Las escrituras que no son la onda.
+    pub fila: Caracteres,
+    t_cuadro: i64,
 }
 
 impl Estado {
@@ -261,6 +291,8 @@ impl Estado {
             aviso: None,
             t_entrada: None,
             version_textos: 0,
+            fila: Caracteres::default(),
+            t_cuadro: 0,
         }
     }
 
@@ -274,6 +306,8 @@ impl Estado {
                         tipo: Tipo::Sale,
                         amp: 7.0 + 3.0 * azar(t),
                     });
+                } else {
+                    self.fila.contar(n, t);
                 }
                 self.chispa(t, (ANCHO - 2.0) / 2.0, 1.0);
                 if matches!(self.modo, Modo::Fallo(_)) {
@@ -288,22 +322,34 @@ impl Estado {
                         tipo: Tipo::Entra,
                         amp: if todo { 10.0 } else { 6.0 },
                     });
+                } else {
+                    self.fila.contar(n, t);
                 }
                 let abajo = (ANCHO - 2.0) + (ALTO - 2.0) + (ANCHO - 2.0) / 2.0;
                 self.chispa(t, abajo, 0.6);
             }
-            Cambio::Vaciar { .. } => self.n = 0,
+            // Si lo tipeado late mientras verifica, los caracteres se quedan.
+            Cambio::Vaciar { t } => {
+                self.n = 0;
+                if !self.estilo.verificar.late() {
+                    self.fila.vaciar(t);
+                }
+            }
             Cambio::Normal { t } => self.cambiar(Modo::Normal, t),
             Cambio::Verificando { t } => self.cambiar(Modo::Verificando, t),
             Cambio::Fallo { n, t } => {
                 self.t_fallo = t;
                 self.cambiar(Modo::Fallo(n), t);
-                if self.estilo.reaccion && self.onda() {
+                if !self.estilo.reaccion {
+                    self.fila.vaciar(t);
+                } else if self.onda() {
                     self.impulsos.push(Impulso {
                         t0: t,
                         tipo: Tipo::Fallo,
                         amp: 15.0,
                     });
+                } else {
+                    self.fila.caer(t);
                 }
             }
             Cambio::Acierto { t } => {
@@ -316,6 +362,7 @@ impl Estado {
                         amp: 6.0,
                     });
                 }
+                self.fila.brillar();
             }
             Cambio::Mayus { si, t } => {
                 self.mayus = si;
@@ -411,6 +458,11 @@ impl Estado {
 
     /// Lo que corre al empezar cada cuadro: limpia lo que terminó y fija la visibilidad.
     pub fn avanzar(&mut self, t: i64) {
+        let dt = seg(t - self.t_cuadro).clamp(0.0, 0.064);
+        self.t_cuadro = t;
+        let latido = self.latido();
+        let juntar = latido && self.estilo.escritura == Escritura::Puntos;
+        self.fila.avanzar(t, dt, juntar, latido);
         self.impulsos
             .retain(|p| seg(t - p.t0) / p.tipo.lento() < 2.5);
         self.chispas.retain(|c| t - c.t0 < 700 * MS);
@@ -447,6 +499,7 @@ impl Estado {
         };
         fundido
             || (self.n > 0 && self.onda())
+            || (self.fila.hay() && self.estilo.escritura != Escritura::Fijo)
             || !self.impulsos.is_empty()
             || !self.chispas.is_empty()
             || matches!(self.modo, Modo::Verificando | Modo::Saliendo)
@@ -490,13 +543,19 @@ mod tests {
     #[test]
     fn quieto_y_vacio_no_pide_cuadros() {
         let mut e = estado();
-        assert!(e.animando(0), "sin primer cuadro, la entrada está pendiente");
+        assert!(
+            e.animando(0),
+            "sin primer cuadro, la entrada está pendiente"
+        );
         e.t_entrada = Some(0);
         let t = 10_000 * MS;
         e.avanzar(t);
         assert!(!e.animando(t));
         e.aplicar(Cambio::Agregar { n: 1, t });
-        assert!(e.animando(t + 5_000 * MS), "con algo tipeado la onda ondula");
+        assert!(
+            e.animando(t + 5_000 * MS),
+            "con algo tipeado la onda ondula"
+        );
     }
 
     #[test]
@@ -508,7 +567,10 @@ mod tests {
         assert_eq!(e.t_salida(), Some(t + DESTELLO_MS * MS));
         assert!(e.opacidad(t + DESTELLO_MS * MS) > 0.999);
         assert!(e.opacidad(t + (DESTELLO_MS + SALIDA_MS) * MS) < 1e-3);
-        assert!(e.animando(t + (DESTELLO_MS + SALIDA_MS) * MS), "el último cuadro, en cero");
+        assert!(
+            e.animando(t + (DESTELLO_MS + SALIDA_MS) * MS),
+            "el último cuadro, en cero"
+        );
     }
 
     #[test]

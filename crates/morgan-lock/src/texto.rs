@@ -32,7 +32,9 @@ impl Textos {
     /// píxeles del buffer, para que el hinting caiga en píxeles de verdad.
     pub fn armar(&mut self, partes: &[(&str, u8)], px: f32, escala: f32) -> Layout<u8> {
         let texto: String = partes.iter().map(|(t, _)| *t).collect();
-        let mut b = self.cx.ranged_builder(&mut self.fuentes, &texto, escala, true);
+        let mut b = self
+            .cx
+            .ranged_builder(&mut self.fuentes, &texto, escala, true);
         b.push_default(StyleProperty::FontFamily(FontFamily::from(FAMILIA)));
         b.push_default(StyleProperty::FontSize(px));
         let mut desde = 0;
@@ -57,7 +59,17 @@ pub fn dibujar(
 ) {
     let x0 = (cx - l.width() as f64 / 2.0).round();
     let y0 = (cy - l.height() as f64 / 2.0).round();
-    let tr = Affine::translate((x0, y0));
+    dibujar_en(s, l, Affine::translate((x0, y0)), color, alfa);
+}
+
+/// Con la esquina del layout donde la ponga `tr` (para escalarlo, como los símbolos).
+pub fn dibujar_en(
+    s: &mut Scene,
+    l: &Layout<u8>,
+    tr: Affine,
+    color: impl Fn(u8) -> Color,
+    alfa: f32,
+) {
     for linea in l.lines() {
         for item in linea.items() {
             let PositionedLayoutItem::GlyphRun(g) = item else {
@@ -66,7 +78,11 @@ pub fn dibujar(
             let run = g.run();
             let c = color(g.style().brush);
             let c = vello::peniko::Color::new([c[0], c[1], c[2], c[3] * alfa]);
-            let coords: Vec<i16> = run.normalized_coords().iter().map(|c| c.to_bits()).collect();
+            let coords: Vec<i16> = run
+                .normalized_coords()
+                .iter()
+                .map(|c| c.to_bits())
+                .collect();
             s.draw_glyphs(run.font())
                 .font_size(run.font_size())
                 .transform(tr)

@@ -51,7 +51,7 @@ tabla los junta sin cambiarlos (`dev/simbolos.py`).
 > dealings in these Data Files or Software without prior written
 > authorization of the copyright holder.
 
-## El piloto sin GTK del bloqueo (`crates/morgan-lock-piloto/src/pintor.rs`)
+## El bloqueo (`crates/morgan-lock/src/pintor.rs`)
 
 Cómo se le pasa a wgpu la superficie de Wayland (el display de libwayland envuelto para
 `HasDisplayHandle`, la superficie por `SurfaceTargetUnsafe`) y cómo se elige su
