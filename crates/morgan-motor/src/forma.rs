@@ -1,8 +1,8 @@
 //! Las formas de la hoja de GTK que se repiten: el `box-shadow` y la caja de los paneles.
 
 use vello::Scene;
-use vello::kurbo::{Affine, BezPath, Rect, RoundedRect, Shape, Vec2};
-use vello::peniko::{BlendMode, Fill};
+use vello::kurbo::{Affine, BezPath, Point, Rect, RoundedRect, Shape, Vec2};
+use vello::peniko::{BlendMode, Compose, Fill, Gradient, ImageBrush, ImageData, Mix};
 
 use crate::color::{Color, Paleta, con_alfa, pincel};
 
@@ -32,6 +32,45 @@ pub fn sombra(
     } else {
         s.draw_blurred_rounded_rect(tr, r, pincel(&c), radio, blur / 2.0);
     }
+}
+
+/// `linear-gradient(135deg, a, b)` de CSS sobre `r`.
+pub fn degrade_135(r: Rect, a: Color, b: Color) -> Gradient {
+    let s = std::f64::consts::FRAC_1_SQRT_2;
+    let largo = (r.width() + r.height()) * s;
+    let c = r.center();
+    let d = s * largo / 2.0;
+    Gradient::new_linear(Point::new(c.x - d, c.y - d), Point::new(c.x + d, c.y + d))
+        .with_stops([pincel(&a), pincel(&b)].as_slice())
+}
+
+/// `linear-gradient(to right, a, b)` de CSS sobre `r`.
+pub fn degrade_horizontal(r: Rect, a: Color, b: Color) -> Gradient {
+    Gradient::new_linear(Point::new(r.x0, r.y0), Point::new(r.x1, r.y0))
+        .with_stops([pincel(&a), pincel(&b)].as_slice())
+}
+
+/// Una imagen en `r` (lógicos, bajo `tr`), estirada a su tamaño.
+pub fn imagen(s: &mut Scene, tr: Affine, img: &ImageData, r: Rect, alfa: f32) {
+    let (w, h) = (f64::from(img.width.max(1)), f64::from(img.height.max(1)));
+    let pos = tr * Affine::translate((r.x0, r.y0)) * Affine::scale_non_uniform(r.width() / w, r.height() / h);
+    s.draw_image(&ImageBrush::new(img.clone()).with_alpha(alfa), pos);
+}
+
+/// Un ícono simbólico (lo que importa es su alfa) pintado de `c`, en `r`.
+pub fn mascara(s: &mut Scene, tr: Affine, img: &ImageData, r: Rect, c: Color) {
+    s.push_layer(Fill::NonZero, BlendMode::default(), 1.0, tr, &r);
+    s.fill(Fill::NonZero, tr, pincel(&c), None, &r);
+    s.push_layer(
+        Fill::NonZero,
+        BlendMode::new(Mix::Normal, Compose::DestIn),
+        1.0,
+        tr,
+        &r,
+    );
+    imagen(s, tr, img, r, 1.0);
+    s.pop_layer();
+    s.pop_layer();
 }
 
 /// Lo de afuera del anillo de los paneles. Sigue a la sombra de las ventanas (`[appearance]

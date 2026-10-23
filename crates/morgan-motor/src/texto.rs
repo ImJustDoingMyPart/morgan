@@ -2,7 +2,8 @@
 //! número), no un color: el color se resuelve al dibujar y puede animarse sin rearmar nada.
 
 use parley::{
-    FontContext, FontFamily, FontWeight, Layout, LayoutContext, PositionedLayoutItem, StyleProperty,
+    FontContext, FontFamily, FontStyle, FontWeight, Layout, LayoutContext, OverflowWrap,
+    PositionedLayoutItem, StyleProperty,
 };
 use vello::Scene;
 use vello::kurbo::Affine;
@@ -66,6 +67,120 @@ impl Textos {
         l.break_all_lines(None);
         l
     }
+
+    /// Un párrafo con estilos por tramo, partido en renglones de `ancho` (píxeles del buffer)
+    /// como una etiqueta de GTK con `wrap` y `WordChar`: por palabras, y una palabra que no
+    /// entra se parte. Con más de `lineas`, el último renglón termina en «…».
+    pub fn parrafo(
+        &mut self,
+        partes: &[(&str, Estilo)],
+        px: f32,
+        escala: f32,
+        ancho: f32,
+        lineas: usize,
+    ) -> Layout<u8> {
+        let l = self.armar_parrafo(partes, px, escala, ancho);
+        if l.len() <= lineas || lineas == 0 {
+            return l;
+        }
+        let total: usize = partes.iter().map(|(t, _)| t.len()).sum();
+        let fin = l
+            .lines()
+            .nth(lineas - 1)
+            .map_or(total, |r| r.text_range().end);
+        // El corte más largo que, con «…», entra en `lineas` renglones.
+        let cortes: Vec<usize> = (0..=fin)
+            .filter(|i| es_corte(partes, *i))
+            .collect();
+        let (mut lo, mut hi) = (0, cortes.len().saturating_sub(1));
+        while lo < hi {
+            let m = (lo + hi).div_ceil(2);
+            let prueba = recortar(partes, cortes[m]);
+            if self.armar_parrafo(&prueba, px, escala, ancho).len() <= lineas {
+                lo = m;
+            } else {
+                hi = m - 1;
+            }
+        }
+        let corte = cortes.get(lo).copied().unwrap_or(0);
+        self.armar_parrafo(&recortar(partes, corte), px, escala, ancho)
+    }
+
+    fn armar_parrafo(
+        &mut self,
+        partes: &[(&str, Estilo)],
+        px: f32,
+        escala: f32,
+        ancho: f32,
+    ) -> Layout<u8> {
+        let texto: String = partes.iter().map(|(t, _)| *t).collect();
+        let mut b = self
+            .cx
+            .ranged_builder(&mut self.fuentes, &texto, escala, true);
+        b.push_default(StyleProperty::FontFamily(FontFamily::from(FAMILIA)));
+        b.push_default(StyleProperty::FontSize(px));
+        b.push_default(StyleProperty::OverflowWrap(OverflowWrap::Anywhere));
+        let mut desde = 0;
+        for (t, e) in partes {
+            let r = desde..desde + t.len();
+            b.push(StyleProperty::Brush(e.rol), r.clone());
+            let peso = if e.negrita { 700.0 } else { 400.0 };
+            b.push(StyleProperty::FontWeight(FontWeight::new(peso)), r.clone());
+            if e.cursiva {
+                b.push(StyleProperty::FontStyle(FontStyle::Italic), r.clone());
+            }
+            if e.subrayado {
+                b.push(StyleProperty::Underline(true), r);
+            }
+            desde += t.len();
+        }
+        let mut l = b.build(&texto);
+        l.break_all_lines(Some(ancho));
+        l
+    }
+}
+
+/// Cómo va un tramo de un párrafo.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Estilo {
+    pub rol: u8,
+    pub negrita: bool,
+    pub cursiva: bool,
+    pub subrayado: bool,
+}
+
+/// Si el byte `i` del texto de `partes` cae entre dos caracteres.
+fn es_corte(partes: &[(&str, Estilo)], mut i: usize) -> bool {
+    for (t, _) in partes {
+        if i <= t.len() {
+            return t.is_char_boundary(i);
+        }
+        i -= t.len();
+    }
+    false
+}
+
+/// Los tramos hasta el byte `corte`, sin el blanco del final, y «…» con el estilo del último.
+fn recortar<'a>(partes: &[(&'a str, Estilo)], mut corte: usize) -> Vec<(&'a str, Estilo)> {
+    let mut v: Vec<(&'a str, Estilo)> = Vec::new();
+    for (t, e) in partes {
+        if corte == 0 {
+            break;
+        }
+        let n = corte.min(t.len());
+        v.push((&t[..n], *e));
+        corte -= n;
+    }
+    while let Some((t, e)) = v.pop() {
+        let t = t.trim_end();
+        if !t.is_empty() {
+            v.push((t, e));
+            break;
+        }
+    }
+    let e = v.last().map(|(_, e)| *e).unwrap_or_default();
+    v.push(("…", e));
+    v
 }
 
 /// Dibuja `l` con su centro en (`cx`, `cy`), en píxeles del buffer.
@@ -134,6 +249,19 @@ pub fn dibujar_con(s: &mut Scene, l: &Layout<u8>, tr: Affine, pincel: impl Fn(u8
                         y: gl.y,
                     }),
                 );
+            if g.style().underline.is_some() {
+                let m = run.font_metrics();
+                let y = f64::from(g.baseline() - m.underline_offset);
+                let x = f64::from(g.offset());
+                let alto = f64::from(m.underline_size.max(1.0)).round();
+                let r = vello::kurbo::Rect::new(
+                    x,
+                    y.round(),
+                    x + f64::from(g.advance()),
+                    y.round() + alto,
+                );
+                s.fill(Fill::NonZero, tr, &c, None, &r);
+            }
         }
     }
 }

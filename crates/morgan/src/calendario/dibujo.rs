@@ -15,12 +15,12 @@ use std::time::{Duration, Instant};
 use gtk::glib;
 use morgan_motor::color::{Color, Paleta, con_alfa, pincel};
 use morgan_motor::curva::Transicion;
-use morgan_motor::forma::{Borde, panel, sombra};
+use morgan_motor::forma::{Borde, degrade_135, panel, sombra};
 use morgan_motor::parley::Layout;
 use morgan_motor::texto::{self, Textos};
 use morgan_motor::vello::Scene;
 use morgan_motor::vello::kurbo::{Affine, Point, Rect, RoundedRect};
-use morgan_motor::vello::peniko::{Fill, Gradient};
+use morgan_motor::vello::peniko::Fill;
 
 use super::modelo::{self, Clima, Pronostico};
 use crate::agenda::Evento;
@@ -473,16 +473,6 @@ impl Animos {
 
 fn opaco(c: &Color, op: f32) -> Color {
     con_alfa(c, c[3] * op)
-}
-
-/// `linear-gradient(135deg, a, b)` de CSS sobre `r`.
-fn degrade_135(r: Rect, a: Color, b: Color) -> Gradient {
-    let s = std::f64::consts::FRAC_1_SQRT_2;
-    let largo = (r.width() + r.height()) * s;
-    let c = r.center();
-    let d = s * largo / 2.0;
-    Gradient::new_linear(Point::new(c.x - d, c.y - d), Point::new(c.x + d, c.y + d))
-        .with_stops([pincel(&a), pincel(&b)].as_slice())
 }
 
 pub struct Pintura<'a> {

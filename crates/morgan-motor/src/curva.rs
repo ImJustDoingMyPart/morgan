@@ -96,9 +96,79 @@ impl Transicion {
     }
 }
 
+/// Lo que se ve de algo que se despliega (un `GtkRevealer`), de 0 a 1: avanza parejo hacia
+/// donde va y se le aplica la salida cúbica al abrir; al cerrar desanda la misma curva.
+#[derive(Clone, Copy, Debug)]
+pub struct Revelado {
+    desde: f32,
+    t0: Instant,
+    abrir: bool,
+    dura: Duration,
+}
+
+impl Revelado {
+    pub fn new(abierto: bool) -> Self {
+        Revelado {
+            desde: if abierto { 1.0 } else { 0.0 },
+            t0: Instant::now(),
+            abrir: abierto,
+            dura: Duration::ZERO,
+        }
+    }
+
+    fn lineal(&self, ahora: Instant) -> f32 {
+        let d = self.dura.as_secs_f32().max(1e-3);
+        let paso = ahora.saturating_duration_since(self.t0).as_secs_f32() / d;
+        let v = if self.abrir {
+            self.desde + paso
+        } else {
+            self.desde - paso
+        };
+        v.clamp(0.0, 1.0)
+    }
+
+    pub fn valor(&self, ahora: Instant) -> f64 {
+        f64::from(ease_out(self.lineal(ahora)))
+    }
+
+    pub fn abierto(&self) -> bool {
+        self.abrir
+    }
+
+    /// Hacia abierto o cerrado, recorriendo todo en `dura`; desde donde iba.
+    pub fn ir(&mut self, abrir: bool, dura: Duration, ahora: Instant) {
+        if abrir != self.abrir {
+            self.desde = self.lineal(ahora);
+            self.t0 = ahora;
+            self.abrir = abrir;
+            self.dura = dura;
+        }
+    }
+
+    pub fn anda(&self, ahora: Instant) -> bool {
+        let v = self.lineal(ahora);
+        if self.abrir { v < 1.0 } else { v > 0.0 }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn revelado_desanda_desde_donde_iba() {
+        let t0 = Instant::now();
+        let ms = Duration::from_millis;
+        let mut r = Revelado::new(false);
+        assert_eq!(r.valor(t0), 0.0);
+        r.ir(true, ms(100), t0);
+        assert!(r.anda(t0 + ms(50)));
+        assert_eq!(r.valor(t0 + ms(100)), 1.0);
+        r.ir(false, ms(100), t0 + ms(150));
+        assert!((r.valor(t0 + ms(200)) - f64::from(ease_out(0.5))).abs() < 1e-6);
+        assert!(!r.anda(t0 + ms(260)));
+        assert!(Revelado::new(true).valor(t0) == 1.0);
+    }
 
     #[test]
     fn bezier_en_las_puntas() {

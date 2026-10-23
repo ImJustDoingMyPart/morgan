@@ -30,6 +30,7 @@ mod hyprland;
 mod icono;
 mod ical;
 mod idle;
+mod lamina;
 mod ipc;
 mod launcher;
 mod luz;

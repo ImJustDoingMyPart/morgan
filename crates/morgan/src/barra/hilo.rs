@@ -11,14 +11,14 @@ use std::time::{Duration, Instant};
 
 use morgan_ipc::{AccionInterruptor, AccionSuperficie, Request};
 use morgan_motor::color::Paleta;
-use morgan_motor::curva::ease_out;
+use morgan_motor::curva::Revelado;
 use morgan_motor::forma::Borde;
 use morgan_motor::gpu::{Gpu, Lienzo};
 use morgan_motor::parley::Layout;
 use morgan_motor::texto::Textos;
 use morgan_motor::vello::Scene;
 use smithay_client_toolkit::compositor::{
-    CompositorHandler, CompositorState, FrameCallbackData, Region,
+    CompositorHandler, CompositorState, Region,
 };
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::reexports::calloop::channel::{self, Sender};
@@ -56,6 +56,7 @@ use wayland_client::{Connection, QueueHandle};
 use super::dibujo::{self, ALTO, Animos, Estado, Icono, Lugar, Pintura, Que, Rotulos};
 use crate::calendario::dibujo::{self as cal, Cal, Hoja, Objetivo};
 use crate::hyprland::Espacios;
+use crate::lamina::Lamina;
 
 /// Lo que GTK espera del puntero quieto antes de mostrar el globo; si otro globo se cerró hace
 /// menos, el siguiente sale enseguida.
@@ -126,94 +127,6 @@ pub fn lanzar(
         eprintln!("morgan: barra: {e}");
     }
     (tx, erx)
-}
-
-/// Lo de wgpu y el ritmo de cuadros de una superficie.
-struct Lamina {
-    /// Antes que la superficie: lo de wgpu se suelta antes de que se destruya.
-    lienzo: Option<Lienzo>,
-    tam: (u32, u32),
-    escala: i32,
-    /// Hay un frame callback pendiente: el compositor todavía no quiere otro cuadro.
-    esperando: bool,
-    sucio: bool,
-}
-
-impl Lamina {
-    fn new(tam: (u32, u32)) -> Self {
-        Lamina {
-            lienzo: None,
-            tam,
-            escala: 1,
-            esperando: false,
-            sucio: false,
-        }
-    }
-
-    /// Dibuja `escena` en `wl` si hay lienzo y el compositor quiere otro cuadro.
-    fn presentar(
-        &mut self,
-        gpu: &mut Gpu,
-        escena: &Scene,
-        wl: &wl_surface::WlSurface,
-        qh: &QueueHandle<Hilo>,
-    ) {
-        let Some(lienzo) = self.lienzo.as_mut() else {
-            return;
-        };
-        // El pedido del próximo cuadro va antes del commit que hace `present`.
-        if lienzo.presentar(gpu, wl, escena, self.tam, self.escala, || {
-            wl.frame(qh, FrameCallbackData(wl.clone()));
-        }) {
-            self.esperando = true;
-            self.sucio = false;
-        }
-    }
-
-    fn lista(&self) -> bool {
-        self.lienzo.is_some() && !self.esperando
-    }
-}
-
-/// Lo que se ve de la bandeja, de 0 a 1 sin curva: avanza parejo hacia donde va.
-#[derive(Clone, Copy)]
-struct Revelado {
-    desde: f32,
-    t0: Instant,
-    abrir: bool,
-}
-
-impl Revelado {
-    fn lineal(&self, ahora: Instant) -> f32 {
-        let d = crate::animaciones::dur(dibujo::REVELAR)
-            .as_secs_f32()
-            .max(1e-3);
-        let paso = ahora.saturating_duration_since(self.t0).as_secs_f32() / d;
-        let v = if self.abrir {
-            self.desde + paso
-        } else {
-            self.desde - paso
-        };
-        v.clamp(0.0, 1.0)
-    }
-
-    /// `GtkRevealer`: salida cúbica al abrir, y la misma curva desandada al cerrar.
-    fn valor(&self, ahora: Instant) -> f64 {
-        f64::from(ease_out(self.lineal(ahora)))
-    }
-
-    fn ir(&mut self, abrir: bool, ahora: Instant) {
-        if abrir != self.abrir {
-            self.desde = self.lineal(ahora);
-            self.t0 = ahora;
-            self.abrir = abrir;
-        }
-    }
-
-    fn anda(&self, ahora: Instant) -> bool {
-        let v = self.lineal(ahora);
-        if self.abrir { v < 1.0 } else { v > 0.0 }
-    }
 }
 
 struct Barra {
@@ -442,7 +355,6 @@ impl Hilo {
         capa.set_exclusive_zone(ALTO as i32);
         capa.set_keyboard_interactivity(KeyboardInteractivity::None);
         capa.commit();
-        let ahora = Instant::now();
         self.barras.push(Barra {
             lamina: Lamina::new((0, ALTO)),
             capa,
@@ -450,11 +362,7 @@ impl Hilo {
             nombre,
             rotulos: None,
             animos: Animos::default(),
-            revelado: Revelado {
-                desde: 0.0,
-                t0: ahora,
-                abrir: false,
-            },
+            revelado: Revelado::new(false),
             encima: None,
             en_cajon: false,
         });
@@ -477,7 +385,8 @@ impl Hilo {
         let e = &self.estado;
         for b in &mut self.barras {
             let abrir = b.en_cajon || e.menu.is_some();
-            b.revelado.ir(abrir, ahora);
+            b.revelado
+                .ir(abrir, crate::animaciones::dur(dibujo::REVELAR), ahora);
             let Some(lugar) = Self::lugar(b, e, ahora) else {
                 continue;
             };
