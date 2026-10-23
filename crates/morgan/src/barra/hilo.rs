@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use morgan_ipc::{AccionInterruptor, AccionSuperficie, Request};
 use morgan_motor::color::Paleta;
 use morgan_motor::curva::ease_out;
+use morgan_motor::forma::Borde;
 use morgan_motor::gpu::{Gpu, Lienzo};
 use morgan_motor::parley::Layout;
 use morgan_motor::texto::Textos;
@@ -83,6 +84,8 @@ pub enum Orden {
     /// El ícono de la bandeja con su menú abierto.
     Menu(Option<String>),
     Calendario(cal::Orden),
+    /// Lo de afuera de los paneles, que sigue a la sombra de las ventanas.
+    Borde(Borde),
 }
 
 /// Lo que se tocó, para el hilo de GTK.
@@ -264,6 +267,7 @@ struct Hilo {
     escena: Scene,
     paleta: Paleta,
     opacidad: f32,
+    borde: Borde,
     estado: Estado,
     /// Sube con cada cambio del estado: los textos de cada barra se rearman.
     version: u64,
@@ -323,6 +327,7 @@ fn correr(
         escena: Scene::new(),
         paleta,
         opacidad,
+        borde: Borde::Sombra,
         estado: Estado {
             fijos,
             ..Estado::default()
@@ -393,6 +398,11 @@ impl Hilo {
             Orden::Menu(m) => e.menu = m,
             Orden::Calendario(o) => {
                 self.orden_calendario(o);
+                return;
+            }
+            Orden::Borde(b) => {
+                self.borde = b;
+                self.ensuciar();
                 return;
             }
         }
@@ -581,6 +591,7 @@ impl Hilo {
                         animos: &c.animos,
                         paleta: &self.paleta,
                         opacidad: self.opacidad,
+                        borde: self.borde,
                         ahora,
                         bajada: f64::from(bajada),
                         marquesina: ahora.saturating_duration_since(c.marquesina).as_secs_f64(),

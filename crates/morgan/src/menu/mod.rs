@@ -1691,7 +1691,7 @@ impl Menu {
         i.s.sonidos.aplicar_config(&c.sonido);
         i.s.luz.aplicar_config(&c.luz);
         i.s.fondos.aplicar_config(&c.fondos);
-        i.s.calendario.aplicar_config(&c.clima);
+        i.s.calendario.aplicar_config(&c);
         i.s.centro.aplicar_config(&c.sonido);
         i.config.replace(c);
         Ok(())

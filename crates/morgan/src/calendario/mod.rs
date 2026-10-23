@@ -30,18 +30,15 @@ struct Inner {
 }
 
 impl Calendario {
-    pub fn new(
-        hilo: Sender<OrdenBarra>,
-        agenda: &Agenda,
-        ubicacion: &crate::config::Clima,
-    ) -> Self {
+    pub fn new(hilo: Sender<OrdenBarra>, agenda: &Agenda, config: &crate::config::Config) -> Self {
         let c = Calendario {
             inner: Rc::new(Inner {
                 hilo,
-                ubicacion: RefCell::new(ubicacion.clone()),
+                ubicacion: RefCell::new(config.clima.clone()),
                 abierto: Cell::new(false),
             }),
         };
+        c.aplicar_config(config);
         c.mandar(Orden::Eventos(agenda.eventos()));
         let (yo, a) = (c.clone(), agenda.clone());
         agenda.al_cambiar(move || yo.mandar(Orden::Eventos(a.eventos())));
@@ -95,7 +92,10 @@ impl Calendario {
         self.mandar(Orden::Clima(p));
     }
 
-    pub fn aplicar_config(&self, c: &crate::config::Clima) {
-        self.inner.ubicacion.replace(c.clone());
+    /// La ubicación del clima y lo de afuera del panel (sigue a la sombra de las ventanas).
+    pub fn aplicar_config(&self, c: &crate::config::Config) {
+        self.inner.ubicacion.replace(c.clima.clone());
+        let borde = morgan_motor::forma::Borde::de(&c.apariencia.sombra);
+        let _ = self.inner.hilo.send(OrdenBarra::Borde(borde));
     }
 }

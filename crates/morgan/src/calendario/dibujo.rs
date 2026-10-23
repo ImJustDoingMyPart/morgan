@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use gtk::glib;
 use morgan_motor::color::{Color, Paleta, con_alfa, pincel};
 use morgan_motor::curva::Transicion;
-use morgan_motor::forma::{panel, sombra};
+use morgan_motor::forma::{Borde, panel, sombra};
 use morgan_motor::parley::Layout;
 use morgan_motor::texto::{self, Textos};
 use morgan_motor::vello::Scene;
@@ -490,6 +490,7 @@ pub struct Pintura<'a> {
     pub animos: &'a Animos,
     pub paleta: &'a Paleta,
     pub opacidad: f32,
+    pub borde: Borde,
     pub ahora: Instant,
     /// Cuánto falta bajar al panel (la entrada), en lógicos.
     pub bajada: f64,
@@ -505,7 +506,7 @@ impl Pintura<'_> {
         let tr = Affine::scale(escala) * Affine::translate((0.0, -self.bajada.round()));
         // Lo que se ve está corrido: el texto, en píxeles del buffer, también.
         let tt = Affine::translate((0.0, -self.bajada.round() * escala));
-        panel(s, tr, p, self.opacidad, h.panel);
+        panel(s, tr, p, self.opacidad, h.panel, self.borde);
         let texto = |s: &mut Scene, t: &Texto, c: Color, k: Affine| {
             let pos = Affine::translate(((t.x * escala).round(), (t.y * escala).round()));
             texto::dibujar_en(s, &t.l, tt * k * pos, |_| c, 1.0);

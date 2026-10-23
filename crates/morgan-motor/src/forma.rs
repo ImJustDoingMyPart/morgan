@@ -34,11 +34,37 @@ pub fn sombra(
     }
 }
 
+/// Lo de afuera del anillo de los paneles. Sigue a la sombra de las ventanas (`[appearance]
+/// shadow`): negra o el glow del tema.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Borde {
+    /// Una línea negra de 1 px y una sombra negra suave, centrada: la de las ventanas,
+    /// achicada al tamaño de un panel.
+    Sombra,
+    /// Los dos brillos del anillo, `primary` arriba a la izquierda y `tertiary` abajo a la
+    /// derecha, sin línea.
+    Brillo,
+}
+
+impl Borde {
+    /// El id de la sombra de la config; uno que no se conoce, la negra.
+    pub fn de(id: &str) -> Borde {
+        if id == "glow" {
+            Borde::Brillo
+        } else {
+            Borde::Sombra
+        }
+    }
+}
+
 /// La caja de los paneles (`.control-center` de la hoja de GTK) con su borde de afuera hacia
-/// adentro, en `r` (la caja del borde, en lógicos): la línea de 1 px del fondo y los dos
-/// brillos por fuera, el anillo de 2 px (`primary` arriba y a la izquierda, `tertiary` abajo y
-/// a la derecha, partido en diagonal en las esquinas, como GTK) y el fondo translúcido.
-pub fn panel(s: &mut Scene, tr: Affine, p: &Paleta, opacidad: f32, r: Rect) {
+/// adentro, en `r` (la caja del borde, en lógicos): lo de afuera según `borde`, el anillo de
+/// 2 px (`primary` arriba y a la izquierda, `tertiary` abajo y a la derecha, partido en
+/// diagonal en las esquinas, como GTK) y el fondo translúcido.
+///
+/// Todo lo de afuera queda por debajo de 0,5 de alfa (salvo la línea): el blur de la capa
+/// (`ignore_alpha` 0,5) no lo alcanza y no se ve una franja desenfocada alrededor.
+pub fn panel(s: &mut Scene, tr: Affine, p: &Paleta, opacidad: f32, r: Rect, borde: Borde) {
     const RADIO: f64 = 4.0;
     const BORDE: f64 = 2.0;
     let rr = RoundedRect::from_rect(r, RADIO);
@@ -47,13 +73,19 @@ pub fn panel(s: &mut Scene, tr: Affine, p: &Paleta, opacidad: f32, r: Rect) {
     afuera.extend(r.inflate(16.0, 16.0).path_elements(0.1));
     afuera.extend(rr.path_elements(0.1));
     s.push_layer(Fill::EvenOdd, BlendMode::default(), 1.0, tr, &afuera);
-    // GTK apila la primera de la lista arriba.
-    for (c, d, spread, blur) in [
-        (con_alfa(&p.tertiary, 0.45), (1.0, 1.0), 2.0, 5.0),
-        (con_alfa(&p.primary, 0.45), (-1.0, -1.0), 2.0, 5.0),
-        (con_alfa(&p.surface, 0.85), (0.0, 0.0), 1.0, 0.0),
-    ] {
-        sombra(s, tr, r, RADIO, c, d, spread, blur);
+    let negro = |a| [0.0, 0.0, 0.0, a];
+    let capas: &[(Color, (f64, f64), f64, f64)] = match borde {
+        Borde::Sombra => &[
+            (negro(0.5), (0.0, 0.0), 1.0, 6.0),
+            (negro(1.0), (0.0, 0.0), 1.0, 0.0),
+        ],
+        Borde::Brillo => &[
+            (con_alfa(&p.tertiary, 0.3), (1.0, 1.0), 1.0, 5.0),
+            (con_alfa(&p.primary, 0.3), (-1.0, -1.0), 1.0, 5.0),
+        ],
+    };
+    for (c, d, spread, blur) in capas {
+        sombra(s, tr, r, RADIO, *c, *d, *spread, *blur);
     }
     s.pop_layer();
     let adentro = RoundedRect::from_rect(r.inflate(-BORDE, -BORDE), RADIO - BORDE);
