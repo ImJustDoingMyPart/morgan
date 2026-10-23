@@ -61,6 +61,7 @@ fn opciones() -> Result<Opciones, String> {
 }
 
 fn main() -> ExitCode {
+    let arranque = std::time::Instant::now();
     let o = match opciones() {
         Ok(o) => o,
         Err(e) => {
@@ -123,6 +124,12 @@ fn main() -> ExitCode {
     xray::poner(cruzado);
     let l = logind.clone();
     instancia.connect_locked(move |_| {
+        if std::env::var_os("MORGAN_LOCK_MEDIR").is_some() {
+            eprintln!(
+                "morgan-lock: medida: locked a los {:.0} ms",
+                arranque.elapsed().as_secs_f64() * 1000.0
+            );
+        }
         if let Some(l) = l.borrow().clone() {
             marcar(l, true);
         }

@@ -39,6 +39,7 @@ use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
 use smithay_client_toolkit::seat::keyboard::{
     KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers,
 };
+use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind, PointerHandler};
 use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState};
 use smithay_client_toolkit::session_lock::{
     SessionLock, SessionLockHandler, SessionLockState, SessionLockSurface,
@@ -47,7 +48,7 @@ use smithay_client_toolkit::session_lock::{
 use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
 use vello::peniko::{Blob, ImageAlphaType, ImageData, ImageFormat};
 use wayland_client::globals::registry_queue_init;
-use wayland_client::protocol::{wl_keyboard, wl_output, wl_seat, wl_surface};
+use wayland_client::protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface};
 use wayland_client::{Connection, QueueHandle};
 
 use morgan_ipc::bloqueo::Bloqueo;
@@ -199,6 +200,7 @@ fn main() -> ExitCode {
         superficies: Vec::new(),
         proximo_id: 0,
         teclado: None,
+        puntero: None,
         clave: Clave::new(),
         ctrl: false,
         mayus: None,
@@ -266,6 +268,7 @@ struct App {
     superficies: Vec<Superficie>,
     proximo_id: u32,
     teclado: Option<wl_keyboard::WlKeyboard>,
+    puntero: Option<wl_pointer::WlPointer>,
     clave: Clave,
     ctrl: bool,
     mayus: Option<bool>,
@@ -791,6 +794,10 @@ impl SeatHandler for App {
         seat: wl_seat::WlSeat,
         c: Capability,
     ) {
+        // El puntero solo se pide para esconderlo, como `morgan-lock`.
+        if c == Capability::Pointer && self.puntero.is_none() {
+            self.puntero = self.asientos.get_pointer(qh, &seat).ok();
+        }
         if c == Capability::Keyboard && self.teclado.is_none() {
             match self.asientos.get_keyboard_with_repeat(
                 qh,
@@ -816,6 +823,11 @@ impl SeatHandler for App {
             && let Some(k) = self.teclado.take()
         {
             k.release();
+        }
+        if c == Capability::Pointer
+            && let Some(p) = self.puntero.take()
+        {
+            p.release();
         }
     }
 
@@ -895,6 +907,22 @@ impl KeyboardHandler for App {
                 si: m.caps_lock,
                 t: ahora(),
             });
+        }
+    }
+}
+
+impl PointerHandler for App {
+    fn pointer_frame(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        puntero: &wl_pointer::WlPointer,
+        eventos: &[PointerEvent],
+    ) {
+        for e in eventos {
+            if let PointerEventKind::Enter { serial } = e.kind {
+                puntero.set_cursor(serial, None, 0, 0);
+            }
         }
     }
 }
