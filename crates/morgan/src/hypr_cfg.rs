@@ -23,10 +23,10 @@ pub const SOMBRAS: &[(&str, &str, &str, &str)] = &[
         "glow",
         "Glow colorido",
         "el degradé del tema, gira con el borde",
-        // Tenue y pegado al borde (Roberto, 2026-10-23: con `range 6` se veía grueso): 4 px
+        // Tenue y pegado al borde (Roberto, 2026-10-23: con `range 6` se veía grueso): 3 px
         // lógicos, `render_power 3` concentra la luz contra el borde, y el degradé del tema al
         // 30 % (`templates/hyprland.lua`).
-        "hl.config({ decoration = { shadow = {\n    enabled = true, range = 4, render_power = 3,\n    \
+        "hl.config({ decoration = { shadow = {\n    enabled = true, range = 3, render_power = 3,\n    \
          color_inactive = \"rgba(00000000)\", offset = { 0, 0 },\n} } })\n",
     ),
 ];
