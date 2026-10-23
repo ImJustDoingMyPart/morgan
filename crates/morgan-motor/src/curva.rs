@@ -96,13 +96,14 @@ impl Transicion {
     }
 }
 
-/// Lo que se ve de algo que se despliega (un `GtkRevealer`), de 0 a 1: avanza parejo hacia
-/// donde va y se le aplica la salida cúbica al abrir; al cerrar desanda la misma curva.
+/// Lo que se ve de algo que se despliega, de 0 a 1, como un `GtkRevealer`: va de donde está
+/// hacia abierto o cerrado en el tiempo entero de la transición, con la salida cúbica en los
+/// dos sentidos.
 #[derive(Clone, Copy, Debug)]
 pub struct Revelado {
     desde: f32,
-    t0: Instant,
     abrir: bool,
+    t0: Instant,
     dura: Duration,
 }
 
@@ -110,44 +111,51 @@ impl Revelado {
     pub fn new(abierto: bool) -> Self {
         Revelado {
             desde: if abierto { 1.0 } else { 0.0 },
-            t0: Instant::now(),
             abrir: abierto,
+            t0: Instant::now(),
             dura: Duration::ZERO,
         }
     }
 
-    fn lineal(&self, ahora: Instant) -> f32 {
-        let d = self.dura.as_secs_f32().max(1e-3);
-        let paso = ahora.saturating_duration_since(self.t0).as_secs_f32() / d;
-        let v = if self.abrir {
-            self.desde + paso
+    fn hasta(&self) -> f32 {
+        if self.abrir { 1.0 } else { 0.0 }
+    }
+
+    fn actual(&self, ahora: Instant) -> f32 {
+        let d = self.dura.as_secs_f32();
+        let t = if d <= 0.0 {
+            1.0
         } else {
-            self.desde - paso
+            ahora.saturating_duration_since(self.t0).as_secs_f32() / d
         };
-        v.clamp(0.0, 1.0)
+        self.desde + (self.hasta() - self.desde) * ease_out(t)
     }
 
     pub fn valor(&self, ahora: Instant) -> f64 {
-        f64::from(ease_out(self.lineal(ahora)))
+        f64::from(self.actual(ahora))
     }
 
     pub fn abierto(&self) -> bool {
         self.abrir
     }
 
-    /// Hacia abierto o cerrado, recorriendo todo en `dura`; desde donde iba.
+    /// Hacia abierto o cerrado en `dura`, desde donde iba.
     pub fn ir(&mut self, abrir: bool, dura: Duration, ahora: Instant) {
         if abrir != self.abrir {
-            self.desde = self.lineal(ahora);
+            self.desde = self.actual(ahora);
             self.t0 = ahora;
             self.abrir = abrir;
             self.dura = dura;
         }
     }
 
+    /// Ya, sin transición.
+    pub fn poner(&mut self, abierto: bool) {
+        *self = Revelado::new(abierto);
+    }
+
     pub fn anda(&self, ahora: Instant) -> bool {
-        let v = self.lineal(ahora);
-        if self.abrir { v < 1.0 } else { v > 0.0 }
+        ahora.saturating_duration_since(self.t0) < self.dura
     }
 }
 
@@ -165,8 +173,11 @@ mod tests {
         assert!(r.anda(t0 + ms(50)));
         assert_eq!(r.valor(t0 + ms(100)), 1.0);
         r.ir(false, ms(100), t0 + ms(150));
-        assert!((r.valor(t0 + ms(200)) - f64::from(ease_out(0.5))).abs() < 1e-6);
-        assert!(!r.anda(t0 + ms(260)));
+        assert!((r.valor(t0 + ms(200)) - f64::from(1.0 - ease_out(0.5))).abs() < 1e-6);
+        // Cambiar a mitad de camino sigue desde donde iba.
+        r.ir(true, ms(100), t0 + ms(200));
+        assert!((r.valor(t0 + ms(200)) - f64::from(1.0 - ease_out(0.5))).abs() < 1e-6);
+        assert!(!r.anda(t0 + ms(310)));
         assert!(Revelado::new(true).valor(t0) == 1.0);
     }
 
