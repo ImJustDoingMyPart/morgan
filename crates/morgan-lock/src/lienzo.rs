@@ -366,7 +366,21 @@ impl Lienzo {
         if self.imp().corriendo.replace(true) {
             return;
         }
-        self.add_tick_callback(|w, _| {
+        let medir = std::env::var_os("MORGAN_LOCK_MEDIR").is_some();
+        let ultimo = Cell::new(None::<i64>);
+        self.add_tick_callback(move |w, reloj| {
+            if medir {
+                // El reloj de cuadros de GTK: un hueco grande es un cuadro que no se dibujó.
+                let t = reloj.frame_time();
+                if let Some(u) = ultimo.replace(Some(t))
+                    && t - u > 17 * MS
+                {
+                    eprintln!(
+                        "morgan-lock: medida: un cuadro tardó {:.1} ms",
+                        (t - u) as f64 / 1000.0
+                    );
+                }
+            }
             w.queue_draw();
             let sigue = w
                 .imp()

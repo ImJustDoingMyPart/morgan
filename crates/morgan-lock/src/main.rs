@@ -1,9 +1,11 @@
 //! Binario aparte de morgan: si morgan se cae, el bloqueo sigue.
 //!
-//!   morgan-lock [--pam SERVICIO] [--sin-logind]
+//!   morgan-lock [--pam SERVICIO] [--sin-logind] [--trabar MS]
 //!
 //! `--pam vlock` y `--sin-logind` son para probarlo en un Hyprland anidado: un fallo no suma
-//! a faillock y no se toca el `LockedHint` de la sesión real.
+//! a faillock y no se toca el `LockedHint` de la sesión real. `--trabar MS` es la prueba del
+//! plan Motor propio: a la tercera tecla el hilo principal duerme MS milisegundos; con
+//! `MORGAN_LOCK_MEDIR=1` se anota cada cuadro de la animación que tarda más de 17 ms.
 
 mod caracteres;
 mod fondo;
@@ -31,18 +33,27 @@ use crate::vista::{Campo, Vista};
 struct Opciones {
     servicio: String,
     logind: bool,
+    trabar: Option<u64>,
 }
 
 fn opciones() -> Result<Opciones, String> {
     let mut o = Opciones {
         servicio: "morgan-lock".into(),
         logind: true,
+        trabar: None,
     };
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--pam" => o.servicio = args.next().ok_or("--pam necesita un servicio")?,
             "--sin-logind" => o.logind = false,
+            "--trabar" => {
+                o.trabar = Some(
+                    args.next()
+                        .and_then(|v| v.parse().ok())
+                        .ok_or("--trabar necesita milisegundos")?,
+                )
+            }
             otro => return Err(format!("argumento desconocido: {otro}")),
         }
     }
@@ -53,7 +64,7 @@ fn main() -> ExitCode {
     let o = match opciones() {
         Ok(o) => o,
         Err(e) => {
-            eprintln!("morgan-lock: {e}\nuso: morgan-lock [--pam SERVICIO] [--sin-logind]");
+            eprintln!("morgan-lock: {e}\nuso: morgan-lock [--pam SERVICIO] [--sin-logind] [--trabar MS]");
             return ExitCode::FAILURE;
         }
     };
@@ -87,6 +98,9 @@ fn main() -> ExitCode {
         .map(|d| d.join("wallpaper-lock.png"))
         .and_then(|p| gdk::Texture::from_filename(p).ok());
     let vista = Vista::new(&display, fondo, paleta, estilo());
+    if let Some(ms) = o.trabar {
+        vista.trabar_a_la_tercera(ms);
+    }
     let instancia = lock::Instance::new();
     let bucle = glib::MainLoop::new(None, false);
     let salida = Rc::new(Cell::new(ExitCode::SUCCESS));

@@ -106,6 +106,22 @@ impl Vista {
         vista
     }
 
+    /// La prueba de `--trabar`: a la tercera tecla, el hilo principal se duerme `ms`.
+    pub fn trabar_a_la_tercera(&self, ms: u64) {
+        let teclas = Cell::new(0u32);
+        let previo = Cell::new(0u32);
+        self.inner.buffer.connect_length_notify(move |b| {
+            let n = b.length() as u32;
+            if n > previo.replace(n) {
+                teclas.set(teclas.get() + 1);
+                if teclas.get() == 3 {
+                    eprintln!("morgan-lock: prueba: el hilo principal se traba {ms} ms");
+                    std::thread::sleep(Duration::from_millis(ms));
+                }
+            }
+        });
+    }
+
     pub fn al_enviar(&self, f: impl Fn(String) + 'static) {
         *self.inner.enviar.borrow_mut() = Some(Box::new(f));
     }

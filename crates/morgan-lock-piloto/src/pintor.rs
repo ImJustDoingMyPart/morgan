@@ -88,6 +88,12 @@ impl Medida {
             self.peor_us = self.peor_us.max(d);
             if d > 17_000 {
                 self.lentos += 1;
+                if self.activa {
+                    eprintln!(
+                        "morgan-lock-piloto: medida: un cuadro tardó {:.1} ms",
+                        d as f64 / 1000.0
+                    );
+                }
             }
         }
         self.cuadros += 1;
