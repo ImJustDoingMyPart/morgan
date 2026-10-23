@@ -1,10 +1,12 @@
 //! Texto con parley, dibujado con vello. El pincel de cada tramo es un rol de la paleta (un
 //! número), no un color: el color se resuelve al dibujar y puede animarse sin rearmar nada.
 
-use parley::{FontContext, FontFamily, Layout, LayoutContext, PositionedLayoutItem, StyleProperty};
+use parley::{
+    FontContext, FontFamily, FontWeight, Layout, LayoutContext, PositionedLayoutItem, StyleProperty,
+};
 use vello::Scene;
 use vello::kurbo::Affine;
-use vello::peniko::Fill;
+use vello::peniko::{Brush, Fill};
 
 use crate::escena::Color;
 
@@ -31,12 +33,24 @@ impl Textos {
     /// Una línea con un rol por tramo. `escala` es la de la salida: el texto se arma en
     /// píxeles del buffer, para que el hinting caiga en píxeles de verdad.
     pub fn armar(&mut self, partes: &[(&str, u8)], px: f32, escala: f32) -> Layout<u8> {
+        self.armar_con_peso(partes, px, 400.0, escala)
+    }
+
+    /// Con otro grosor de la misma familia (400 es la regular, 500 la medium).
+    pub fn armar_con_peso(
+        &mut self,
+        partes: &[(&str, u8)],
+        px: f32,
+        peso: f32,
+        escala: f32,
+    ) -> Layout<u8> {
         let texto: String = partes.iter().map(|(t, _)| *t).collect();
         let mut b = self
             .cx
             .ranged_builder(&mut self.fuentes, &texto, escala, true);
         b.push_default(StyleProperty::FontFamily(FontFamily::from(FAMILIA)));
         b.push_default(StyleProperty::FontSize(px));
+        b.push_default(StyleProperty::FontWeight(FontWeight::new(peso)));
         let mut desde = 0;
         for (t, rol) in partes {
             b.push(StyleProperty::Brush(*rol), desde..desde + t.len());
@@ -80,14 +94,21 @@ pub fn dibujar_en(
     color: impl Fn(u8) -> Color,
     alfa: f32,
 ) {
+    dibujar_con(s, l, tr, |rol| {
+        let c = color(rol);
+        vello::peniko::Color::new([c[0], c[1], c[2], c[3] * alfa]).into()
+    });
+}
+
+/// Con cualquier pincel por rol (un degradé, por ejemplo), en las coordenadas del layout.
+pub fn dibujar_con(s: &mut Scene, l: &Layout<u8>, tr: Affine, pincel: impl Fn(u8) -> Brush) {
     for linea in l.lines() {
         for item in linea.items() {
             let PositionedLayoutItem::GlyphRun(g) = item else {
                 continue;
             };
             let run = g.run();
-            let c = color(g.style().brush);
-            let c = vello::peniko::Color::new([c[0], c[1], c[2], c[3] * alfa]);
+            let c = pincel(g.style().brush);
             let coords: Vec<i16> = run
                 .normalized_coords()
                 .iter()
@@ -98,7 +119,7 @@ pub fn dibujar_en(
                 .transform(tr)
                 .normalized_coords(&coords)
                 .hint(true)
-                .brush(c)
+                .brush(&c)
                 .draw(
                     Fill::NonZero,
                     g.positioned_glyphs().map(|gl| vello::Glyph {

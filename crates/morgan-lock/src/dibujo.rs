@@ -67,7 +67,7 @@ pub struct Rotulos {
     pub aviso: Option<parley::Layout<u8>>,
     /// Las sombras de las tres piezas del reloj, la fecha y el aviso, en ese orden; las pone
     /// el render (necesitan la GPU).
-    pub sombras: [Option<Sombra>; 5],
+    pub sombras: [Vec<(Sombra, f64)>; 5],
     /// El texto del campo y su layout: cambia poco, se guarda el último.
     pub campo: Option<(String, parley::Layout<u8>)>,
     /// Los de la escritura `symbols`, armados la primera vez que salen.
@@ -76,7 +76,8 @@ pub struct Rotulos {
 
 impl Rotulos {
     pub fn armar(t: &mut texto::Textos, e: &Estado, escala: f32) -> Self {
-        let mut pieza = |s: &str, rol| t.armar(&[(s, rol)], texto::pt(96.0), escala);
+        let mut pieza =
+            |s: &str, rol| t.armar_con_peso(&[(s, rol)], texto::pt(96.0), PESO_RELOJ, escala);
         let reloj = [
             pieza(&e.hora, ROL_PRIMARY),
             pieza(":", ROL_VARIANTE),
@@ -90,7 +91,7 @@ impl Rotulos {
         }
         .map(|a| t.armar(&[(&a, ROL_TEXTO)], texto::pt(13.0), escala));
         Rotulos {
-            sombras: [None, None, None, None, None],
+            sombras: Default::default(),
             version: e.version_textos,
             reloj,
             fecha,
@@ -181,14 +182,23 @@ pub fn pintar(
     let yr = cy - Y_RELOJ * escala;
     for (l, sm) in rot.reloj.iter().zip(&rot.sombras) {
         let (w, h) = texto::caja(l);
-        con_sombra(s, l, sm, (x, (yr - h / 2.0).round()), color);
+        let esq = (x, (yr - h / 2.0).round());
+        con_relieve(s, l, sm, esq, color, Some(&RELIEVE_RELOJ), escala);
         x += w;
     }
     let esq = texto::esquina(&rot.fecha, cx, cy - Y_FECHA * escala);
-    con_sombra(s, &rot.fecha, &rot.sombras[3], esq, color);
+    con_relieve(
+        s,
+        &rot.fecha,
+        &rot.sombras[3],
+        esq,
+        color,
+        Some(&RELIEVE_FECHA),
+        escala,
+    );
     if let Some(a) = &rot.aviso {
         let esq = texto::esquina(a, cx, cy - Y_AVISO * escala);
-        con_sombra(s, a, &rot.sombras[4], esq, color);
+        con_relieve(s, a, &rot.sombras[4], esq, color, None, escala);
     }
 
     // El campo en sus coordenadas: (0, 0) es su esquina, en píxeles lógicos.
@@ -202,23 +212,89 @@ pub fn pintar(
     s.pop_layer();
 }
 
-fn con_sombra(
-    s: &mut Scene,
-    l: &parley::Layout<u8>,
-    sombra: &Option<Sombra>,
-    (x, y): (f64, f64),
-    color: impl Fn(u8) -> Color,
-) {
-    if let Some(sm) = sombra {
-        let brocha = ImageBrush::new(sm.imagen.clone());
-        s.draw_image(&brocha, Affine::translate((x - sm.margen, y - sm.margen)));
-    }
-    texto::dibujar_en(s, l, Affine::translate((x, y)), color, 1.0);
+/// El volumen del texto: la «Q» de una muestra que eligió Roberto (2026-10-23), entre el
+/// texto plano de antes y un biselado que fue demasiado. Un espesor de pocos píxeles hacia
+/// abajo (copias oscuras apiladas), sombra en dos capas debajo de ese espesor (una fina y
+/// pegada, una amplia), una copia clara apenas arriba (el filo) y la cara con un degradé
+/// vertical, más clara arriba.
+pub struct Relieve {
+    /// (sigma, alfa, cuánto baja), en píxeles lógicos: sombras negras desenfocadas.
+    pub sombras: &'static [(f32, f32, f64)],
+    /// Cuántos píxeles de espesor (una copia oscura por píxel) y cuánto negro llevan.
+    pub espesor: (u32, f32),
+    /// Cuánto sube la copia clara y cuánto blanco lleva.
+    pub filo: (f64, f32),
+    /// Cuánto blanco arriba, cuánto negro abajo y entre qué fracciones del alto del texto.
+    pub degrade: (f32, f32, f64, f64),
 }
 
-/// Cuánto se desenfoca y qué tan oscura es cada sombra (las tres piezas del reloj, fecha,
-/// aviso): los `text-shadow` de 8 y 3 px al 60 % de la versión con GTK.
-pub const SOMBRAS: [(f32, f32); 5] = [(4.0, 0.6), (4.0, 0.6), (4.0, 0.6), (1.5, 0.6), (1.5, 0.6)];
+const PESO_RELOJ: f32 = 500.0;
+
+pub const RELIEVE_RELOJ: Relieve = Relieve {
+    sombras: &[(1.2, 0.55, 4.0), (10.0, 0.45, 6.0)],
+    espesor: (2, 0.55),
+    filo: (1.5, 0.6),
+    degrade: (0.35, 0.12, 20.0 / 169.0, 150.0 / 169.0),
+};
+
+/// La fecha, con lo mismo en menor medida (y su grosor regular).
+pub const RELIEVE_FECHA: Relieve = Relieve {
+    sombras: &[(0.6, 0.45, 2.0), (4.0, 0.35, 2.5)],
+    espesor: (1, 0.45),
+    filo: (0.7, 0.4),
+    degrade: (0.2, 0.08, 20.0 / 169.0, 150.0 / 169.0),
+};
+
+/// El aviso queda plano, con el `text-shadow` de 3 px de antes.
+const SOMBRA_AVISO: &[(f32, f32, f64)] = &[(1.5, 0.6, 0.0)];
+
+/// Las sombras de cada capa de `Rotulos::capas`, en el mismo orden.
+pub fn sombras_de(i: usize) -> &'static [(f32, f32, f64)] {
+    match i {
+        0..=2 => RELIEVE_RELOJ.sombras,
+        3 => RELIEVE_FECHA.sombras,
+        _ => SOMBRA_AVISO,
+    }
+}
+
+const NEGRO: Color = [0.0, 0.0, 0.0, 1.0];
+
+fn con_relieve(
+    s: &mut Scene,
+    l: &parley::Layout<u8>,
+    sombras: &[(Sombra, f64)],
+    (x, y): (f64, f64),
+    color: impl Fn(u8) -> Color,
+    relieve: Option<&Relieve>,
+    escala: f64,
+) {
+    for (sm, baja) in sombras {
+        let brocha = ImageBrush::new(sm.imagen.clone());
+        let en = (x - sm.margen, y - sm.margen + baja * escala);
+        s.draw_image(&brocha, Affine::translate(en));
+    }
+    let Some(r) = relieve else {
+        texto::dibujar_en(s, l, Affine::translate((x, y)), color, 1.0);
+        return;
+    };
+    let (espesor, negro) = r.espesor;
+    for i in (1..=espesor).rev() {
+        let en = Affine::translate((x, y + i as f64 * escala));
+        texto::dibujar_en(s, l, en, |b| mezclar(&color(b), &NEGRO, negro), 1.0);
+    }
+    let (sube, blanco) = r.filo;
+    let en = Affine::translate((x, y - sube * escala));
+    texto::dibujar_en(s, l, en, |b| mezclar(&color(b), &BLANCO, blanco), 1.0);
+    let (claro, oscuro, y0, y1) = r.degrade;
+    let alto = l.height() as f64;
+    texto::dibujar_con(s, l, Affine::translate((x, y)), |b| {
+        let c = color(b);
+        let (arriba, abajo) = (mezclar(&c, &BLANCO, claro), mezclar(&c, &NEGRO, oscuro));
+        Gradient::new_linear((0.0, alto * y0), (0.0, alto * y1))
+            .with_stops([pincel(&arriba), pincel(&abajo)].as_slice())
+            .into()
+    });
+}
 
 fn sacudida(t: f32) -> f32 {
     const K: [(f32, f32); 7] = [

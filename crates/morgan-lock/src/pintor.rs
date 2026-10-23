@@ -467,17 +467,16 @@ impl Pintor {
 fn sombras(gpu: &mut Gpu, r: &mut Rotulos, escala: f32) {
     let capas = r.capas();
     let hechas = std::array::from_fn(|i| {
-        let (sigma, alfa) = dibujo::SOMBRAS[i];
-        capas[i].and_then(|l| {
-            crate::sombra::hacer(
-                &gpu.device,
-                &gpu.cola,
-                &mut gpu.vello,
-                l,
-                sigma * escala,
-                alfa,
-            )
-        })
+        let Some(l) = capas[i] else {
+            return Vec::new();
+        };
+        dibujo::sombras_de(i)
+            .iter()
+            .filter_map(|&(sigma, alfa, baja)| {
+                let (d, c, v) = (&gpu.device, &gpu.cola, &mut gpu.vello);
+                crate::sombra::hacer(d, c, v, l, sigma * escala, alfa).map(|s| (s, baja))
+            })
+            .collect()
     });
     r.sombras = hechas;
 }
