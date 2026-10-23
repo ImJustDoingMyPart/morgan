@@ -1,0 +1,522 @@
+//! Lo que se ve, como función del tiempo. El hilo principal declara cada cambio con su
+//! instante (`Cambio`) y el de render camina las animaciones solo, a ritmo de pantalla: si el
+//! principal se traba, la onda sigue. Acá no hay Wayland ni GPU, solo el modelo; lo dibuja
+//! `dibujo.rs`.
+//!
+//! El modelo es el de `morgan-lock/src/lienzo.rs` (los mismos tiempos y constantes), más el
+//! reloj, el aviso y los fundidos de entrada y salida que allá ponían GTK y su hoja.
+
+use std::sync::OnceLock;
+use std::time::Instant;
+
+use morgan_ipc::bloqueo::{Bloqueo, Escritura};
+
+pub const ANCHO: f32 = 344.0;
+pub const ALTO: f32 = 52.0;
+
+/// Los de `morgan-lock/src/estilo.css`: la animación `entrar` y la transición de `.saliendo`.
+pub const ENTRADA_MS: i64 = 200;
+pub const SALIDA_MS: i64 = 200;
+pub const DESTELLO_MS: i64 = 380;
+pub const FALLO_MS: i64 = 2000;
+
+pub(crate) const LENTO_TECLA: f32 = 4.0;
+pub(crate) const LENTO_EVENTO: f32 = 2.0;
+const LENTO_FALLO: f32 = 1.4;
+pub(crate) const FALLO_ONDA: f32 = 0.7;
+pub(crate) const FALLO_TEXTO: f32 = 0.8;
+
+pub const MS: i64 = 1000;
+
+/// Microsegundos desde el arranque, el mismo reloj en los dos hilos.
+pub fn ahora() -> i64 {
+    static CERO: OnceLock<Instant> = OnceLock::new();
+    CERO.get_or_init(Instant::now).elapsed().as_micros() as i64
+}
+
+pub(crate) fn seg(us: i64) -> f32 {
+    us as f32 / 1e6
+}
+
+pub(crate) fn acotar(x: f32, a: f32, b: f32) -> f32 {
+    x.max(a).min(b)
+}
+
+pub(crate) fn ease_out(t: f32) -> f32 {
+    1.0 - (1.0 - acotar(t, 0.0, 1.0)).powi(3)
+}
+
+/// RGBA sin premultiplicar, de 0 a 1.
+pub type Color = [f32; 4];
+
+pub const BLANCO: Color = [1.0, 1.0, 1.0, 1.0];
+
+pub(crate) fn mezclar(a: &Color, b: &Color, t: f32) -> Color {
+    std::array::from_fn(|i| a[i] + (b[i] - a[i]) * t)
+}
+
+pub(crate) fn con_alfa(c: &Color, a: f32) -> Color {
+    [c[0], c[1], c[2], acotar(a, 0.0, 1.0)]
+}
+
+/// `cubic-bezier(x1, y1, x2, y2)` de CSS: se busca el parámetro cuya x es `x` y se da su y.
+pub(crate) fn bezier(x1: f32, y1: f32, x2: f32, y2: f32, x: f32) -> f32 {
+    let x = acotar(x, 0.0, 1.0);
+    let curva = |a: f32, b: f32, s: f32| {
+        let r = 1.0 - s;
+        3.0 * r * r * s * a + 3.0 * r * s * s * b + s * s * s
+    };
+    let (mut lo, mut hi) = (0.0f32, 1.0f32);
+    for _ in 0..24 {
+        let m = (lo + hi) / 2.0;
+        if curva(x1, x2, m) < x {
+            lo = m;
+        } else {
+            hi = m;
+        }
+    }
+    curva(y1, y2, (lo + hi) / 2.0)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Paleta {
+    pub primary: Color,
+    pub tertiary: Color,
+    pub on_surface: Color,
+    pub on_surface_variant: Color,
+    pub error: Color,
+    pub surface: Color,
+    pub surface_container: Color,
+}
+
+fn hex(v: &str) -> Option<Color> {
+    let h = v.strip_prefix('#')?;
+    if h.len() != 6 && h.len() != 8 {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(h.get(i..i + 2)?, 16).ok();
+    let a = if h.len() == 8 { byte(6)? } else { 255 };
+    Some([byte(0)?, byte(2)?, byte(4)?, a].map(|b| b as f32 / 255.0))
+}
+
+impl Paleta {
+    /// Los `@define-color` de `theme.css`; lo que falta o no se entiende, de fábrica.
+    pub fn desde_css(css: &str) -> Self {
+        let rol = |nombre: &str, defecto: &str| {
+            css.lines()
+                .filter_map(|l| l.trim().strip_prefix("@define-color "))
+                .filter_map(|l| l.trim().split_once(char::is_whitespace))
+                .find(|(n, _)| *n == nombre)
+                .and_then(|(_, v)| hex(v.trim().trim_end_matches(';').trim()))
+                .unwrap_or_else(|| hex(defecto).expect("color de fábrica"))
+        };
+        Paleta {
+            primary: rol("primary", "#9fcafd"),
+            tertiary: rol("tertiary", "#d6bee5"),
+            on_surface: rol("on_surface", "#e1e2e8"),
+            on_surface_variant: rol("on_surface_variant", "#c2c7cf"),
+            error: rol("error", "#ffb4ab"),
+            surface: rol("surface", "#101418"),
+            surface_container: rol("surface_container", "#1d2024"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Modo {
+    Normal,
+    Verificando,
+    Fallo(u32),
+    Saliendo,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Tipo {
+    Sale,
+    Entra,
+    Fallo,
+    Acierto,
+}
+
+impl Tipo {
+    pub(crate) fn lento(self) -> f32 {
+        match self {
+            Tipo::Sale | Tipo::Entra => LENTO_TECLA,
+            Tipo::Fallo => LENTO_FALLO,
+            Tipo::Acierto => LENTO_EVENTO,
+        }
+    }
+}
+
+pub struct Impulso {
+    pub t0: i64,
+    pub tipo: Tipo,
+    pub amp: f32,
+}
+
+pub struct Chispa {
+    pub t0: i64,
+    pub dir: f32,
+    pub s0: f32,
+    pub fuerza: f32,
+}
+
+/// Una transición lineal entre dos valores, para no depender del dt del cuadro.
+#[derive(Clone, Copy)]
+pub struct Tramo<T> {
+    pub de: T,
+    pub a: T,
+    pub t0: i64,
+    pub dura: i64,
+}
+
+impl Tramo<f32> {
+    pub fn valor(&self, t: i64) -> f32 {
+        let f = acotar((t - self.t0) as f32 / self.dura.max(1) as f32, 0.0, 1.0);
+        self.de + (self.a - self.de) * f
+    }
+}
+
+impl Tramo<[Color; 2]> {
+    pub fn valor(&self, t: i64) -> [Color; 2] {
+        let f = acotar((t - self.t0) as f32 / self.dura.max(1) as f32, 0.0, 1.0);
+        [
+            mezclar(&self.de[0], &self.a[0], f),
+            mezclar(&self.de[1], &self.a[1], f),
+        ]
+    }
+}
+
+/// Lo que el hilo principal le declara al de render. Cada uno trae su instante.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Cambio {
+    Agregar { n: usize, t: i64 },
+    Quitar { n: usize, todo: bool, t: i64 },
+    /// El campo se vació por el envío, no por un borrado: sin golpe de onda.
+    Vaciar { t: i64 },
+    Normal { t: i64 },
+    Verificando { t: i64 },
+    Fallo { n: u32, t: i64 },
+    /// El destello, y después el fundido de salida: los dos quedan declarados acá.
+    Acierto { t: i64 },
+    Mayus { si: bool, t: i64 },
+    Reloj { hora: String, minutos: String, fecha: String },
+    Aviso(Option<String>),
+}
+
+pub struct Estado {
+    pub paleta: Paleta,
+    pub estilo: Bloqueo,
+    pub modo: Modo,
+    pub t_modo: i64,
+    pub t_fallo: i64,
+    pub t_acierto: i64,
+    pub n: usize,
+    pub mayus: bool,
+    pub impulsos: Vec<Impulso>,
+    pub chispas: Vec<Chispa>,
+    lado: f32,
+    pub anillo: Tramo<[Color; 2]>,
+    pub visible: Tramo<f32>,
+    pub hora: String,
+    pub minutos: String,
+    pub fecha: String,
+    pub aviso: Option<String>,
+    /// Desde el primer cuadro: la entrada empieza cuando se ve algo, no al pedir el bloqueo.
+    pub t_entrada: Option<i64>,
+    /// Sube con cada cambio de texto: quien arma los textos sabe cuándo rehacerlos.
+    pub version_textos: u64,
+}
+
+impl Estado {
+    pub fn new(paleta: Paleta, estilo: Bloqueo) -> Self {
+        let par = [paleta.primary, paleta.tertiary];
+        Estado {
+            paleta,
+            estilo,
+            modo: Modo::Normal,
+            t_modo: 0,
+            t_fallo: i64::MIN / 2,
+            t_acierto: i64::MIN / 2,
+            n: 0,
+            mayus: false,
+            impulsos: Vec::new(),
+            chispas: Vec::new(),
+            lado: 1.0,
+            anillo: Tramo {
+                de: par,
+                a: par,
+                t0: 0,
+                dura: 300 * MS,
+            },
+            visible: Tramo {
+                de: 0.0,
+                a: 0.0,
+                t0: 0,
+                dura: 1,
+            },
+            hora: String::new(),
+            minutos: String::new(),
+            fecha: String::new(),
+            aviso: None,
+            t_entrada: None,
+            version_textos: 0,
+        }
+    }
+
+    pub fn aplicar(&mut self, c: Cambio) {
+        match c {
+            Cambio::Agregar { n, t } => {
+                self.n = n;
+                if self.onda() {
+                    self.impulsos.push(Impulso {
+                        t0: t,
+                        tipo: Tipo::Sale,
+                        amp: 7.0 + 3.0 * azar(t),
+                    });
+                }
+                self.chispa(t, (ANCHO - 2.0) / 2.0, 1.0);
+                if matches!(self.modo, Modo::Fallo(_)) {
+                    self.cambiar(Modo::Normal, t);
+                }
+            }
+            Cambio::Quitar { n, todo, t } => {
+                self.n = n;
+                if self.onda() {
+                    self.impulsos.push(Impulso {
+                        t0: t,
+                        tipo: Tipo::Entra,
+                        amp: if todo { 10.0 } else { 6.0 },
+                    });
+                }
+                let abajo = (ANCHO - 2.0) + (ALTO - 2.0) + (ANCHO - 2.0) / 2.0;
+                self.chispa(t, abajo, 0.6);
+            }
+            Cambio::Vaciar { .. } => self.n = 0,
+            Cambio::Normal { t } => self.cambiar(Modo::Normal, t),
+            Cambio::Verificando { t } => self.cambiar(Modo::Verificando, t),
+            Cambio::Fallo { n, t } => {
+                self.t_fallo = t;
+                self.cambiar(Modo::Fallo(n), t);
+                if self.estilo.reaccion && self.onda() {
+                    self.impulsos.push(Impulso {
+                        t0: t,
+                        tipo: Tipo::Fallo,
+                        amp: 15.0,
+                    });
+                }
+            }
+            Cambio::Acierto { t } => {
+                self.t_acierto = t;
+                self.cambiar(Modo::Saliendo, t);
+                if self.onda() {
+                    self.impulsos.push(Impulso {
+                        t0: t,
+                        tipo: Tipo::Acierto,
+                        amp: 6.0,
+                    });
+                }
+            }
+            Cambio::Mayus { si, t } => {
+                self.mayus = si;
+                self.rehacer_anillo(t);
+            }
+            Cambio::Reloj {
+                hora,
+                minutos,
+                fecha,
+            } => {
+                (self.hora, self.minutos, self.fecha) = (hora, minutos, fecha);
+                self.version_textos += 1;
+            }
+            Cambio::Aviso(a) => {
+                self.aviso = a;
+                self.version_textos += 1;
+            }
+        }
+    }
+
+    /// Cuándo empieza el fundido de salida: después del destello, si lo hay.
+    pub fn t_salida(&self) -> Option<i64> {
+        (self.modo == Modo::Saliendo).then(|| {
+            let destello = if self.estilo.destello { DESTELLO_MS } else { 0 };
+            self.t_acierto + destello * MS
+        })
+    }
+
+    /// La opacidad de todo: los dos fundidos de la hoja de `morgan-lock`.
+    pub fn opacidad(&self, t: i64) -> f32 {
+        let entra = match self.t_entrada {
+            Some(t0) => bezier(0.5, 1.0, 0.89, 1.0, seg(t - t0) / seg(ENTRADA_MS * MS)),
+            None => 0.0,
+        };
+        let sale = match self.t_salida() {
+            Some(t0) if t >= t0 => {
+                1.0 - bezier(0.33, 1.0, 0.68, 1.0, seg(t - t0) / seg(SALIDA_MS * MS))
+            }
+            _ => 1.0,
+        };
+        entra * sale
+    }
+
+    /// El fallo manda sobre Bloq Mayús, y Bloq Mayús sobre la verificación.
+    fn objetivo(&self) -> [Color; 2] {
+        let p = &self.paleta;
+        match self.modo {
+            Modo::Fallo(_) => [p.error, p.error],
+            _ if self.mayus => [p.on_surface, p.on_surface],
+            Modo::Verificando => [p.tertiary, p.primary],
+            _ => [p.primary, p.tertiary],
+        }
+    }
+
+    fn rehacer_anillo(&mut self, t: i64) {
+        let a = self.objetivo();
+        if a != self.anillo.a {
+            self.anillo = Tramo {
+                de: self.anillo.valor(t),
+                a,
+                t0: t,
+                dura: 300 * MS,
+            };
+        }
+    }
+
+    fn cambiar(&mut self, m: Modo, t: i64) {
+        self.modo = m;
+        self.t_modo = t;
+        self.rehacer_anillo(t);
+    }
+
+    pub fn onda(&self) -> bool {
+        self.estilo.escritura == Escritura::Onda
+    }
+
+    pub fn latido(&self) -> bool {
+        self.modo == Modo::Verificando && self.estilo.verificar.late()
+    }
+
+    fn quiere_onda(&self, t: i64) -> bool {
+        if !self.onda() {
+            return false;
+        }
+        self.n > 0
+            || self.latido()
+            || self.modo == Modo::Saliendo
+            || self
+                .impulsos
+                .iter()
+                .any(|p| p.tipo == Tipo::Fallo && seg(t - p.t0) < FALLO_ONDA)
+    }
+
+    /// Lo que corre al empezar cada cuadro: limpia lo que terminó y fija la visibilidad.
+    pub fn avanzar(&mut self, t: i64) {
+        self.impulsos
+            .retain(|p| seg(t - p.t0) / p.tipo.lento() < 2.5);
+        self.chispas.retain(|c| t - c.t0 < 700 * MS);
+        let quiere = if self.quiere_onda(t) { 1.0 } else { 0.0 };
+        if quiere != self.visible.a {
+            let dura = if quiere > 0.5 { 150 } else { 300 };
+            self.visible = Tramo {
+                de: self.visible.valor(t),
+                a: quiere,
+                t0: t,
+                dura: dura * MS,
+            };
+        }
+    }
+
+    fn chispa(&mut self, t: i64, s0: f32, fuerza: f32) {
+        if self.estilo.chispa {
+            self.chispas.push(Chispa {
+                t0: t,
+                dir: self.lado,
+                s0,
+                fuerza,
+            });
+        }
+        self.lado = -self.lado;
+    }
+
+    /// Hace falta otro cuadro. Con el campo vacío y quieto, no.
+    pub fn animando(&self, t: i64) -> bool {
+        let fundido = match (self.t_entrada, self.t_salida()) {
+            (None, _) => true,
+            (_, Some(t0)) => t - t0 < (SALIDA_MS + 50) * MS,
+            (Some(t0), None) => t - t0 < (ENTRADA_MS + 50) * MS,
+        };
+        fundido
+            || (self.n > 0 && self.onda())
+            || !self.impulsos.is_empty()
+            || !self.chispas.is_empty()
+            || matches!(self.modo, Modo::Verificando | Modo::Saliendo)
+            || t - self.anillo.t0 < self.anillo.dura
+            || t - self.visible.t0 < self.visible.dura
+            || t - self.t_fallo < 1500 * MS
+    }
+}
+
+/// Un número en [0, 1) a partir del tiempo: alcanza para variar el golpe de cada tecla.
+pub(crate) fn azar(t: i64) -> f32 {
+    let x = (t as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    (x >> 40) as f32 / (1u64 << 24) as f32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn estado() -> Estado {
+        Estado::new(Paleta::desde_css(""), Bloqueo::default())
+    }
+
+    #[test]
+    fn paleta_lee_los_roles_y_cae_en_los_de_fabrica() {
+        let p =
+            Paleta::desde_css("@define-color primary #ff0000;\n@define-color  error  #00ff00 ;\n");
+        assert_eq!(p.primary, [1.0, 0.0, 0.0, 1.0]);
+        assert_eq!(p.error, [0.0, 1.0, 0.0, 1.0]);
+        assert_eq!(p.tertiary, hex("#d6bee5").unwrap());
+        assert_eq!(hex("rgba(0,0,0,1)"), None);
+    }
+
+    #[test]
+    fn bezier_va_de_cero_a_uno_y_sale_rapido() {
+        assert!(bezier(0.33, 1.0, 0.68, 1.0, 0.0).abs() < 1e-4);
+        assert!((bezier(0.33, 1.0, 0.68, 1.0, 1.0) - 1.0).abs() < 1e-4);
+        assert!(bezier(0.33, 1.0, 0.68, 1.0, 0.5) > 0.8);
+    }
+
+    #[test]
+    fn quieto_y_vacio_no_pide_cuadros() {
+        let mut e = estado();
+        assert!(e.animando(0), "sin primer cuadro, la entrada está pendiente");
+        e.t_entrada = Some(0);
+        let t = 10_000 * MS;
+        e.avanzar(t);
+        assert!(!e.animando(t));
+        e.aplicar(Cambio::Agregar { n: 1, t });
+        assert!(e.animando(t + 5_000 * MS), "con algo tipeado la onda ondula");
+    }
+
+    #[test]
+    fn la_salida_queda_declarada_desde_el_acierto() {
+        let mut e = estado();
+        e.t_entrada = Some(0);
+        let t = 5_000 * MS;
+        e.aplicar(Cambio::Acierto { t });
+        assert_eq!(e.t_salida(), Some(t + DESTELLO_MS * MS));
+        assert!(e.opacidad(t + DESTELLO_MS * MS) > 0.999);
+        assert!(e.opacidad(t + (DESTELLO_MS + SALIDA_MS) * MS) < 1e-3);
+        assert!(e.animando(t + (DESTELLO_MS + SALIDA_MS) * MS), "el último cuadro, en cero");
+    }
+
+    #[test]
+    fn el_fallo_tiñe_el_anillo_y_tipear_lo_saca() {
+        let mut e = estado();
+        e.aplicar(Cambio::Fallo { n: 1, t: 0 });
+        assert_eq!(e.anillo.a, [e.paleta.error; 2]);
+        e.aplicar(Cambio::Agregar { n: 1, t: 10 });
+        assert_eq!(e.modo, Modo::Normal);
+    }
+}
