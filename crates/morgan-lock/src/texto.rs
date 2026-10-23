@@ -60,13 +60,16 @@ pub fn dibujar(
     dibujar_en(s, l, Affine::translate(esquina(l, cx, cy)), color, alfa);
 }
 
-/// Dónde cae la esquina de `l` centrado en (`cx`, `cy`): en un píxel entero, para que el
-/// hinting no se pierda.
+/// Dónde cae la esquina de `l` centrado en (`cx`, `cy`). Como una etiqueta de GTK: la caja
+/// mide el texto redondeado hacia arriba y se centra en un píxel entero.
 pub fn esquina(l: &Layout<u8>, cx: f64, cy: f64) -> (f64, f64) {
-    (
-        (cx - l.width() as f64 / 2.0).round(),
-        (cy - l.height() as f64 / 2.0).round(),
-    )
+    let (w, h) = caja(l);
+    ((cx - w / 2.0).floor(), (cy - h / 2.0).floor())
+}
+
+/// El tamaño de la caja de `l`, en píxeles enteros.
+pub fn caja(l: &Layout<u8>) -> (f64, f64) {
+    (l.width().ceil() as f64, l.height().ceil() as f64)
 }
 
 /// Con la esquina del layout donde la ponga `tr` (para escalarlo, como los símbolos).

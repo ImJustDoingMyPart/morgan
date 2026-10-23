@@ -465,9 +465,10 @@ impl Pintor {
 
 /// Las sombras del texto necesitan la GPU: van acá y no en `Rotulos::armar`.
 fn sombras(gpu: &mut Gpu, r: &mut Rotulos, escala: f32) {
-    let capas = [Some(&r.reloj), Some(&r.fecha), r.aviso.as_ref()];
-    for (i, (l, (sigma, alfa))) in capas.into_iter().zip(dibujo::SOMBRAS).enumerate() {
-        r.sombras[i] = l.and_then(|l| {
+    let capas = r.capas();
+    let hechas = std::array::from_fn(|i| {
+        let (sigma, alfa) = dibujo::SOMBRAS[i];
+        capas[i].and_then(|l| {
             crate::sombra::hacer(
                 &gpu.device,
                 &gpu.cola,
@@ -476,8 +477,9 @@ fn sombras(gpu: &mut Gpu, r: &mut Rotulos, escala: f32) {
                 sigma * escala,
                 alfa,
             )
-        });
-    }
+        })
+    });
+    r.sombras = hechas;
 }
 
 impl Dispatch<wl_callback::WlCallback, u32> for Pintor {

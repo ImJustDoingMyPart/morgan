@@ -60,11 +60,14 @@ pub fn rol(p: &Paleta, r: u8) -> Color {
 /// Los textos armados de una salida. Se rehacen cuando cambia la versión del estado.
 pub struct Rotulos {
     pub version: u64,
-    pub reloj: parley::Layout<u8>,
+    /// Hora, dos puntos y minutos, cada uno aparte como las etiquetas de GTK: juntos,
+    /// JetBrains Mono sube los dos puntos entre números (`calt`) y quedaban más arriba.
+    pub reloj: [parley::Layout<u8>; 3],
     pub fecha: parley::Layout<u8>,
     pub aviso: Option<parley::Layout<u8>>,
-    /// Las sombras del reloj, la fecha y el aviso; las pone el render (necesitan la GPU).
-    pub sombras: [Option<Sombra>; 3],
+    /// Las sombras de las tres piezas del reloj, la fecha y el aviso, en ese orden; las pone
+    /// el render (necesitan la GPU).
+    pub sombras: [Option<Sombra>; 5],
     /// El texto del campo y su layout: cambia poco, se guarda el último.
     pub campo: Option<(String, parley::Layout<u8>)>,
     /// Los de la escritura `symbols`, armados la primera vez que salen.
@@ -73,15 +76,12 @@ pub struct Rotulos {
 
 impl Rotulos {
     pub fn armar(t: &mut texto::Textos, e: &Estado, escala: f32) -> Self {
-        let reloj = t.armar(
-            &[
-                (&e.hora, ROL_PRIMARY),
-                (":", ROL_VARIANTE),
-                (&e.minutos, ROL_TERTIARY),
-            ],
-            texto::pt(96.0),
-            escala,
-        );
+        let mut pieza = |s: &str, rol| t.armar(&[(s, rol)], texto::pt(96.0), escala);
+        let reloj = [
+            pieza(&e.hora, ROL_PRIMARY),
+            pieza(":", ROL_VARIANTE),
+            pieza(&e.minutos, ROL_TERTIARY),
+        ];
         let fecha = t.armar(&[(&e.fecha, ROL_VARIANTE)], texto::pt(20.0), escala);
         let aviso = if e.mayus {
             Some("󰘲  Bloq Mayús activado".to_owned())
@@ -90,7 +90,7 @@ impl Rotulos {
         }
         .map(|a| t.armar(&[(&a, ROL_TEXTO)], texto::pt(13.0), escala));
         Rotulos {
-            sombras: [None, None, None],
+            sombras: [None, None, None, None, None],
             version: e.version_textos,
             reloj,
             fecha,
@@ -98,6 +98,18 @@ impl Rotulos {
             campo: None,
             glifos: HashMap::new(),
         }
+    }
+
+    /// Lo que lleva sombra, en el orden de `sombras` y `SOMBRAS`.
+    pub fn capas(&self) -> [Option<&parley::Layout<u8>>; 5] {
+        let [h, d, m] = &self.reloj;
+        [
+            Some(h),
+            Some(d),
+            Some(m),
+            Some(&self.fecha),
+            self.aviso.as_ref(),
+        ]
     }
 
     /// La versión incluye Bloq Mayús: cambia el aviso.
@@ -161,11 +173,22 @@ pub fn pintar(
 
     let (cx, cy) = (w * escala / 2.0, h * escala / 2.0);
     let color = |r| rol(&e.paleta, r);
-    let [sr, sf, sa] = &rot.sombras;
-    con_sombra(s, &rot.reloj, sr, cx, cy - Y_RELOJ * escala, color);
-    con_sombra(s, &rot.fecha, sf, cx, cy - Y_FECHA * escala, color);
+    // El reloj es una fila de tres cajas centrada, como el `GtkBox` de antes. El medio píxel
+    // sobrante va abajo y a la derecha, al revés que en la fecha: así coincide con la versión
+    // con GTK (medido en el anidado; sin redondear, o hacia el otro lado, se corre).
+    let total: f64 = rot.reloj.iter().map(|l| texto::caja(l).0).sum();
+    let mut x = (cx - total / 2.0).round();
+    let yr = cy - Y_RELOJ * escala;
+    for (l, sm) in rot.reloj.iter().zip(&rot.sombras) {
+        let (w, h) = texto::caja(l);
+        con_sombra(s, l, sm, (x, (yr - h / 2.0).round()), color);
+        x += w;
+    }
+    let esq = texto::esquina(&rot.fecha, cx, cy - Y_FECHA * escala);
+    con_sombra(s, &rot.fecha, &rot.sombras[3], esq, color);
     if let Some(a) = &rot.aviso {
-        con_sombra(s, a, sa, cx, cy - Y_AVISO * escala, color);
+        let esq = texto::esquina(a, cx, cy - Y_AVISO * escala);
+        con_sombra(s, a, &rot.sombras[4], esq, color);
     }
 
     // El campo en sus coordenadas: (0, 0) es su esquina, en píxeles lógicos.
@@ -183,21 +206,19 @@ fn con_sombra(
     s: &mut Scene,
     l: &parley::Layout<u8>,
     sombra: &Option<Sombra>,
-    cx: f64,
-    cy: f64,
+    (x, y): (f64, f64),
     color: impl Fn(u8) -> Color,
 ) {
     if let Some(sm) = sombra {
-        let (x, y) = texto::esquina(l, cx, cy);
         let brocha = ImageBrush::new(sm.imagen.clone());
         s.draw_image(&brocha, Affine::translate((x - sm.margen, y - sm.margen)));
     }
-    texto::dibujar(s, l, cx, cy, color, 1.0);
+    texto::dibujar_en(s, l, Affine::translate((x, y)), color, 1.0);
 }
 
-/// Cuánto se desenfoca y qué tan oscura es cada sombra (reloj, fecha, aviso): los
-/// `text-shadow` de 8 y 3 px al 60 % de la versión con GTK.
-pub const SOMBRAS: [(f32, f32); 3] = [(4.0, 0.6), (1.5, 0.6), (1.5, 0.6)];
+/// Cuánto se desenfoca y qué tan oscura es cada sombra (las tres piezas del reloj, fecha,
+/// aviso): los `text-shadow` de 8 y 3 px al 60 % de la versión con GTK.
+pub const SOMBRAS: [(f32, f32); 5] = [(4.0, 0.6), (4.0, 0.6), (4.0, 0.6), (1.5, 0.6), (1.5, 0.6)];
 
 fn sacudida(t: f32) -> f32 {
     const K: [(f32, f32); 7] = [
