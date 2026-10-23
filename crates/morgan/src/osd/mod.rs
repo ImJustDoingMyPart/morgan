@@ -14,9 +14,13 @@ use crate::tema::Tema;
 
 const MARGEN_INFERIOR: f64 = 0.15;
 
-/// El tamaño de la ventana, con el lugar del brillo del borde: la tarjeta mide 12 px menos.
-pub const ANCHO: i32 = 320;
-pub const ALTO: i32 = 74;
+/// El tamaño de la ventana, con el lugar del brillo del borde: la tarjeta mide 20 px menos
+/// (los 300 × 54 de siempre).
+pub const ANCHO: i32 = 328;
+pub const ALTO: i32 = 82;
+/// Lo que creció el margen del brillo (de 6 a 10): la ventana baja eso para que la tarjeta
+/// quede donde estaba.
+pub const MARGEN_EXTRA: i32 = 4;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Aviso {

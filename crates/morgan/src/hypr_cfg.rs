@@ -23,8 +23,9 @@ pub const SOMBRAS: &[(&str, &str, &str, &str)] = &[
         "glow",
         "Glow colorido",
         "el degradé del tema, gira con el borde",
-        // `range` en px lógicos; `render_power 3` concentra la luz pegada al borde.
-        "hl.config({ decoration = { shadow = {\n    enabled = true, range = 4, render_power = 3,\n    \
+        // Tenue, como el de los paneles de morgan: el alcance y la caída de la negra, y el
+        // degradé del tema al 30 % (`templates/hyprland.lua`).
+        "hl.config({ decoration = { shadow = {\n    enabled = true, range = 6, render_power = 2,\n    \
          color_inactive = \"rgba(00000000)\", offset = { 0, 0 },\n} } })\n",
     ),
 ];
@@ -42,7 +43,9 @@ pub fn ruta() -> PathBuf {
 }
 
 fn colores_tema() -> PathBuf {
-    morgan_temas::Rutas::del_entorno().render().join("hyprland.lua")
+    morgan_temas::Rutas::del_entorno()
+        .render()
+        .join("hyprland.lua")
 }
 
 pub fn ruta_cambios(ruta_config: &Path) -> PathBuf {
@@ -101,7 +104,13 @@ fn arranque() -> String {
 }
 
 /// Los colores del tema van primero: la sombra los usa.
-pub fn lua(c: &Config, cambios: &Cambios, monitores: &Reglas, tema: &Path, hyprshot: bool) -> String {
+pub fn lua(
+    c: &Config,
+    cambios: &Cambios,
+    monitores: &Reglas,
+    tema: &Path,
+    hyprshot: bool,
+) -> String {
     let (_, nombre, _, lua_sombra) = sombra(&c.apariencia.sombra);
     let binds = crate::launcher::binds::lua(&c.atajos, &c.capturas, hyprshot);
     let reglas = crate::menu::reglas::lua(&c.reglas, &crate::aplicacion::buscar);
@@ -135,7 +144,10 @@ pub async fn aplicar(c: &Config, ruta_config: &Path) -> Result<(), String> {
         return Ok(());
     }
     escribir(&destino, &nuevo)?;
-    if comando::salida(&["Hyprland", "--verify-config"]).await.is_err() {
+    if comando::salida(&["Hyprland", "--verify-config"])
+        .await
+        .is_err()
+    {
         let _ = match &antes {
             Some(a) => escribir(&destino, a),
             None => std::fs::remove_file(&destino).map_err(|e| e.to_string()),
@@ -167,7 +179,13 @@ mod tests {
     fn animacion_sombra_y_compositor_en_ese_orden() {
         let mut c = Config::default();
         c.apariencia.sombra = "glow".into();
-        let lua = lua(&c, &Cambios::default(), &Reglas::default(), Path::new("/e/tema/hyprland.lua"), true);
+        let lua = lua(
+            &c,
+            &Cambios::default(),
+            &Reglas::default(),
+            Path::new("/e/tema/hyprland.lua"),
+            true,
+        );
         let anim = lua.find("-- Animación").unwrap();
         let sombra = lua.find("-- Sombra: Glow colorido").unwrap();
         assert!(anim < sombra);
@@ -178,16 +196,33 @@ mod tests {
             velocidad: "y".into(),
             sombra: "black".into(),
         };
-        let lua = super::lua(&c, &Cambios::default(), &Reglas::default(), Path::new("/t"), false);
+        let lua = super::lua(
+            &c,
+            &Cambios::default(),
+            &Reglas::default(),
+            Path::new("/t"),
+            false,
+        );
         assert!(lua.contains("-- Animación: Precisa (Crece y se desliza), velocidad Media"));
         assert!(lua.contains("-- Sombra: Sombra negra"));
-        assert!(!lua.contains("hyprshot"), "sin hyprshot, sin binds de captura");
+        assert!(
+            !lua.contains("hyprshot"),
+            "sin hyprshot, sin binds de captura"
+        );
     }
 
     #[test]
     fn los_colores_del_tema_primero_y_las_capturas_al_final() {
-        let lua = lua(&Config::default(), &Cambios::default(), &Reglas::default(), Path::new("/e/tema/hyprland.lua"), true);
-        let tema = lua.find(r#"pcall(dofile, "/e/tema/hyprland.lua")"#).unwrap();
+        let lua = lua(
+            &Config::default(),
+            &Cambios::default(),
+            &Reglas::default(),
+            Path::new("/e/tema/hyprland.lua"),
+            true,
+        );
+        let tema = lua
+            .find(r#"pcall(dofile, "/e/tema/hyprland.lua")"#)
+            .unwrap();
         assert!(tema < lua.find("-- Animación").unwrap());
         assert!(lua.find("-- Sombra").unwrap() < lua.find("atajo(\"Print\", ").unwrap());
     }

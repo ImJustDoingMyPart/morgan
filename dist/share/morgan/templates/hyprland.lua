@@ -8,9 +8,10 @@ hl.config({
     },
     decoration = {
         shadow = {
-            -- Mismo degradé que el borde (primary -> tertiary, 45°) al 50 %: así `shadowangle`
+            -- Mismo degradé que el borde (primary -> tertiary, 45°) al 30 %, el glow tenue de
+            -- los paneles de morgan. Así `shadowangle`
             -- lo hace girar junto con el borde al enfocar (lo anima morgan: crates/morgan/src/animaciones.rs).
-            color = { colors = { "rgba({{colors.primary.default.hex_stripped}}80)", "rgba({{colors.tertiary.default.hex_stripped}}80)" }, angle = 45 },
+            color = { colors = { "rgba({{colors.primary.default.hex_stripped}}4d)", "rgba({{colors.tertiary.default.hex_stripped}}4d)" }, angle = 45 },
         },
     },
     -- Grupos (pestañas, Mod+W). El borde es el mismo degradé que el de cualquier ventana

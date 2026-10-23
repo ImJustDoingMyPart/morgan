@@ -1,7 +1,7 @@
 //! Un aviso en una `Scene` de vello. Las medidas y los colores son los de la versión con GTK
 //! (la hoja `.osd` de `estilo.css` hasta 0.1.1), medidos en el anidado:
 //!
-//! - la ventana mide `ANCHO` × `ALTO`; la tarjeta deja 6 px por lado para el brillo del borde
+//! - la ventana mide `ANCHO` × `ALTO`; la tarjeta deja 10 px por lado para el brillo del borde
 //!   y tiene 12 de relleno;
 //! - a la izquierda, el cuadrito del ícono (36 px); a 10 px, la columna de texto: el título
 //!   arriba (con el porcentaje a la derecha, a 6 px) y, 2 px más abajo, el estado o la barra
@@ -18,8 +18,8 @@ use morgan_motor::vello::peniko::{BlendMode, Fill, Gradient};
 
 use super::{Aviso, Cuerpo, es_glifo, porcentaje};
 
-/// El lugar del brillo del borde (1 de desplazamiento + 1 de spread + 4 de blur).
-const MARGEN: f64 = 6.0;
+/// El lugar del brillo del borde: el anillo asoma 2 px y el glow se apaga unos 8 más allá.
+const MARGEN: f64 = 10.0;
 const RELLENO: f64 = 12.0;
 const RADIO: f64 = 4.0;
 const CUADRO: f64 = 36.0;
@@ -227,9 +227,10 @@ fn tarjeta(s: &mut Scene, tr: Affine, p: &Paleta, opacidad: f32, borde: Borde, r
     // Con la sombra negra, en vez de los dos brillos: la sombra suave y una línea negra de
     // 1 px por fuera del anillo (el de los toasts). La sombra cabe en el margen del brillo.
     let afuera_del_anillo = match borde {
+        // El glow tenue de todo el shell, por fuera del anillo (que asoma 2 px).
         Borde::Brillo => [
-            (con_alfa(&p.primary, 0.5), (-1.0, -1.0), 1.0, 4.0),
-            (con_alfa(&p.tertiary, 0.5), (1.0, 1.0), 1.0, 4.0),
+            (con_alfa(&p.tertiary, 0.3), (1.0, 1.0), 3.0, 5.0),
+            (con_alfa(&p.primary, 0.3), (-1.0, -1.0), 3.0, 5.0),
         ],
         Borde::Sombra => [
             ([0.0, 0.0, 0.0, 0.5], (0.0, 0.0), 3.0, 4.0),

@@ -33,7 +33,7 @@ use wayland_client::protocol::{wl_output, wl_surface};
 use wayland_client::{Connection, QueueHandle};
 
 use super::dibujo::{self, Rotulos};
-use super::{ALTO, ANCHO, Aviso, tope};
+use super::{ALTO, ANCHO, Aviso, MARGEN_EXTRA, tope};
 
 pub enum Orden {
     Mostrar(Aviso),
@@ -213,7 +213,7 @@ impl Hilo {
         );
         capa.set_anchor(Anchor::BOTTOM);
         capa.set_size(ancho, ALTO as u32);
-        capa.set_margin(0, 0, t.margen_inferior, 0);
+        capa.set_margin(0, 0, (t.margen_inferior - MARGEN_EXTRA).max(0), 0);
         capa.set_keyboard_interactivity(KeyboardInteractivity::None);
         if let Ok(r) = Region::new(&self.compositor) {
             capa.wl_surface().set_input_region(Some(r.wl_region()));

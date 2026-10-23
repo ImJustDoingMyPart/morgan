@@ -152,8 +152,8 @@ window.floating-notifications {
 .floating-notifications .notification-row .notification-background .notification {
     background: @morgan_fondo;
     box-shadow:
-        -1px -1px 4px 1px alpha(@primary, 0.5),
-        1px 1px 4px 1px alpha(@tertiary, 0.5),
+        1px 1px 5px 3px alpha(@tertiary, 0.3),
+        -1px -1px 5px 3px alpha(@primary, 0.3),
         0 0 0 2px mix(@primary, @tertiary, 0.5),
         1px 1px 0 1px @tertiary,
         -1px -1px 0 1px @primary;
@@ -223,9 +223,9 @@ window.blank-window {
     font-family: "JetBrainsMono Nerd Font", monospace;
 }
 
-/* El anillo es un borde de verdad (2 px; GTK parte las esquinas en diagonal), y por fuera lo
- * delimita una línea de 1 px del fondo: el `tertiary`, pálido, contra un fondo de pantalla
- * claro se lee más fino que el `primary` con su glow. */
+/* El anillo es un borde de verdad (2 px; GTK parte las esquinas en diagonal). Por fuera, el
+ * glow tenue de todo el shell (el de `forma::Borde::Brillo`): GTK apila la última sombra
+ * arriba. Con la sombra negra lo pisa `BORDE_SOMBRA` de tema.rs. */
 .control-center {
     margin: 8px;
     padding: 14px;
@@ -235,9 +235,8 @@ window.blank-window {
     border-color: @primary @tertiary @tertiary @primary;
     background: @morgan_fondo;
     box-shadow:
-        0 0 0 1px alpha(@surface, 0.85),
-        -1px -1px 5px 2px alpha(@primary, 0.45),
-        1px 1px 5px 2px alpha(@tertiary, 0.45);
+        1px 1px 5px 1px alpha(@tertiary, 0.3),
+        -1px -1px 5px 1px alpha(@primary, 0.3);
 }
 
 .control-center viewport,
@@ -921,9 +920,8 @@ window.blank-window {
     border-color: @primary @tertiary @tertiary @primary;
     background: @morgan_fondo;
     box-shadow:
-        0 0 0 1px alpha(@surface, 0.85),
-        -1px -1px 5px 2px alpha(@primary, 0.45),
-        1px 1px 5px 2px alpha(@tertiary, 0.45);
+        1px 1px 5px 1px alpha(@tertiary, 0.3),
+        -1px -1px 5px 1px alpha(@primary, 0.3);
 }
 
 .launcher-entrada {

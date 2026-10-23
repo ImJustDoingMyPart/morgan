@@ -461,8 +461,11 @@ fn campo(
     }
 }
 
-/// El brillo del anillo en reposo (con GTK era 0,45; más tenue, Roberto, 2026-10-23).
-const BRILLO: f32 = 0.35;
+/// El brillo del anillo en reposo: el de todo el shell (con GTK era 0,45; Roberto,
+/// 2026-10-23).
+const BRILLO: f32 = 0.3;
+/// Cuánto más grande que el de los paneles es el borde de la caja (sombra y glow).
+const ESCALA_BORDE: f64 = 8.0 / 6.0;
 
 /// `box-shadow` de GTK sobre el campo.
 fn sombra(s: &mut Scene, tr: Affine, c: Color, dx: f64, dy: f64, spread: f64, blur: f64) {
@@ -491,22 +494,31 @@ fn caja(
     escala: f64,
 ) {
     let (w, h) = (ANCHO as f64, ALTO as f64);
-    let blur = 5.0 + 8.0 * extra as f64;
+    // Los dos bordes son los de los paneles agrandados en la misma proporción: la caja es más
+    // grande, y su sombra negra va con blur 8 donde la de los paneles va con 6.
+    let blur = 5.0 * ESCALA_BORDE + 8.0 * extra as f64;
     match borde {
-        // La sombra oscura de abajo y el brillo del anillo encima, sin línea.
+        // El glow tenue de todo el shell, sin línea.
         Borde::Brillo => {
-            sombra(s, tr, [0.0, 0.0, 0.0, 0.5], 0.0, 0.0, 4.0, 10.0);
-            sombra(s, tr, con_alfa(&par[0], alfa), -1.0, -1.0, 1.5, blur);
-            sombra(s, tr, con_alfa(&par[1], alfa), 1.0, 1.0, 1.5, blur);
+            sombra(s, tr, con_alfa(&par[1], alfa), 1.0, 1.0, 1.0, blur);
+            sombra(s, tr, con_alfa(&par[0], alfa), -1.0, -1.0, 1.0, blur);
         }
         // La de los paneles, un poco más ancha (la caja es más grande); el color asoma solo
         // en el destello del error y del acierto.
         Borde::Sombra => {
-            sombra(s, tr, [0.0, 0.0, 0.0, 0.5], 0.0, 0.0, 1.0, 8.0);
+            sombra(
+                s,
+                tr,
+                [0.0, 0.0, 0.0, 0.5],
+                0.0,
+                0.0,
+                1.0,
+                6.0 * ESCALA_BORDE,
+            );
             let destello = alfa - BRILLO;
             if destello > 0.0 {
-                sombra(s, tr, con_alfa(&par[0], destello), -1.0, -1.0, 1.5, blur);
-                sombra(s, tr, con_alfa(&par[1], destello), 1.0, 1.0, 1.5, blur);
+                sombra(s, tr, con_alfa(&par[1], destello), 1.0, 1.0, 1.0, blur);
+                sombra(s, tr, con_alfa(&par[0], destello), -1.0, -1.0, 1.0, blur);
             }
             sombra(s, tr, [0.0, 0.0, 0.0, 1.0], 0.0, 0.0, 1.0, 0.0);
         }
