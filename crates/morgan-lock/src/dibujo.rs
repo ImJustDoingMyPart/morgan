@@ -16,6 +16,7 @@ use vello::peniko::{self, BlendMode, Fill, Gradient, ImageBrush, ImageData, Imag
 
 use crate::caracteres;
 use crate::escena::*;
+use crate::hundido::{self, Hundido};
 use crate::sombra::Sombra;
 use crate::texto;
 use morgan_ipc::bloqueo::Escritura;
@@ -72,6 +73,8 @@ pub struct Rotulos {
     pub campo: Option<(String, parley::Layout<u8>)>,
     /// Los de la escritura `symbols`, armados la primera vez que salen.
     pub glifos: HashMap<char, parley::Layout<u8>>,
+    /// La sombra y la luz de adentro del campo (`hundido.rs`), en píxeles del buffer.
+    pub hundido: Option<(ImageData, ImageData)>,
 }
 
 impl Rotulos {
@@ -98,6 +101,10 @@ impl Rotulos {
             aviso,
             campo: None,
             glifos: HashMap::new(),
+            hundido: HUNDIDO.map(|hd| {
+                let (w, h) = (ANCHO as f64 - 2.0 * BORDE, ALTO as f64 - 2.0 * BORDE);
+                hundido::hacer(w, h, RADIO - BORDE / 2.0, escala as f64, &hd)
+            }),
         }
     }
 
@@ -237,11 +244,13 @@ pub const RELIEVE_RELOJ: Relieve = Relieve {
     degrade: (0.35, 0.12, 20.0 / 169.0, 150.0 / 169.0),
 };
 
-/// La fecha, con lo mismo en menor medida (y su grosor regular).
+/// La fecha, con lo mismo en menor medida (y su grosor regular). Sin espesor ni filo: en una
+/// letra chica, las copias corridas un píxel engordaban cada trazo. La profundidad la da una
+/// sombra nítida justo debajo («F2», elegida por Roberto entre muestras, 2026-10-23).
 pub const RELIEVE_FECHA: Relieve = Relieve {
-    sombras: &[(0.6, 0.45, 2.0), (4.0, 0.35, 2.5)],
-    espesor: (1, 0.45),
-    filo: (0.7, 0.4),
+    sombras: &[(0.5, 0.6, 1.0), (4.0, 0.35, 2.0)],
+    espesor: (0, 0.0),
+    filo: (0.0, 0.0),
     degrade: (0.2, 0.08, 20.0 / 169.0, 150.0 / 169.0),
 };
 
@@ -259,7 +268,7 @@ pub fn sombras_de(i: usize) -> &'static [(f32, f32, f64)] {
 
 const NEGRO: Color = [0.0, 0.0, 0.0, 1.0];
 
-fn con_relieve(
+pub(crate) fn con_relieve(
     s: &mut Scene,
     l: &parley::Layout<u8>,
     sombras: &[(Sombra, f64)],
@@ -283,8 +292,10 @@ fn con_relieve(
         texto::dibujar_en(s, l, en, |b| mezclar(&color(b), &NEGRO, negro), 1.0);
     }
     let (sube, blanco) = r.filo;
-    let en = Affine::translate((x, y - sube * escala));
-    texto::dibujar_en(s, l, en, |b| mezclar(&color(b), &BLANCO, blanco), 1.0);
+    if blanco > 0.0 {
+        let en = Affine::translate((x, y - sube * escala));
+        texto::dibujar_en(s, l, en, |b| mezclar(&color(b), &BLANCO, blanco), 1.0);
+    }
     let (claro, oscuro, y0, y1) = r.degrade;
     let alto = l.height() as f64;
     texto::dibujar_con(s, l, Affine::translate((x, y)), |b| {
@@ -348,7 +359,16 @@ fn campo(
         }
         _ => (0.45, 0.0),
     };
-    caja(s, tr, &p, &par, alfa, extra);
+    caja(
+        s,
+        tr,
+        &p,
+        &par,
+        alfa,
+        extra,
+        rot.hundido.as_ref(),
+        escala as f64,
+    );
 
     let latido = e.latido().then(|| seg(t - e.t_modo));
     match estilo.escritura {
@@ -456,7 +476,25 @@ fn sombra(s: &mut Scene, tr: Affine, c: Color, dx: f64, dy: f64, spread: f64, bl
     }
 }
 
-fn caja(s: &mut Scene, tr: Affine, p: &Paleta, par: &[Color; 2], alfa: f32, extra: f32) {
+/// El interior del campo, hundido: sobre un relleno casi negro una sombra suave no se ve,
+/// así que la de arriba va cargada y la luz de abajo hace la otra mitad («H3», elegida por
+/// Roberto entre muestras, 2026-10-23).
+pub const HUNDIDO: Option<Hundido> = Some(Hundido {
+    sombra: (5.0, 0.9, 3.0),
+    luz: (1.2, 0.3, 1.2),
+});
+
+#[allow(clippy::too_many_arguments)]
+fn caja(
+    s: &mut Scene,
+    tr: Affine,
+    p: &Paleta,
+    par: &[Color; 2],
+    alfa: f32,
+    extra: f32,
+    hundido: Option<&(ImageData, ImageData)>,
+    escala: f64,
+) {
     let (w, h) = (ANCHO as f64, ALTO as f64);
     sombra(s, tr, [0.0, 0.0, 0.0, 0.5], 0.0, 0.0, 4.0, 10.0);
     sombra(s, tr, con_alfa(&p.surface, 0.85), 0.0, 0.0, 1.0, 0.0);
@@ -479,6 +517,13 @@ fn caja(s: &mut Scene, tr: Affine, p: &Paleta, par: &[Color; 2], alfa: f32, extr
         None,
         &fuera,
     );
+
+    if let Some((sombra, luz)) = hundido {
+        // Las imágenes están en píxeles del buffer; `tr` ya escala.
+        let en = tr * Affine::translate((BORDE, BORDE)) * Affine::scale(1.0 / escala);
+        s.draw_image(&ImageBrush::new(sombra.clone()), en);
+        s.draw_image(&ImageBrush::new(luz.clone()), en);
+    }
 
     // El borde: arriba e izquierda con el primer color, abajo y derecha con el segundo; se
     // juntan en diagonal en las esquinas, como los bordes de GTK.

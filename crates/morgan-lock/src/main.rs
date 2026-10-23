@@ -14,6 +14,7 @@ mod clave;
 mod dibujo;
 mod escena;
 mod fondo;
+mod hundido;
 mod logind;
 mod pam;
 mod pintor;

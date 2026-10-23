@@ -153,7 +153,7 @@ pub fn leer(
 }
 
 /// Tres cajas por eje aproximan la gaussiana; afuera es transparente (por eso el margen).
-fn desenfocar(p: &mut [f32], w: usize, h: usize, sigma: f32) {
+pub(crate) fn desenfocar(p: &mut [f32], w: usize, h: usize, sigma: f32) {
     let r = (((4.0 * sigma * sigma + 1.0).sqrt() - 1.0) / 2.0)
         .round()
         .max(1.0) as isize;
