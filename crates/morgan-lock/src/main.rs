@@ -19,8 +19,9 @@ mod logind;
 mod pam;
 mod pintor;
 mod sombra;
-mod texto;
 mod xray;
+
+pub(crate) use morgan_motor::texto;
 
 use std::path::PathBuf;
 use std::process::ExitCode;

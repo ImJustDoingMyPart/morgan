@@ -145,7 +145,7 @@ fn main() -> ExitCode {
         let hyprland = Hyprland::new();
         let notificaciones = Notificaciones::new(&config, hyprland.clone());
         let toasts = toasts::Toasts::new(app, &notificaciones, &hyprland);
-        let osd = Osd::new(app, &display);
+        let osd = Osd::new(&tema);
         {
             let (osd, hyprland) = (osd.clone(), hyprland.clone());
             dispositivos::escuchar(move |a| {

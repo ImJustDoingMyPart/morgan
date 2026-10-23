@@ -1598,10 +1598,12 @@ dependencies = [
  "libpulse-glib-binding",
  "morgan-idioma",
  "morgan-ipc",
+ "morgan-motor",
  "morgan-temas",
  "rrule",
  "serde",
  "serde_json",
+ "smithay-client-toolkit",
  "toml",
  "toml_edit",
  "udev",
@@ -1636,6 +1638,7 @@ dependencies = [
  "futures-lite",
  "libc",
  "morgan-ipc",
+ "morgan-motor",
  "parley",
  "png",
  "smithay-client-toolkit",
@@ -1644,6 +1647,18 @@ dependencies = [
  "wayland-backend",
  "wayland-client",
  "zbus",
+]
+
+[[package]]
+name = "morgan-motor"
+version = "0.1.1"
+dependencies = [
+ "futures-lite",
+ "parley",
+ "skrifa",
+ "vello",
+ "wayland-backend",
+ "wayland-client",
 ]
 
 [[package]]

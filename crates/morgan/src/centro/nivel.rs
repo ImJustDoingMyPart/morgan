@@ -99,7 +99,7 @@ impl Nivel {
     pub fn poner(&self, glifo: &str, nombre: &str, valor: f64, mudo: bool) {
         self.glifo.set_label(glifo);
         if let Some(l) = self.glifo.child().and_downcast::<gtk::Label>() {
-            crate::osd::centrar_tinta(&l);
+            crate::icono::centrar_tinta(&l);
         }
         self.nombre.set_label(nombre);
         if mudo {

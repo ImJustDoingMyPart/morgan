@@ -12,7 +12,7 @@ use std::f32::consts::PI;
 
 use vello::Scene;
 use vello::kurbo::{Affine, BezPath, Cap, Circle, Join, Point, Rect, RoundedRect, Stroke};
-use vello::peniko::{self, BlendMode, Fill, Gradient, ImageBrush, ImageData, ImageQuality};
+use vello::peniko::{BlendMode, Fill, Gradient, ImageBrush, ImageData, ImageQuality};
 
 use crate::caracteres;
 use crate::escena::*;
@@ -20,6 +20,7 @@ use crate::hundido::{self, Hundido};
 use crate::sombra::Sombra;
 use crate::texto;
 use morgan_ipc::bloqueo::Escritura;
+use morgan_motor::color::pincel;
 
 pub(crate) const BORDE: f64 = 2.0;
 const RADIO: f64 = 4.0;
@@ -44,10 +45,6 @@ pub const ROL_PRIMARY: u8 = 0;
 pub const ROL_TERTIARY: u8 = 1;
 pub const ROL_VARIANTE: u8 = 2;
 pub const ROL_TEXTO: u8 = 3;
-
-fn pincel(c: &Color) -> peniko::Color {
-    peniko::Color::new(*c)
-}
 
 pub fn rol(p: &Paleta, r: u8) -> Color {
     match r {
@@ -463,17 +460,10 @@ fn campo(
     }
 }
 
-/// `box-shadow` de GTK: el rectángulo agrandado en `spread`, desplazado y desenfocado con
-/// sigma = blur / 2.
+/// `box-shadow` de GTK sobre el campo.
 fn sombra(s: &mut Scene, tr: Affine, c: Color, dx: f64, dy: f64, spread: f64, blur: f64) {
-    let r = Rect::new(0.0, 0.0, ANCHO as f64, ALTO as f64).inflate(spread, spread)
-        + vello::kurbo::Vec2::new(dx, dy);
-    if blur <= 0.0 {
-        let rr = RoundedRect::from_rect(r, RADIO + spread);
-        s.fill(Fill::NonZero, tr, pincel(&c), None, &rr);
-    } else {
-        s.draw_blurred_rounded_rect(tr, r, pincel(&c), RADIO + spread, blur / 2.0);
-    }
+    let r = Rect::new(0.0, 0.0, ANCHO as f64, ALTO as f64);
+    morgan_motor::forma::sombra(s, tr, r, RADIO, c, (dx, dy), spread, blur);
 }
 
 /// El interior del campo, hundido: sobre un relleno casi negro una sombra suave no se ve,

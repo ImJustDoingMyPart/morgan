@@ -8,11 +8,11 @@ use vello::Scene;
 use vello::kurbo::Affine;
 use vello::peniko::{Brush, Fill};
 
-use crate::escena::Color;
+use crate::color::Color;
 
-const FAMILIA: &str = "JetBrainsMono Nerd Font";
+pub const FAMILIA: &str = "JetBrainsMono Nerd Font";
 
-/// Los tamaños de `morgan-lock` están en puntos; GTK los pasa a píxeles a 96 ppp.
+/// Los tamaños que en la hoja de GTK estaban en puntos; GTK los pasa a píxeles a 96 ppp.
 pub fn pt(p: f32) -> f32 {
     p * 96.0 / 72.0
 }
@@ -20,6 +20,12 @@ pub fn pt(p: f32) -> f32 {
 pub struct Textos {
     fuentes: FontContext,
     cx: LayoutContext<u8>,
+}
+
+impl Default for Textos {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Textos {
@@ -130,4 +136,99 @@ pub fn dibujar_con(s: &mut Scene, l: &Layout<u8>, tr: Affine, pincel: impl Fn(u8
                 );
         }
     }
+}
+
+/// Como una etiqueta de GTK con `ellipsize = End`: si no entra en `max` (píxeles del buffer),
+/// se corta y termina en «…». Un solo tramo, un solo rol.
+pub fn armar_recortado(
+    t: &mut Textos,
+    texto: &str,
+    rol: u8,
+    px: f32,
+    escala: f32,
+    max: f32,
+) -> Layout<u8> {
+    let l = t.armar(&[(texto, rol)], px, escala);
+    if l.width() <= max {
+        return l;
+    }
+    let cortes: Vec<usize> = texto.char_indices().map(|(i, _)| i).collect();
+    // El corte más largo que entra con los puntos suspensivos.
+    let (mut lo, mut hi) = (0, cortes.len());
+    while lo < hi {
+        let m = (lo + hi).div_ceil(2);
+        let prueba = format!("{}…", &texto[..cortes[m]]);
+        if t.armar(&[(&prueba, rol)], px, escala).width() <= max {
+            lo = m;
+        } else {
+            hi = m - 1;
+        }
+    }
+    let corte = cortes.get(lo).copied().unwrap_or(0);
+    t.armar(&[(&format!("{}…", &texto[..corte]), rol)], px, escala)
+}
+
+/// La caja de la tinta de `l` (lo que se dibuja de verdad), en sus coordenadas: x0, y0, x1,
+/// y1. Los glifos de la Nerd Font tienen el dibujo corrido dentro del ancho que reservan.
+pub fn tinta(l: &Layout<u8>) -> Option<[f64; 4]> {
+    use skrifa::MetadataProvider;
+    use skrifa::instance::{LocationRef, Size};
+    let mut caja: Option<[f64; 4]> = None;
+    for linea in l.lines() {
+        for item in linea.items() {
+            let PositionedLayoutItem::GlyphRun(g) = item else {
+                continue;
+            };
+            let run = g.run();
+            let fuente = run.font();
+            let Ok(f) = skrifa::FontRef::from_index(fuente.data.data(), fuente.index) else {
+                continue;
+            };
+            let m = f.glyph_metrics(Size::new(run.font_size()), LocationRef::default());
+            for gl in g.positioned_glyphs() {
+                let Some(b) = m.bounds(skrifa::GlyphId::new(gl.id)) else {
+                    continue;
+                };
+                if b.x_max <= b.x_min || b.y_max <= b.y_min {
+                    continue;
+                }
+                let r = [
+                    (gl.x + b.x_min) as f64,
+                    (gl.y - b.y_max) as f64,
+                    (gl.x + b.x_max) as f64,
+                    (gl.y - b.y_min) as f64,
+                ];
+                caja = Some(match caja {
+                    None => r,
+                    Some(c) => [
+                        c[0].min(r[0]),
+                        c[1].min(r[1]),
+                        c[2].max(r[2]),
+                        c[3].max(r[3]),
+                    ],
+                });
+            }
+        }
+    }
+    caja
+}
+
+/// El alto de la caja de una etiqueta de GTK con el texto de `l`: ascenso más descenso de la
+/// fuente, sin redondear cada uno (parley los redondea por separado y queda un píxel corto).
+pub fn alto_de_linea(l: &Layout<u8>) -> f64 {
+    use skrifa::MetadataProvider;
+    use skrifa::instance::{LocationRef, Size};
+    let alto = l.lines().next().and_then(|linea| {
+        linea.items().find_map(|item| {
+            let PositionedLayoutItem::GlyphRun(g) = item else {
+                return None;
+            };
+            let run = g.run();
+            let fuente = run.font();
+            let f = skrifa::FontRef::from_index(fuente.data.data(), fuente.index).ok()?;
+            let m = f.metrics(Size::new(run.font_size()), LocationRef::default());
+            Some((m.ascent - m.descent + m.leading) as f64)
+        })
+    });
+    alto.map_or_else(|| caja(l).1, f64::ceil)
 }

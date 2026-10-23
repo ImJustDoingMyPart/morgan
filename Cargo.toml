@@ -12,6 +12,8 @@ license = "GPL-3.0-or-later"
 morgan-ipc = { path = "crates/morgan-ipc" }
 morgan-idioma = { path = "crates/morgan-idioma" }
 morgan-temas = { path = "crates/morgan-temas" }
+morgan-motor = { path = "crates/morgan-motor" }
+smithay-client-toolkit = { version = "0.21", default-features = false, features = ["calloop"] }
 gtk = { package = "gtk4", version = "0.11", features = ["v4_22"] }
 gtk4-layer-shell = { version = "0.8", features = ["v1_3"] }
 serde = { version = "1", features = ["derive"] }

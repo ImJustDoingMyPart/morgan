@@ -22,7 +22,12 @@ struct Inner {
     provider: gtk::CssProvider,
     pendiente: Cell<bool>,
     estado: RefCell<Estado>,
+    /// Lo que no es GTK (el OSD) recibe los colores cargados y la opacidad de las tarjetas.
+    cargado: RefCell<(String, f64)>,
+    oyentes: RefCell<Vec<Oyente>>,
 }
+
+type Oyente = Box<dyn Fn(&str, f64)>;
 
 #[derive(Default)]
 struct Estado {
@@ -50,6 +55,8 @@ impl Tema {
             provider,
             pendiente: Cell::new(false),
             estado: RefCell::default(),
+            cargado: RefCell::new((String::new(), shell.opacidad)),
+            oyentes: RefCell::default(),
         });
         let link_monitor = monitor(&inner.link, Rc::downgrade(&inner));
         inner.estado.borrow_mut()._link_monitor = link_monitor;
@@ -57,7 +64,18 @@ impl Tema {
         Tema { inner }
     }
 
+    /// Los colores cargados (`@define-color`) y la opacidad de las tarjetas.
+    pub fn actual(&self) -> (String, f64) {
+        self.inner.cargado.borrow().clone()
+    }
+
+    /// `f` corre con cada cambio de colores o de opacidad.
+    pub fn al_cambiar(&self, f: impl Fn(&str, f64) + 'static) {
+        self.inner.oyentes.borrow_mut().push(Box::new(f));
+    }
+
     pub fn set_shell(&self, shell: &Shell) {
+        self.inner.cargado.borrow_mut().1 = shell.opacidad;
         self.inner.estructura.replace(estructura(shell));
         self.inner.estado.borrow_mut().colores = None;
         self.inner.refrescar();
@@ -96,6 +114,7 @@ impl Inner {
                     // Otro tema (no el primero al arrancar): el color de las carpetas del tema de íconos lo
                     // sigue. Después de soltar el estado.
                     let otro_tema = estado.colores.is_some();
+                    self.cargar(&colores);
                     estado.colores = Some(colores);
                     if otro_tema {
                         glib::idle_add_local_once(crate::apariencia::iconos::resincronizar);
@@ -108,13 +127,25 @@ impl Inner {
             Err(e) => {
                 eprintln!("morgan: tema: {}: {e}", self.link.display());
                 if estado.colores.is_none() {
-                    self.provider.load_from_string(&format!(
-                        "{}\n{}",
-                        morgan_temas::colores_por_defecto(),
-                        self.estructura.borrow()
-                    ));
+                    let colores = morgan_temas::colores_por_defecto();
+                    self.provider
+                        .load_from_string(&format!("{colores}\n{}", self.estructura.borrow()));
+                    self.cargar(&colores);
                 }
             }
+        }
+    }
+}
+
+impl Inner {
+    fn cargar(&self, colores: &str) {
+        let opacidad = {
+            let mut c = self.cargado.borrow_mut();
+            c.0 = colores.to_owned();
+            c.1
+        };
+        for f in self.oyentes.borrow().iter() {
+            f(colores, opacidad);
         }
     }
 }

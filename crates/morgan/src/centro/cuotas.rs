@@ -74,7 +74,7 @@ impl Fila {
     fn poner(&self, p: &Pintura) {
         self.glifo.set_label(p.glifo);
         if let Some(l) = self.glifo.child().and_downcast::<gtk::Label>() {
-            crate::osd::centrar_tinta(&l);
+            crate::icono::centrar_tinta(&l);
         }
         self.nombre.set_label(&p.nombre);
         self.renueva.set_label(&p.renueva);

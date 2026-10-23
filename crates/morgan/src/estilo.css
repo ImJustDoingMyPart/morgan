@@ -10,7 +10,6 @@ window.morgan {
  * declara la app e ignora la regla `blur` de la capa (con la región vacía, nada). GTK declara
  * la región donde hay un `backdrop-filter: blur` de 20px o más; el radio no importa más allá
  * de eso: el desenfoque es el de `decoration:blur` de Hyprland. */
-.osd,
 .floating-notifications .notification-row .notification-background .notification,
 .control-center,
 .launcher,
@@ -20,82 +19,8 @@ window.barra,
     backdrop-filter: blur(20px);
 }
 
-/* ─── OSD ───
- * El borde es un anillo de box-shadow, que GTK4 dibuja por fuera del contorno, y el margin
- * de 6px es el lugar del glow (1 de offset + 1 de spread + 4 de blur). GTK4 apila la ÚLTIMA
- * sombra arriba: la lista va de abajo hacia arriba (glow, mezcla, tertiary, primary). */
-.osd {
-    margin: 6px;
-    padding: 12px;
-    border-radius: 4px;
-    background-color: @morgan_fondo;
-    box-shadow:
-        -1px -1px 4px 1px alpha(@primary, 0.5),
-        1px 1px 4px 1px alpha(@tertiary, 0.5),
-        0 0 0 2px mix(@primary, @tertiary, 0.5),
-        1px 1px 0 1px @tertiary,
-        -1px -1px 0 1px @primary;
-}
-
-.osd label {
-    color: @on_surface;
-    font-family: "JetBrainsMono Nerd Font", monospace;
-}
-
-.osd .icono {
-    min-width: 36px;
-    min-height: 36px;
-    border-radius: 4px;
-    background: alpha(@on_surface, 0.08);
-}
-
-.osd .icono image,
-.osd .icono .glifo {
-    color: @on_surface;
-}
-
-.osd .icono .glifo {
-    font-size: 18px;
-}
-
-.osd.encendido .icono {
-    background-image: linear-gradient(135deg, @primary, @tertiary);
-    box-shadow: 0 0 6px 0 alpha(@tertiary, 0.3);
-}
-
-.osd.encendido .icono image,
-.osd.encendido .icono .glifo {
-    color: @surface;
-}
-
-.osd .titulo {
-    font-size: 14px;
-}
-
-.osd .estado {
-    font-size: 12px;
-    opacity: 0.5;
-}
-
-.osd.encendido .estado {
-    color: @tertiary;
-    opacity: 0.9;
-}
-
-.osd .porcentaje {
-    font-size: 12px;
-    color: @tertiary;
-}
-
-.osd.mudo .porcentaje {
-    color: @error;
-}
-
 /* La barra conserva las puntas redondas: con 6px de alto, el radio de la tarjeta la haría
  * ver como un rectángulo mal cortado. */
-.osd progressbar,
-.osd progressbar trough,
-.osd progressbar progress,
 .cc-cuota progressbar,
 .cc-cuota progressbar trough,
 .cc-cuota progressbar progress {
@@ -105,18 +30,11 @@ window.barra,
     border: none;
 }
 
-.osd progressbar {
-    background: none;
-    margin-top: 4px;
-}
-
-.osd progressbar trough,
 .cc-cuota progressbar trough {
     background: alpha(@outline_variant, 0.6);
 }
 
-/* Sin animación: el OSD vive un segundo y su aparición ya es el movimiento. */
-.osd progressbar progress,
+/* Sin animación. */
 .cc-cuota progressbar progress {
     background-image: linear-gradient(to right, @primary, @tertiary);
     box-shadow: 0 0 4px 0 alpha(@tertiary, 0.35);
@@ -124,7 +42,6 @@ window.barra,
     margin: 0;
 }
 
-.osd progressbar:disabled,
 .cc-cuota progressbar:disabled {
     opacity: 0.5;
 }
