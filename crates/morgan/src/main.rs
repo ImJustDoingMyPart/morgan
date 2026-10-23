@@ -171,10 +171,10 @@ fn main() -> ExitCode {
             },
         );
         centro.aplicar_config(&config.sonido);
-        let fijos = config.barra.fijos.clone();
+        let (hilo_barra, eventos_barra) = barra::lanzar(&tema, &config.barra.fijos);
         let iconos_bandeja = config.barra.iconos_bandeja.clone();
         let tele = config.barra.tele.clone();
-        let calendario = calendario::Calendario::new(app, &agenda, &config.clima);
+        let calendario = calendario::Calendario::new(hilo_barra.clone(), &agenda, &config.clima);
         let calculadora = calculadora::Calculadora::new(app);
         let audio = Audio::new(&config.sonido);
         let sonidos = sonidos::Sonidos::new(&config.sonido);
@@ -255,11 +255,13 @@ fn main() -> ExitCode {
         });
         let barra = barra::Barra::new(
             app,
-            &display,
+            hilo_barra,
+            eventos_barra,
             barra::Servicios {
                 hyprland: servicios.hyprland.clone(),
                 notificaciones: servicios.notificaciones.clone(),
-                fijos,
+                tema: tema.clone(),
+                calendario: servicios.calendario.clone(),
                 bandeja: bandeja::Bandeja::new(),
                 privacidad,
                 iconos_bandeja,
@@ -278,10 +280,6 @@ fn main() -> ExitCode {
         servicios
             .centro
             .al_abrir(move |abierto| b.marcar_centro(abierto));
-        let b = barra.clone();
-        servicios
-            .calendario
-            .al_abrir(move |abierto| b.marcar_calendario(abierto));
         let _ = servicios.barra.set(barra);
         let f = servicios.fondos.clone();
         servicios.menu.al_fondos(move || f.abrir(true));

@@ -1,4 +1,3 @@
-
 use crate::hyprland::Espacios;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

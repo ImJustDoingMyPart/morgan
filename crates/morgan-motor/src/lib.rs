@@ -2,6 +2,7 @@
 //! Lo comparten las superficies que ya dejaron GTK (`PLAN.md`, "Motor propio").
 
 pub mod color;
+pub mod curva;
 pub mod forma;
 pub mod gpu;
 pub mod texto;

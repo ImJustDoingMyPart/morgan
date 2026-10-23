@@ -13,7 +13,6 @@ window.morgan {
 .floating-notifications .notification-row .notification-background .notification,
 .control-center,
 .launcher,
-window.barra,
 .fondos .banda,
 .ventanas {
     backdrop-filter: blur(20px);
@@ -1241,94 +1240,9 @@ window.blank-window {
     transform: none;
 }
 
-/* ─── Barra ───
- * GTK4 no redondea como GTK3: la fecha y la hora van a 10pt y no a 13.5px, el relleno de 2px
- * abajo o arriba corrige 1px de centrado y la campana lleva 1px menos a la derecha. */
-window.barra {
-    background-color: @morgan_barra;
-}
-
-.barra label {
-    font-family: "JetBrainsMono Nerd Font", monospace;
-    font-size: 14px;
-    color: @on_surface;
-}
-
-.barra .espacios {
-    margin-left: 10px;
-}
-
-.barra .espacios label {
-    font-weight: 500;
-    opacity: 0.40;
-    padding: 2px 3px 0;
-    margin: 0 1px;
-}
-
-.barra .espacios label:hover {
-    opacity: 1;
-}
-
-.barra .espacios label:not(.vacio) {
-    opacity: 1;
-}
-
-.barra .espacios label.activo {
-    opacity: 1;
-    color: @primary;
-    font-weight: 700;
-}
-
-.barra .espacios label.urgente {
-    opacity: 1;
-    color: @error;
-}
-
-.barra .fecha,
-.barra .hora {
-    font-size: 10pt;
-    padding: 0 5px 2px;
-}
-
-.barra .fecha {
-    font-weight: 500;
-}
-
-.barra .separador {
-    color: @primary;
-    opacity: 0.45;
-    font-size: 13px;
-    padding: 0 4px 2px;
-}
-
-.barra .hora {
-    color: @primary;
-    font-weight: 700;
-}
-
-.barra .derecha {
-    margin-right: 10px;
-}
-
-.barra .campana {
-    font-size: 15.5px;
-    margin-left: 2px;
-    padding: 0 3px 0 4px;
-    opacity: 0.90;
-}
-
-.barra .campana.con-avisos {
-    opacity: 1;
-    color: @primary;
-}
-
-.barra .campana.no-molestar {
-    color: @on_surface_variant;
-    opacity: 0.50;
-}
-
 /* Los tooltips son superficies propias, sin la clase de la ventana que los abre: esto vale
- * para todos los de morgan. */
+ * para todos los de morgan con GTK. Los globos de la barra los dibuja `barra/dibujo.rs` con
+ * estos mismos valores. */
 tooltip.background {
     background-color: alpha(@surface_container, 0.95);
     border: 1px solid alpha(@primary, 0.40);
@@ -1341,22 +1255,6 @@ tooltip label {
     font-family: "JetBrainsMono Nerd Font", monospace;
     font-size: 11px;
     color: @on_surface;
-}
-
-.barra .flecha {
-    color: @on_surface_variant;
-    opacity: 0.65;
-    padding: 0 4px;
-    transition: color 150ms ease, opacity 150ms ease;
-}
-
-.barra .cajon:hover .flecha {
-    color: @primary;
-    opacity: 1;
-}
-
-.barra .bandeja {
-    padding: 0 8px 0 2px;
 }
 
 .menu-bandeja > .cc-lista:first-child {
@@ -1374,128 +1272,6 @@ tooltip label {
 
 .menu-bandeja .cc-opcion:disabled {
     opacity: 0.6;
-}
-
-/* ─── Calendario ─── */
-.calendario .cc-seccion {
-    margin: 0;
-}
-
-.calendario button label {
-    font-weight: normal;
-}
-
-.calendario .cal-mes {
-    padding: 8px;
-    border-radius: 4px;
-    background: alpha(@on_surface, 0.06);
-}
-
-.calendario .cal-semana label {
-    font-size: 12px;
-    opacity: 0.5;
-}
-
-.calendario .cal-dia {
-    background: transparent;
-    color: @on_surface;
-    border: none;
-    box-shadow: none;
-    border-radius: 4px;
-    padding: 4px 0;
-    min-height: 0;
-    min-width: 0;
-    transition: background-color 150ms ease, transform 100ms ease;
-}
-
-.calendario .cal-dia:hover {
-    background: alpha(@primary, 0.14);
-}
-
-.calendario .cal-dia:active {
-    transform: scale(0.94);
-    transition: none;
-}
-
-.calendario .cal-dia.elegido {
-    background: alpha(@primary, 0.2);
-}
-
-.calendario .cal-dia.hoy {
-    background-image: linear-gradient(135deg, @primary, @tertiary);
-    color: @surface;
-    box-shadow: 0 0 6px 0 alpha(@tertiary, 0.3);
-}
-
-.calendario .cal-dia .numero {
-    font-size: 14px;
-}
-
-.calendario .cal-dia.pasado .numero {
-    opacity: 0.5;
-}
-
-.calendario .cal-dia .glifo {
-    font-size: 12px;
-    min-height: 14px;
-    color: @tertiary;
-}
-
-.calendario .cal-dia.hoy .glifo {
-    color: @surface;
-}
-
-.calendario .cal-dia .marca {
-    min-width: 4px;
-    min-height: 4px;
-    margin: 2px 6px;
-    border-radius: 2px;
-    background: @tertiary;
-}
-
-.calendario .cal-dia.hoy .marca {
-    background: @surface;
-}
-
-.calendario .cal-clima,
-.calendario .cal-evento {
-    background: alpha(@on_surface, 0.06);
-    color: @on_surface;
-    border: none;
-    box-shadow: none;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 0;
-}
-
-.calendario .cal-evento.elegido {
-    background: alpha(@primary, 0.2);
-}
-
-.calendario .cal-evento.pasado > * {
-    opacity: 0.5;
-}
-
-.calendario .icono {
-    font-size: 18px;
-    min-width: 36px;
-    min-height: 36px;
-    border-radius: 4px;
-    background: alpha(@on_surface, 0.08);
-}
-
-.calendario .cal-evento .icono {
-    color: @tertiary;
-    background: alpha(@tertiary, 0.12);
-}
-
-.calendario .titulo {
-    font-size: 14px;
-}
-
-.calendario .estado {
-    font-size: 12px;
-    opacity: 0.5;
 }
 
 /* ─── Calculadora ─── */
@@ -1605,74 +1381,6 @@ tooltip label {
     background-image: linear-gradient(135deg, @primary, @tertiary);
     color: @surface;
     box-shadow: 0 0 6px 0 alpha(@tertiary, 0.3);
-}
-
-/* En error: lo que no se puede pasar por alto. */
-.barra .privacidad {
-    color: @error;
-    font-size: 15.5px;
-    padding: 0 4px;
-}
-
-/* Late despacio: es lo único de la barra que avisa algo que sigue pasando. */
-.barra .grabacion {
-    color: @error;
-    padding: 0 6px 0 4px;
-    animation: grabando 2s ease-in-out infinite;
-}
-
-/* ── Botones de la barra ──
- * Al pasar el puntero y con lo suyo abierto avanzan un paso por el degradé del anillo: lo que
- * está en color de texto pasa a `primary` y lo que ya es `primary` pasa a `tertiary`. Los
- * íconos de la bandeja traen sus colores: su paso es de opacidad. Lo que avisa (urgente,
- * grabación) no cambia de color. Un glow alrededor del texto engorda y desenfoca la letra. */
-.barra .boton,
-.barra .boton label {
-    transition: color 150ms ease, opacity 150ms ease, transform 150ms ease;
-}
-
-.barra .boton:hover,
-.barra .boton.abierto {
-    color: @primary;
-    opacity: 1;
-}
-
-.barra .espacios label.activo:hover,
-.barra .reloj:hover > .hora,
-.barra .reloj.abierto > .hora,
-.barra .campana.con-avisos:not(.no-molestar):hover,
-.barra .campana.con-avisos:not(.no-molestar).abierto {
-    color: @tertiary;
-}
-
-.barra .reloj:hover > .fecha,
-.barra .reloj.abierto > .fecha {
-    color: @primary;
-}
-
-.barra .reloj:hover > .separador,
-.barra .reloj.abierto > .separador {
-    color: mix(@primary, @tertiary, 0.5);
-    opacity: 0.9;
-}
-
-.barra .bandeja .boton {
-    opacity: 0.8;
-}
-
-.barra .bandeja .boton:hover,
-.barra .bandeja .boton.abierto {
-    opacity: 1;
-}
-
-.barra .espacios label.urgente:hover,
-.barra .grabacion:hover {
-    color: @error;
-}
-
-.barra .boton:active {
-    transform: scale(0.92);
-    transition: none;
 }
 
 @keyframes grabando {

@@ -28,22 +28,23 @@ struct Inner {
 }
 
 impl MenuBandeja {
+    /// `derecha`: del borde derecho del ícono al de la salida; el panel queda debajo.
     pub fn abrir(
-        barra: &gtk::ApplicationWindow,
-        icono: &impl IsA<gtk::Widget>,
+        app: &gtk::Application,
+        monitor: Option<&gdk::Monitor>,
+        derecha: i32,
         raiz: &Nodo,
         al_elegir: impl Fn(i32) + 'static,
         al_cerrar: impl FnOnce() + 'static,
     ) -> Option<Self> {
-        let app = barra.application()?;
-        let window = gtk::ApplicationWindow::new(&app);
+        let window = gtk::ApplicationWindow::new(app);
         window.add_css_class("morgan");
         window.add_css_class("blank-window");
         window.init_layer_shell();
         window.set_namespace(Some("morgan-tray"));
         window.set_layer(Layer::Top);
         window.set_keyboard_mode(KeyboardMode::Exclusive);
-        window.set_monitor(barra.monitor().as_ref());
+        window.set_monitor(monitor);
         for borde in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {
             window.set_anchor(borde, true);
         }
@@ -54,10 +55,7 @@ impl MenuBandeja {
         panel.set_halign(gtk::Align::End);
         panel.set_valign(gtk::Align::Start);
         panel.set_size_request(ANCHO_MIN, -1);
-        if let Some(r) = icono.compute_bounds(barra) {
-            let derecha = barra.width() as f32 - (r.x() + r.width());
-            panel.set_margin_end((derecha.round() as i32 - 8).max(0));
-        }
+        panel.set_margin_end((derecha - 8).max(0));
         let bajada = Bajada::new(&panel);
         window.set_child(Some(&bajada));
 

@@ -10,7 +10,7 @@ morgan-ipc.workspace = true
 morgan-idioma.workspace = true
 morgan-temas.workspace = true
 morgan-motor.workspace = true
-smithay-client-toolkit.workspace = true
+smithay-client-toolkit = { workspace = true, features = ["xkbcommon"] }
 gtk.workspace = true
 gtk4-layer-shell.workspace = true
 async-channel.workspace = true

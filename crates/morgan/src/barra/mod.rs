@@ -1,3 +1,7 @@
+//! La barra, sin GTK: la dibuja su propio hilo con el motor de `morgan-motor` (`hilo.rs`,
+//! `dibujo.rs`), junto con el calendario, que se abre desde la fecha. Acá, en el hilo de GTK,
+//! queda lo que la alimenta (workspaces, reloj, avisos, bandeja) y lo que hace cada click.
+//!
 //! Los pedidos que también tienen `morganctl` (centro, No molestar) pasan por el mismo
 //! `dispatch` que el socket, así que cierran las otras superficies y muestran el OSD igual.
 //!
@@ -6,6 +10,8 @@
 //! cuenta el tiempo dormido).
 
 mod bandeja;
+mod dibujo;
+pub mod hilo;
 mod menu_bandeja;
 mod modelo;
 
@@ -15,28 +21,48 @@ use std::num::NonZeroU32;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::prelude::*;
-use gtk::{gdk, gio, glib};
-use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-use morgan_ipc::{AccionInterruptor, AccionSuperficie, Request};
+use gtk::glib;
+use morgan_ipc::Request;
+use morgan_motor::color::Paleta;
+use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::bandeja::Bandeja;
-use crate::hyprland::{Espacios, Hyprland};
+use crate::calendario::Calendario;
+use crate::hyprland::Hyprland;
 use crate::notificaciones::Notificaciones;
 use crate::privacidad::{self, Privacidad};
 use crate::sistema;
-
-const ALTO: i32 = 28;
+use crate::tema::Tema;
+use hilo::{Evento, Orden};
 
 pub struct Servicios {
     pub hyprland: Hyprland,
     pub notificaciones: Notificaciones,
-    pub fijos: BTreeMap<String, Vec<NonZeroU32>>,
     pub bandeja: Bandeja,
     pub privacidad: Privacidad,
     pub iconos_bandeja: BTreeMap<String, String>,
     pub tele: String,
+    pub tema: Tema,
+    pub calendario: Calendario,
     pub pedir: Rc<dyn Fn(Request)>,
+}
+
+/// Lanza el hilo de la barra y el calendario, que sigue los colores de `tema`.
+pub fn lanzar(
+    tema: &Tema,
+    fijos: &BTreeMap<String, Vec<NonZeroU32>>,
+) -> (Sender<Orden>, async_channel::Receiver<Evento>) {
+    let (css, opacidad) = tema.actual();
+    let fijos = fijos
+        .iter()
+        .map(|(m, v)| (m.clone(), v.iter().map(|i| i64::from(i.get())).collect()))
+        .collect();
+    let (tx, rx) = hilo::lanzar(Paleta::desde_css(&css), opacidad as f32, fijos);
+    let t = tx.clone();
+    tema.al_cambiar(move |css, opacidad| {
+        let _ = t.send(Orden::Tema(Paleta::desde_css(css), opacidad as f32));
+    });
+    (tx, rx)
 }
 
 #[derive(Clone)]
@@ -45,59 +71,50 @@ pub struct Barra {
 }
 
 struct Inner {
-    app: gtk::Application,
+    hilo: Sender<Orden>,
     s: Servicios,
     cajon: Rc<bandeja::Contexto>,
-    ventanas: RefCell<Vec<Ventana>>,
     reloj: RefCell<Option<glib::SourceId>>,
-    centro_abierto: std::cell::Cell<bool>,
-    calendario_abierto: std::cell::Cell<bool>,
     grabacion: RefCell<Option<(std::time::Instant, glib::SourceId)>>,
     despertar: RefCell<Option<glib::JoinHandle<()>>>,
+    escuchar: RefCell<Option<glib::JoinHandle<()>>>,
 }
 
 impl Barra {
-    pub fn new(app: &gtk::Application, display: &gdk::Display, s: Servicios) -> Self {
-        let cajon = Rc::new(bandeja::Contexto::new(
+    pub fn new(
+        app: &gtk::Application,
+        hilo: Sender<Orden>,
+        eventos: async_channel::Receiver<Evento>,
+        s: Servicios,
+    ) -> Self {
+        let cajon = bandeja::Contexto::new(
+            app,
             s.bandeja.clone(),
             s.iconos_bandeja.clone(),
-        ));
+            hilo.clone(),
+            &s.tema,
+        );
         let inner = Rc::new(Inner {
-            app: app.clone(),
+            hilo,
             cajon,
             s,
-            ventanas: RefCell::default(),
             reloj: RefCell::default(),
-            centro_abierto: Default::default(),
-            calendario_abierto: Default::default(),
             grabacion: RefCell::default(),
             despertar: RefCell::default(),
+            escuchar: RefCell::default(),
         });
-
-        let monitores = display.monitors();
-        let weak = Rc::downgrade(&inner);
-        monitores.connect_items_changed(move |lista, _, _, _| {
-            if let Some(inner) = weak.upgrade() {
-                inner.rearmar(lista);
-            }
-        });
-        inner.rearmar(&monitores);
 
         let weak = Rc::downgrade(&inner);
         inner.s.hyprland.al_cambiar_espacios(move |e| {
             if let Some(inner) = weak.upgrade() {
-                for v in inner.ventanas.borrow().iter() {
-                    v.espacios(e, &inner.s);
-                }
+                let _ = inner.hilo.send(Orden::Espacios(e.clone()));
                 inner.privacidad();
             }
         });
         let weak = Rc::downgrade(&inner);
         inner.s.bandeja.al_cambiar(move || {
             if let Some(inner) = weak.upgrade() {
-                for v in inner.ventanas.borrow().iter() {
-                    v.cajon.pintar(&inner.cajon, &v.window);
-                }
+                inner.cajon.enviar();
             }
         });
         let weak = Rc::downgrade(&inner);
@@ -113,6 +130,13 @@ impl Barra {
                 inner.campana();
             }
         });
+        let _ = inner
+            .hilo
+            .send(Orden::Espacios(inner.s.hyprland.espacios()));
+        inner.campana();
+        inner.privacidad();
+        inner.grabacion();
+        inner.cajon.enviar();
 
         // Relee al empezar (eso arranca el reloj) y cada vez que la máquina se despierta.
         let weak = Rc::downgrade(&inner);
@@ -126,57 +150,49 @@ impl Barra {
             }),
         );
         inner.despertar.replace(Some(despertar));
+
+        let weak = Rc::downgrade(&inner);
+        let escuchar = glib::MainContext::default().spawn_local(async move {
+            while let Ok(e) = eventos.recv().await {
+                let Some(inner) = weak.upgrade() else { return };
+                inner.evento(e);
+            }
+        });
+        inner.escuchar.replace(Some(escuchar));
         Barra { inner }
     }
 
     pub fn marcar_centro(&self, abierto: bool) {
-        self.inner.centro_abierto.set(abierto);
-        self.inner.campana();
-    }
-
-    pub fn marcar_calendario(&self, abierto: bool) {
-        self.inner.calendario_abierto.set(abierto);
-        self.inner.marcar_reloj();
+        let _ = self.inner.hilo.send(Orden::Centro(abierto));
     }
 }
 
 impl Drop for Inner {
     fn drop(&mut self) {
-        if let Some(h) = self.despertar.take() {
+        for h in [self.despertar.take(), self.escuchar.take()]
+            .into_iter()
+            .flatten()
+        {
             h.abort();
         }
     }
 }
 
 impl Inner {
-    fn rearmar(self: &Rc<Self>, lista: &gio::ListModel) {
-        for v in self.ventanas.take() {
-            v.window.destroy();
+    fn evento(&self, e: Evento) {
+        match e {
+            Evento::Pedir(r) => (self.s.pedir)(r),
+            Evento::IrA(id) => self.s.hyprland.ir_a(id),
+            Evento::Grabar => crate::comando::lanzar(&["gsr-ui-cli", "toggle-record"]),
+            Evento::Bandeja {
+                clave,
+                boton,
+                salida,
+                derecha,
+            } => self.cajon.click(&clave, boton, &salida, derecha),
+            Evento::Desplazar { clave, delta } => self.s.bandeja.desplazar(&clave, delta),
+            Evento::CalendarioCerrado => self.s.calendario.cerrado(),
         }
-        let nuevas: Vec<Ventana> = (0..lista.n_items())
-            .filter_map(|i| lista.item(i)?.downcast::<gdk::Monitor>().ok())
-            .map(|m| Ventana::new(self, &m))
-            .collect();
-        let espacios = self.s.hyprland.espacios();
-        for v in &nuevas {
-            let weak = Rc::downgrade(self);
-            v.monitor.connect_connector_notify(move |_| {
-                if let Some(inner) = weak.upgrade() {
-                    let espacios = inner.s.hyprland.espacios();
-                    for v in inner.ventanas.borrow().iter() {
-                        v.espacios(&espacios, &inner.s);
-                    }
-                }
-            });
-            v.espacios(&espacios, &self.s);
-            v.cajon.pintar(&self.cajon, &v.window);
-        }
-        self.ventanas.replace(nuevas);
-        self.campana();
-        self.marcar_reloj();
-        self.privacidad();
-        self.pintar_grabacion();
-        self.pintar_reloj();
     }
 
     fn grabacion(self: &Rc<Self>) {
@@ -201,13 +217,8 @@ impl Inner {
 
     fn pintar_grabacion(&self) {
         let desde = self.grabacion.borrow().as_ref().map(|(t, _)| *t);
-        let texto = desde
-            .map(|t| modelo::duracion(t.elapsed().as_secs()))
-            .unwrap_or_default();
-        for v in self.ventanas.borrow().iter() {
-            v.grabacion.set_label(&format!("󰑋 {texto}"));
-            v.grabacion.set_visible(desde.is_some());
-        }
+        let texto = desde.map(|t| modelo::duracion(t.elapsed().as_secs()));
+        let _ = self.hilo.send(Orden::Grabacion(texto));
     }
 
     fn reloj(self: &Rc<Self>) {
@@ -229,10 +240,7 @@ impl Inner {
         let ahora = glib::DateTime::now_local().expect("reloj local");
         let fecha = modelo::fecha(ahora.day_of_month(), ahora.month());
         let hora = ahora.format("%H:%M").map(String::from).unwrap_or_default();
-        for v in self.ventanas.borrow().iter() {
-            v.fecha.set_label(&fecha);
-            v.hora.set_label(&hora);
-        }
+        let _ = self.hilo.send(Orden::Reloj { fecha, hora });
         // Unos milisegundos de más: despertar justo antes del cambio pintaría el minuto viejo.
         let falta = (60.0 - ahora.seconds()).max(0.0);
         Duration::from_secs_f64(falta) + Duration::from_millis(20)
@@ -251,7 +259,6 @@ impl Inner {
         if tele {
             glifos.push("󰔂");
         }
-        let texto = glifos.join(" ");
         let mut tooltip = privacidad::tooltip(&e.microfono, e.pantalla);
         if tele {
             if !tooltip.is_empty() {
@@ -259,44 +266,18 @@ impl Inner {
             }
             tooltip.push_str("TV prendida");
         }
-        for v in self.ventanas.borrow().iter() {
-            v.privacidad.set_label(&texto);
-            v.privacidad.set_tooltip_text(Some(&tooltip));
-            v.privacidad.set_visible(!glifos.is_empty());
-        }
-    }
-
-    fn marcar_reloj(&self) {
-        let abierto = self.calendario_abierto.get();
-        for v in self.ventanas.borrow().iter() {
-            if abierto {
-                v.reloj.add_css_class("abierto");
-            } else {
-                v.reloj.remove_css_class("abierto");
-            }
-        }
+        let _ = self.hilo.send(Orden::Privacidad {
+            glifos: glifos.join(" "),
+            tooltip,
+        });
     }
 
     fn campana(&self) {
         let n = &self.s.notificaciones;
-        let (estado, tooltip) = modelo::campana(n.lista().len(), n.no_molestar());
-        let abierto = self.centro_abierto.get().then_some("abierto");
-        let clases: Vec<&str> = ["campana", "boton"]
-            .into_iter()
-            .chain(estado)
-            .chain(abierto)
-            .collect();
-        for v in self.ventanas.borrow().iter() {
-            let viejas = v.campana.css_classes();
-            let iguales = viejas.len() == clases.len()
-                && viejas.iter().zip(&clases).all(|(vi, c)| vi.as_str() == *c);
-            if !iguales {
-                v.campana.set_css_classes(&clases);
-            }
-            if v.campana.tooltip_text().as_deref() != Some(&tooltip) {
-                v.campana.set_tooltip_text(Some(&tooltip));
-            }
-        }
+        let _ = self.hilo.send(Orden::Campana {
+            avisos: n.lista().len(),
+            no_molestar: n.no_molestar(),
+        });
     }
 }
 
@@ -309,203 +290,4 @@ fn dormir() -> zbus::MatchRule<'static> {
         .and_then(|b| b.member("PrepareForSleep"))
         .map(|b| b.build())
         .expect("regla fija")
-}
-
-struct Ventana {
-    window: gtk::ApplicationWindow,
-    /// Se lee al pintar: GDK puede anunciar el monitor antes de saber el conector, y copiarlo al
-    /// crear la ventana dejaría la barra sin workspaces para siempre.
-    monitor: gdk::Monitor,
-    espacios: gtk::Box,
-    botones: RefCell<Vec<(i64, gtk::Label)>>,
-    fecha: gtk::Label,
-    hora: gtk::Label,
-    reloj: gtk::Box,
-    campana: gtk::Label,
-    cajon: bandeja::Cajon,
-    privacidad: gtk::Label,
-    grabacion: gtk::Label,
-}
-
-impl Ventana {
-    fn new(inner: &Rc<Inner>, monitor: &gdk::Monitor) -> Self {
-        let window = gtk::ApplicationWindow::new(&inner.app);
-        window.add_css_class("morgan");
-        window.add_css_class("barra");
-        window.init_layer_shell();
-        window.set_namespace(Some("morgan-bar"));
-        window.set_layer(Layer::Top);
-        window.set_keyboard_mode(KeyboardMode::None);
-        window.set_monitor(Some(monitor));
-        for borde in [Edge::Top, Edge::Left, Edge::Right] {
-            window.set_anchor(borde, true);
-        }
-        window.auto_exclusive_zone_enable();
-        window.set_default_size(-1, ALTO);
-
-        let espacios = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        espacios.add_css_class("espacios");
-
-        let fecha = gtk::Label::new(None);
-        fecha.add_css_class("fecha");
-        let separador = gtk::Label::new(Some("›"));
-        separador.add_css_class("separador");
-        let hora = gtk::Label::new(None);
-        hora.add_css_class("hora");
-        let centro = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        centro.add_css_class("reloj");
-        centro.add_css_class("boton");
-        centro.append(&fecha);
-        centro.append(&separador);
-        centro.append(&hora);
-        // Izquierdo: el calendario. Derecho: el centro.
-        al_click(&centro, &inner.s.pedir, |boton| match boton {
-            1 => Some(Request::Reloj {
-                accion: AccionSuperficie::Alternar,
-            }),
-            3 => Some(centro_alternar()),
-            _ => None,
-        });
-
-        let campana = gtk::Label::new(Some("󰨝"));
-        campana.add_css_class("campana");
-        let derecha = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        derecha.add_css_class("derecha");
-        let grabacion = gtk::Label::new(None);
-        grabacion.add_css_class("grabacion");
-        grabacion.add_css_class("boton");
-        grabacion.set_tooltip_text(Some("Grabando la pantalla\nClick: parar"));
-        grabacion.set_visible(false);
-        let click = gtk::GestureClick::new();
-        apretable(&click);
-        click.connect_released(|_, _, _, _| {
-            crate::comando::lanzar(&["gsr-ui-cli", "toggle-record"]);
-        });
-        grabacion.add_controller(click);
-        derecha.append(&grabacion);
-        let privacidad = gtk::Label::new(None);
-        privacidad.add_css_class("privacidad");
-        privacidad.set_visible(false);
-        derecha.append(&privacidad);
-        let cajon = bandeja::Cajon::new();
-        derecha.append(&cajon.raiz);
-        derecha.append(&campana);
-        // Izquierdo: el centro. Derecho: No molestar.
-        al_click(&campana, &inner.s.pedir, |boton| match boton {
-            1 => Some(centro_alternar()),
-            3 => Some(Request::NoMolestar {
-                accion: AccionInterruptor::Alternar,
-            }),
-            _ => None,
-        });
-
-        let caja = gtk::CenterBox::new();
-        caja.set_start_widget(Some(&espacios));
-        caja.set_center_widget(Some(&centro));
-        caja.set_end_widget(Some(&derecha));
-        window.set_child(Some(&caja));
-        window.present();
-
-        Ventana {
-            window,
-            monitor: monitor.clone(),
-            espacios,
-            botones: RefCell::default(),
-            fecha,
-            hora,
-            reloj: centro,
-            campana,
-            cajon,
-            privacidad,
-            grabacion,
-        }
-    }
-
-    fn espacios(&self, e: &Espacios, s: &Servicios) {
-        let monitor = self
-            .monitor
-            .connector()
-            .map(String::from)
-            .unwrap_or_default();
-        let fijos: Vec<i64> = s
-            .fijos
-            .get(&monitor)
-            .map(|v| v.iter().map(|i| i64::from(i.get())).collect())
-            .unwrap_or_default();
-        let nuevos = modelo::botones(e, &monitor, &fijos);
-        let mut botones = self.botones.borrow_mut();
-        let mismos = botones.len() == nuevos.len()
-            && botones.iter().zip(&nuevos).all(|((id, _), b)| *id == b.id);
-        if !mismos {
-            for (_, l) in botones.drain(..) {
-                self.espacios.remove(&l);
-            }
-            for b in &nuevos {
-                let l = gtk::Label::new(Some(&b.etiqueta));
-                let hyprland = s.hyprland.clone();
-                let id = b.id;
-                let click = gtk::GestureClick::new();
-                apretable(&click);
-                click.connect_released(move |_, _, _, _| hyprland.ir_a(id));
-                l.add_controller(click);
-                self.espacios.append(&l);
-                botones.push((b.id, l));
-            }
-        }
-        for ((_, l), b) in botones.iter().zip(&nuevos) {
-            let clases = [
-                (b.activo, "activo"),
-                (b.vacio, "vacio"),
-                (b.urgente, "urgente"),
-            ];
-            let nuevas: Vec<&str> = std::iter::once("boton")
-                .chain(clases.iter().filter(|(si, _)| *si).map(|(_, c)| *c))
-                .collect();
-            let viejas = l.css_classes();
-            let iguales = viejas.len() == nuevas.len()
-                && viejas.iter().zip(&nuevas).all(|(v, n)| v.as_str() == *n);
-            if !iguales {
-                l.set_css_classes(&nuevas);
-            }
-        }
-    }
-}
-
-fn centro_alternar() -> Request {
-    Request::Centro {
-        accion: AccionSuperficie::Alternar,
-    }
-}
-
-/// GTK pone `:active` solo a los `Button`: lo que se toca en la barra son etiquetas, cajas e
-/// imágenes, y la hoja los hunde.
-fn apretable(click: &gtk::GestureClick) {
-    click.connect_pressed(|g, _, _, _| {
-        if let Some(w) = g.widget() {
-            w.set_state_flags(gtk::StateFlags::ACTIVE, false);
-        }
-    });
-    // `stopped` llega al soltar y también si el gesto se cancela (el puntero se va).
-    click.connect_stopped(|g| {
-        if let Some(w) = g.widget() {
-            w.unset_state_flags(gtk::StateFlags::ACTIVE);
-        }
-    });
-}
-
-fn al_click(
-    w: &impl IsA<gtk::Widget>,
-    pedir: &Rc<dyn Fn(Request)>,
-    que: impl Fn(u32) -> Option<Request> + 'static,
-) {
-    let click = gtk::GestureClick::new();
-    click.set_button(0);
-    let pedir = pedir.clone();
-    apretable(&click);
-    click.connect_released(move |g, _, _, _| {
-        if let Some(r) = que(g.current_button()) {
-            pedir(r);
-        }
-    });
-    w.add_controller(click);
 }

@@ -40,34 +40,9 @@ pub(crate) fn seg(us: i64) -> f32 {
     us as f32 / 1e6
 }
 
-pub(crate) fn acotar(x: f32, a: f32, b: f32) -> f32 {
-    x.max(a).min(b)
-}
-
-pub(crate) fn ease_out(t: f32) -> f32 {
-    1.0 - (1.0 - acotar(t, 0.0, 1.0)).powi(3)
-}
+pub(crate) use morgan_motor::curva::{acotar, bezier, ease_out};
 
 pub use morgan_motor::color::{BLANCO, Color, Paleta, con_alfa, mezclar};
-
-/// `cubic-bezier(x1, y1, x2, y2)` de CSS: se busca el parámetro cuya x es `x` y se da su y.
-pub(crate) fn bezier(x1: f32, y1: f32, x2: f32, y2: f32, x: f32) -> f32 {
-    let x = acotar(x, 0.0, 1.0);
-    let curva = |a: f32, b: f32, s: f32| {
-        let r = 1.0 - s;
-        3.0 * r * r * s * a + 3.0 * r * s * s * b + s * s * s
-    };
-    let (mut lo, mut hi) = (0.0f32, 1.0f32);
-    for _ in 0..24 {
-        let m = (lo + hi) / 2.0;
-        if curva(x1, x2, m) < x {
-            lo = m;
-        } else {
-            hi = m;
-        }
-    }
-    curva(y1, y2, (lo + hi) / 2.0)
-}
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Modo {
