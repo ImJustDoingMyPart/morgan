@@ -44,7 +44,7 @@ pub async fn apariencia(
                 opciones,
                 muestras_cursor: muestras
                     .into_iter()
-                    .map(|(t, m)| (t, std::rc::Rc::from(m)))
+                    .map(|(t, m)| (t, std::sync::Arc::from(m)))
                     .collect(),
             })
         }
@@ -109,7 +109,6 @@ pub async fn compositor(cambios: &Path, reglas: &[crate::config::ReglaApp]) -> V
     p
 }
 
-
 pub async fn atajos(c: &crate::config::Atajos) -> Vec<Seccion> {
     let json = leer(&["hyprctl", "-j", "binds"]).await;
     let binds = crate::launcher::fuentes::binds(&json).unwrap_or_else(|e| {
@@ -131,7 +130,9 @@ pub async fn atajos(c: &crate::config::Atajos) -> Vec<Seccion> {
 
 /// Hasta tres niveles: no se pierde en un symlink que vuelve atrás.
 fn archivos_lua(dir: &std::path::Path, nivel: u32, v: &mut Vec<std::path::PathBuf>) {
-    let Ok(it) = std::fs::read_dir(dir) else { return };
+    let Ok(it) = std::fs::read_dir(dir) else {
+        return;
+    };
     for e in it.flatten() {
         let p = e.path();
         if p.is_dir() && nivel < 3 {
@@ -322,7 +323,11 @@ pub async fn sistema() -> Vec<Seccion> {
         .and_then(|v| v.get("tag")?.as_str().map(str::to_owned))
         .unwrap_or_default();
     // En una PC armada, el equipo es la placa: se dice una vez.
-    let placa = if placa == equipo { String::new() } else { placa };
+    let placa = if placa == equipo {
+        String::new()
+    } else {
+        placa
+    };
     let equipo = sistema::equipo(&[
         ("Nombre", una("/proc/sys/kernel/hostname")),
         ("Equipo", equipo),
@@ -330,15 +335,20 @@ pub async fn sistema() -> Vec<Seccion> {
         ("Procesador", sistema::procesador(&archivo("/proc/cpuinfo"))),
         ("Gráficos", sistema::graficas(&lspci)),
         ("Memoria", sistema::memoria(&archivo("/proc/meminfo"))),
-        ("Sistema", sistema::distribucion(&archivo("/etc/os-release"))),
+        (
+            "Sistema",
+            sistema::distribucion(&archivo("/etc/os-release")),
+        ),
         ("Kernel", una("/proc/sys/kernel/osrelease")),
         ("Hyprland", hyprland),
         ("morgan", env!("CARGO_PKG_VERSION").to_owned()),
-        ("Encendida hace", sistema::encendida(&archivo("/proc/uptime"))),
+        (
+            "Encendida hace",
+            sistema::encendida(&archivo("/proc/uptime")),
+        ),
     ]);
     let recientes = gtk::RecentManager::default().items().len();
-    let privacidad =
-        arbol::privacidad(clip.lines().filter(|l| !l.is_empty()).count(), recientes);
+    let privacidad = arbol::privacidad(clip.lines().filter(|l| !l.is_empty()).count(), recientes);
     let mut secciones = vec![equipo];
     if sistema::hay_snapper() {
         secciones.push(snapshots);

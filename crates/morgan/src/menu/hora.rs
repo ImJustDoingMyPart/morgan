@@ -85,7 +85,9 @@ pub async fn aplicar(c: Cambio) -> Result<(), String> {
 /// Microsegundos desde 1970 de la fecha o la hora escrita, completada con la otra mitad de
 /// `ahora` en la zona `zona`.
 pub fn instante(c: &Cambio, zona: &str, ahora: chrono::DateTime<Utc>) -> Result<i64, String> {
-    let tz: chrono_tz::Tz = zona.parse().map_err(|_| format!("zona desconocida: {zona}"))?;
+    let tz: chrono_tz::Tz = zona
+        .parse()
+        .map_err(|_| format!("zona desconocida: {zona}"))?;
     let local = ahora.with_timezone(&tz).naive_local();
     let nueva = match c {
         Cambio::Fecha(s) => NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d")
@@ -134,7 +136,15 @@ pub fn ciudad(zona: &str) -> String {
     let limpio = |s: &str| s.replace('_', " ");
     match partes.as_slice() {
         [_, medio @ .., ultima] if !medio.is_empty() => {
-            format!("{} ({})", limpio(ultima), medio.iter().map(|m| limpio(m)).collect::<Vec<_>>().join(", "))
+            format!(
+                "{} ({})",
+                limpio(ultima),
+                medio
+                    .iter()
+                    .map(|m| limpio(m))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
         }
         [_, ultima] => limpio(ultima),
         _ => limpio(zona),
@@ -172,7 +182,9 @@ pub fn filas(l: &Lectura, mirada: Option<&str>, ahora: chrono::DateTime<Utc>) ->
             },
         ));
     }
-    if !l.ntp && let Some(local) = local {
+    if !l.ntp
+        && let Some(local) = local
+    {
         let fecha = local.format("%Y-%m-%d").to_string();
         let reloj = local.format("%H:%M").to_string();
         v.push(ajuste(
@@ -272,7 +284,10 @@ mod tests {
         assert_eq!(region("America/Argentina/Buenos_Aires"), "America");
         assert_eq!(region("UTC"), "Etc");
         assert_eq!(region("Etc/GMT+3"), "Etc");
-        assert_eq!(ciudad("America/Argentina/Buenos_Aires"), "Buenos Aires (Argentina)");
+        assert_eq!(
+            ciudad("America/Argentina/Buenos_Aires"),
+            "Buenos Aires (Argentina)"
+        );
         assert_eq!(ciudad("America/New_York"), "New York");
         assert_eq!(ciudad("UTC"), "UTC");
     }
@@ -311,9 +326,19 @@ mod tests {
         let ahora = Utc.with_ymd_and_hms(2026, 10, 18, 15, 0, 0).unwrap();
         let z = "America/Argentina/Buenos_Aires";
         let t = instante(&Cambio::Reloj("09:30".into()), z, ahora).unwrap();
-        assert_eq!(t, Utc.with_ymd_and_hms(2026, 10, 18, 12, 30, 0).unwrap().timestamp_micros());
+        assert_eq!(
+            t,
+            Utc.with_ymd_and_hms(2026, 10, 18, 12, 30, 0)
+                .unwrap()
+                .timestamp_micros()
+        );
         let t = instante(&Cambio::Fecha("2026-12-31".into()), z, ahora).unwrap();
-        assert_eq!(t, Utc.with_ymd_and_hms(2026, 12, 31, 15, 0, 0).unwrap().timestamp_micros());
+        assert_eq!(
+            t,
+            Utc.with_ymd_and_hms(2026, 12, 31, 15, 0, 0)
+                .unwrap()
+                .timestamp_micros()
+        );
         assert!(instante(&Cambio::Reloj("25:00".into()), z, ahora).is_err());
         assert!(instante(&Cambio::Fecha("ayer".into()), z, ahora).is_err());
     }

@@ -958,43 +958,6 @@ impl Launcher {
     }
 }
 
-pub(crate) fn resaltar_markup(texto: &str, consulta: &str, color: &str) -> String {
-    if consulta.is_empty() {
-        return glib::markup_escape_text(texto).to_string();
-    }
-    let intervalos = busqueda::resaltar(texto, consulta);
-    if intervalos.is_empty() {
-        return glib::markup_escape_text(texto).to_string();
-    }
-    let mut byte_offsets: Vec<usize> = texto.char_indices().map(|(b, _)| b).collect();
-    byte_offsets.push(texto.len());
-    let mut out = String::with_capacity(texto.len() + intervalos.len() * 40);
-    let mut desde = 0;
-    for (a, b) in intervalos {
-        if a > desde {
-            out.push_str(&glib::markup_escape_text(
-                &texto[byte_offsets[desde]..byte_offsets[a]],
-            ));
-        }
-        out.push_str(&format!(
-            "<span foreground=\"{color}\">{}</span>",
-            glib::markup_escape_text(&texto[byte_offsets[a]..byte_offsets[b]])
-        ));
-        desde = b;
-    }
-    if desde < byte_offsets.len() - 1 {
-        out.push_str(&glib::markup_escape_text(
-            &texto[byte_offsets[desde]..],
-        ));
-    }
-    out
-}
-
-pub(crate) fn color_hex(c: &gdk::RGBA) -> String {
-    let b = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-    format!("#{:02x}{:02x}{:02x}", b(c.red()), b(c.green()), b(c.blue()))
-}
-
 fn leer_historial(archivo: Option<&Path>) -> Historial {
     archivo
         .and_then(|a| std::fs::read_to_string(a).ok())

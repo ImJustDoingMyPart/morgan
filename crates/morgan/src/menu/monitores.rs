@@ -123,7 +123,11 @@ pub fn de_json(texto: &str) -> Vec<Salida> {
 fn descripcion(m: &serde_json::Value) -> String {
     let s = |k: &str| m.get(k).and_then(|x| x.as_str()).unwrap_or("").trim();
     let marca = s("make");
-    let marca = if marca.chars().all(|c| c == '@') { "" } else { marca };
+    let marca = if marca.chars().all(|c| c == '@') {
+        ""
+    } else {
+        marca
+    };
     let marca_modelo = format!("{marca} {}", s("model"));
     marca_modelo.trim().to_owned()
 }
@@ -603,7 +607,11 @@ fn rotacion(s: &Salida) -> Fila {
 }
 
 fn nombre(s: &Salida) -> Fila {
-    let fabrica = if s.descripcion.is_empty() { &s.nombre } else { &s.descripcion };
+    let fabrica = if s.descripcion.is_empty() {
+        &s.nombre
+    } else {
+        &s.descripcion
+    };
     let sub = match &s.apodo {
         Some(_) => trf!("el de fábrica es {}", fabrica),
         None => tr!("ponele uno que se reconozca: «TV», «el de la izquierda»").to_owned(),
@@ -667,7 +675,12 @@ pub fn encajar(p: &[Pantalla], i: usize, x: f64, y: f64) -> (i32, i32) {
     let s = &p[i];
     let (a, b) = (s.ancho, s.alto);
     let mut mejor: Option<((i32, i32), f64)> = None;
-    for o in p.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, o)| o) {
+    for o in p
+        .iter()
+        .enumerate()
+        .filter(|(j, _)| *j != i)
+        .map(|(_, o)| o)
+    {
         // A lo largo del borde: que se toquen al menos un poco, y alineado si está cerca.
         let a_lo_largo = |v: f64, desde: i32, largo: i32, propio: i32| -> i32 {
             let v = (v.round() as i32).clamp(desde - propio + 1, desde + largo - 1);
@@ -874,7 +887,10 @@ mod tests {
         // El único encendido no tiene al lado de quién ponerse; el apagado sí, para cuando
         // se prenda.
         let p = listas(&f, "Posición");
-        assert!(p.iter().all(|o| matches!(&o.2, Que::Monitor(s, _) if s == "HDMI-A-1")));
+        assert!(
+            p.iter()
+                .all(|o| matches!(&o.2, Que::Monitor(s, _) if s == "HDMI-A-1"))
+        );
         assert!(p.iter().any(|o| o.0 == "arriba de DP-3" && o.1));
     }
 
@@ -894,7 +910,11 @@ mod tests {
         assert_eq!(r.lua(), "", "el nombre no va a Hyprland");
         r.poner("HDMI-A-1", &Campo::Escala(2.0));
         r.poner("HDMI-A-1", &Campo::Restablecer);
-        assert_eq!(r.0["HDMI-A-1"].apodo.as_deref(), Some("TV"), "restablecer lo deja");
+        assert_eq!(
+            r.0["HDMI-A-1"].apodo.as_deref(),
+            Some("TV"),
+            "restablecer lo deja"
+        );
         assert_eq!(r.lua(), "");
 
         let mut s = de_json(JSON);
@@ -926,7 +946,10 @@ mod tests {
         let p = listas(&filas(&s, &Reglas::default(), false), "Posición");
         assert!(p.iter().any(|o| o.0 == "a la derecha de DP-3" && o.1));
         assert!(p.iter().any(|o| o.2
-            == Que::Monitor("HDMI-A-1".into(), Campo::Lugar(0, -1080, (1920, 1080, 60.0)))));
+            == Que::Monitor(
+                "HDMI-A-1".into(),
+                Campo::Lugar(0, -1080, (1920, 1080, 60.0))
+            )));
 
         // Vista prendida: su tamaño y su lugar de entonces, sin modo que guardar.
         let mut prendida = de_json(JSON);

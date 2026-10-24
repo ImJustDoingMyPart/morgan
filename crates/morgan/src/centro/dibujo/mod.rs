@@ -12,6 +12,7 @@
 //!   a 54 del borde de su caja; títulos de 14 px y lo secundario a 12, atenuado.
 
 mod armar;
+pub mod ajustes;
 pub mod avisos;
 pub mod campo;
 pub mod launcher;
@@ -76,6 +77,12 @@ pub enum Objetivo {
     AccionAviso(u32, usize),
     /// Una fila del menú de la bandeja, por su id de dbusmenu.
     Fila(i32),
+    /// Del menú de sistema: una fila del índice, una fila (o una opción de una galería) de
+    /// la página, una opción de una lista desplegada y un monitor del dibujo a escala.
+    Indice(usize),
+    Ajuste(super::vista::Lugar),
+    OpcionAjuste(super::vista::Lugar),
+    Pantalla(super::vista::Lugar),
 }
 
 /// Cómo responde cada clase de objetivo, como en la hoja de GTK: lo que tarda en encenderse con
@@ -87,6 +94,10 @@ fn tiempos(o: Objetivo) -> (Duration, f64, Duration) {
         Objetivo::Opcion(..) | Objetivo::AccionAviso(..) | Objetivo::Fila(_) => {
             (ms(100), 0.97, ms(100))
         }
+        Objetivo::Indice(_) => (Duration::ZERO, 1.0, Duration::ZERO),
+        Objetivo::Ajuste(_) => (ms(150), 0.97, ms(100)),
+        Objetivo::OpcionAjuste(_) => (ms(100), 1.0, ms(100)),
+        Objetivo::Pantalla(_) => (ms(150), 1.0, ms(100)),
         Objetivo::Aviso(_) | Objetivo::Grupo(_) => (ms(100), 1.0, ms(100)),
         Objetivo::Campo(_) => (ms(100), 1.0, ms(100)),
         Objetivo::Slider(_) => (ms(200), 1.0, ms(120)),

@@ -43,6 +43,7 @@ use wayland_client::globals::registry_queue_init;
 use wayland_client::protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface};
 use wayland_client::{Connection, QueueHandle};
 
+use super::dibujo::ajustes::{self, AjustesUi};
 use super::dibujo::launcher::{self, LauncherUi};
 use super::dibujo::menu::{MenuUi, Salida};
 use super::dibujo::toasts::{self, ToastsUi};
@@ -50,8 +51,8 @@ use super::dibujo::toque::{IZQUIERDO, Pedido};
 use super::dibujo::{Objetivo, Ui};
 use super::ecualizador;
 use super::vista::{
-    Aviso, Contenido, Evento, EventoLauncher, Grupo, Iconos, ListaId, ListaLauncher, Menu, Nivel,
-    Reproductor, Tarjeta,
+    Aviso, Contenido, Evento, EventoAjustes, EventoLauncher, Grupo, Iconos, IndiceAjustes, ListaId,
+    ListaLauncher, Lugar, Menu, Nivel, PaginaAjustes, Reproductor, Tarjeta,
 };
 use crate::lamina::Lamina;
 
@@ -86,6 +87,25 @@ pub enum Orden {
     },
     LauncherLista(ListaLauncher),
     LauncherCerrar,
+    /// El menú de sistema: abrirlo (con el buscador vacío), lo que muestra el índice y la
+    /// página, adónde ir en ella, lo aplicado (y si salió) y si se graba un atajo.
+    AjustesAbrir,
+    AjustesCerrar,
+    AjustesIndice(IndiceAjustes),
+    AjustesPagina(PaginaAjustes),
+    AjustesIr {
+        seccion: usize,
+        fila: Option<usize>,
+        suave: bool,
+    },
+    AjustesHecho {
+        lugar: Lugar,
+        ok: bool,
+    },
+    AjustesGrabando(bool),
+    /// Una página armada una vez con el menú cerrado: las fuentes de la galería se cargan
+    /// antes de la primera apertura.
+    AjustesPrecalentar(PaginaAjustes),
 }
 
 /// Si no hay Wayland o la GPU no abre, el hilo termina: morgan sigue sin centro.
@@ -176,6 +196,8 @@ struct Hilo {
     toasts_ui: ToastsUi,
     launcher: Option<LauncherSup>,
     launcher_ui: LauncherUi,
+    ajustes: Option<LauncherSup>,
+    ajustes_ui: AjustesUi,
     /// Abrir con la sesión desplegada espera a la primera hoja para enfocar.
     enfocar_al_armar: Option<Enfoque>,
     cava: Option<Cava>,
@@ -237,6 +259,8 @@ fn correr(
         toasts_ui: ToastsUi::new(paleta, opacidad, borde),
         launcher: None,
         launcher_ui: LauncherUi::new(paleta, opacidad, borde),
+        ajustes: None,
+        ajustes_ui: AjustesUi::new(paleta, opacidad, borde),
         enfocar_al_armar: None,
         cava: None,
         reloj: None,
@@ -270,6 +294,9 @@ impl Hilo {
         if let Some(l) = &mut self.launcher {
             l.lamina.sucio = true;
         }
+        if let Some(a) = &mut self.ajustes {
+            a.lamina.sucio = true;
+        }
     }
 
     fn orden(&mut self, o: Orden) {
@@ -284,6 +311,8 @@ impl Hilo {
                 (t.paleta, t.opacidad, t.borde) = (p, o, b);
                 let l = &mut self.launcher_ui;
                 (l.paleta, l.opacidad, l.borde) = (p, o, b);
+                let a = &mut self.ajustes_ui;
+                (a.paleta, a.opacidad, a.borde) = (p, o, b);
             }
             Orden::Abrir { sesion } => self.abrir(sesion),
             Orden::Cerrar => self.cerrar(false),
@@ -329,6 +358,35 @@ impl Hilo {
                 self.pedidos_launcher(pedidos);
             }
             Orden::LauncherCerrar => self.cerrar_launcher(),
+            Orden::AjustesAbrir => self.abrir_ajustes(),
+            Orden::AjustesCerrar => self.cerrar_ajustes(),
+            Orden::AjustesIndice(i) => self.ajustes_ui.poner_indice(i),
+            Orden::AjustesPagina(p) => self.ajustes_ui.poner_pagina(p),
+            Orden::AjustesIr {
+                seccion,
+                fila,
+                suave,
+            } => self.ajustes_ui.ir_a(seccion, fila, suave),
+            Orden::AjustesHecho { lugar, ok } => {
+                self.ajustes_ui.hecho(lugar, ok);
+                // Hyprland 0.56, tras `setcursor`, no redibuja la forma ya pedida: una ida y
+                // vuelta a otra la vuelve a pedir, y sale del tema nuevo.
+                if self.ajustes.is_some()
+                    && let Some(f) = &self.forma
+                {
+                    f.set_shape(self.serial_puntero, Shape::Progress);
+                    f.set_shape(
+                        self.serial_puntero,
+                        self.forma_puesta.unwrap_or(Shape::Default),
+                    );
+                }
+            }
+            Orden::AjustesGrabando(g) => self.ajustes_ui.grabando = g,
+            Orden::AjustesPrecalentar(p) => {
+                if self.ajustes.is_none() {
+                    self.ajustes_ui.precalentar(p);
+                }
+            }
         }
         self.ensuciar();
     }
@@ -388,6 +446,63 @@ impl Hilo {
             capa,
             inicio: None,
         });
+    }
+
+    fn abrir_ajustes(&mut self) {
+        self.ajustes_ui.abrir();
+        if self.ajustes.is_some() {
+            return;
+        }
+        let wl = self.compositor.create_surface(&self.qh);
+        let capa = self.capas.create_layer_surface(
+            &self.qh,
+            wl,
+            Layer::Overlay,
+            Some("morgan-menu"),
+            None,
+        );
+        capa.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
+        capa.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        capa.commit();
+        self.ajustes = Some(LauncherSup {
+            lamina: Lamina::new((0, 0)),
+            capa,
+            inicio: None,
+        });
+    }
+
+    fn cerrar_ajustes(&mut self) {
+        if self.ajustes.take().is_none() {
+            return;
+        }
+        self.ajustes_ui.cerrar();
+        if self.panel.is_none()
+            && self.launcher.is_none()
+            && let Some((_, t)) = self.parpadeo.take()
+        {
+            self.bucle.remove(t);
+        }
+    }
+
+    fn pedidos_ajustes(&mut self, pedidos: Vec<ajustes::Pedido>) {
+        for p in pedidos {
+            match p {
+                ajustes::Pedido::Gtk(e) => {
+                    let cierra = matches!(e, EventoAjustes::Cerrado);
+                    self.avisar(Evento::Ajustes(e));
+                    if cierra {
+                        self.cerrar_ajustes();
+                    }
+                }
+                ajustes::Pedido::Pegar => self.pegar(|h, t| {
+                    let pedidos = h.ajustes_ui.pegar(t);
+                    h.pedidos_ajustes(pedidos);
+                }),
+            }
+        }
+        if let Some(a) = &mut self.ajustes {
+            a.lamina.sucio = true;
+        }
     }
 
     fn cerrar_launcher(&mut self) {
@@ -608,6 +723,8 @@ impl Hilo {
     fn programar_parpadeo(&mut self, ahora: Instant) {
         let proximo = if self.launcher.is_some() {
             self.launcher_ui.proximo_parpadeo(ahora)
+        } else if self.ajustes.is_some() {
+            self.ajustes_ui.proximo_parpadeo(ahora)
         } else {
             self.ui.proximo_parpadeo(ahora)
         };
@@ -638,6 +755,7 @@ impl Hilo {
         self.pintar_menu(ahora);
         self.pintar_toasts(ahora);
         self.pintar_launcher(ahora);
+        self.pintar_ajustes(ahora);
         let Some(p) = &mut self.panel else {
             let _ = self.conn.flush();
             return;
@@ -699,6 +817,77 @@ impl Hilo {
         l.lamina
             .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
         self.programar_parpadeo(ahora);
+    }
+
+    /// Baja desde su borde de abajo al abrir (`bajada.rs`), como el centro.
+    fn pintar_ajustes(&mut self, ahora: Instant) {
+        let Some(a) = &mut self.ajustes else { return };
+        let ui = &mut self.ajustes_ui;
+        let anda = ui.anda(ahora)
+            || a.inicio
+                .is_none_or(|t| ahora.saturating_duration_since(t) < crate::bajada::duracion());
+        if !a.lamina.lista() || !(a.lamina.sucio || anda) {
+            return;
+        }
+        ui.tam = a.lamina.tam;
+        let escala = a.lamina.escala;
+        ui.armar(escala as f32, ahora);
+        let inicio = *a.inicio.get_or_insert(ahora);
+        let micros = ahora.saturating_duration_since(inicio).as_micros() as i64;
+        let bajada = crate::bajada::desplazamiento(micros, ui.panel().y1 as f32);
+        ui.pintar(&mut self.escena, f64::from(escala), f64::from(bajada));
+        let wl = a.capa.wl_surface().clone();
+        a.lamina
+            .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+        self.programar_parpadeo(ahora);
+    }
+
+    fn puntero_ajustes(&mut self, e: &PointerEvent) {
+        let (x, y) = e.position;
+        let ui = &mut self.ajustes_ui;
+        let pedidos = match e.kind {
+            PointerEventKind::Enter { serial } => {
+                self.serial_puntero = serial;
+                self.forma_puesta = None;
+                ui.mover(x, y);
+                Vec::new()
+            }
+            PointerEventKind::Motion { .. } => {
+                ui.mover(x, y);
+                Vec::new()
+            }
+            PointerEventKind::Leave { .. } => {
+                ui.salir();
+                Vec::new()
+            }
+            PointerEventKind::Press { .. } => {
+                ui.apretar(x, y);
+                Vec::new()
+            }
+            PointerEventKind::Release { button, .. } => ui.soltar(x, y, button == IZQUIERDO),
+            PointerEventKind::Axis { vertical, .. } => {
+                if vertical.value120 != 0 {
+                    ui.rueda(f64::from(vertical.value120) / 120.0, true);
+                } else if vertical.discrete != 0 {
+                    ui.rueda(f64::from(vertical.discrete), true);
+                } else if vertical.absolute != 0.0 {
+                    ui.rueda(vertical.absolute, false);
+                }
+                Vec::new()
+            }
+        };
+        let forma = match self.ajustes_ui.forma_puntero() {
+            ajustes::Forma::Normal => Shape::Default,
+            ajustes::Forma::Texto => Shape::Text,
+            ajustes::Forma::Mano => Shape::Grab,
+        };
+        self.pedidos_ajustes(pedidos);
+        if self.forma_puesta != Some(forma)
+            && let Some(f) = &self.forma
+        {
+            f.set_shape(self.serial_puntero, forma);
+            self.forma_puesta = Some(forma);
+        }
     }
 
     fn puntero_launcher(&mut self, e: &PointerEvent) {
@@ -935,6 +1124,17 @@ impl Hilo {
             self.salida_menu(s);
             return;
         }
+        if self.ajustes.is_some() {
+            let m = self.mods;
+            let pedidos = self.ajustes_ui.tecla(
+                ev.keysym,
+                ev.utf8.as_deref(),
+                ev.raw_code + 8,
+                [m.logo, m.ctrl, m.alt, m.shift],
+            );
+            self.pedidos_ajustes(pedidos);
+            return;
+        }
         if self.launcher.is_some() {
             let pedidos = self
                 .launcher_ui
@@ -1015,6 +1215,13 @@ fn lanzar_cava() -> Result<(std::process::Child, channel::Channel<Vec<f64>>), St
 impl LayerShellHandler for Hilo {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, capa: &LayerSurface) {
         if self
+            .ajustes
+            .as_ref()
+            .is_some_and(|a| a.capa.wl_surface() == capa.wl_surface())
+        {
+            self.pedidos_ajustes(vec![ajustes::Pedido::Gtk(EventoAjustes::Cerrado)]);
+        }
+        if self
             .launcher
             .as_ref()
             .is_some_and(|l| l.capa.wl_surface() == capa.wl_surface())
@@ -1056,7 +1263,12 @@ impl LayerShellHandler for Hilo {
         _: u32,
     ) {
         let wl = capa.wl_surface();
-        if let Some(l) = self.launcher.as_mut().filter(|l| l.capa.wl_surface() == wl) {
+        if let Some(l) = self
+            .ajustes
+            .as_mut()
+            .filter(|l| l.capa.wl_surface() == wl)
+            .or(self.launcher.as_mut().filter(|l| l.capa.wl_surface() == wl))
+        {
             if c.new_size.0 > 0 && c.new_size.1 > 0 {
                 l.lamina.tam = c.new_size;
             }
@@ -1167,6 +1379,9 @@ impl Hilo {
         }
         if let Some(l) = self.launcher.as_mut().filter(|l| l.capa.wl_surface() == wl) {
             return Some(&mut l.lamina);
+        }
+        if let Some(a) = self.ajustes.as_mut().filter(|a| a.capa.wl_surface() == wl) {
+            return Some(&mut a.lamina);
         }
         self.menu
             .as_mut()
@@ -1342,6 +1557,12 @@ impl PointerHandler for Hilo {
                 .is_some_and(|l| l.capa.wl_surface() == &e.surface)
             {
                 self.puntero_launcher(e);
+            } else if self
+                .ajustes
+                .as_ref()
+                .is_some_and(|a| a.capa.wl_surface() == &e.surface)
+            {
+                self.puntero_ajustes(e);
             } else if self
                 .panel
                 .as_ref()

@@ -7,7 +7,6 @@
 
 mod acciones;
 mod bt;
-pub mod desplegable;
 mod dibujo;
 mod ecualizador;
 pub mod hilo;
@@ -115,9 +114,12 @@ struct Inner {
     menu: RefCell<Option<MenuAbierto>>,
     /// El launcher dibuja en el hilo del centro: lo que hace allá le llega acá.
     al_launcher: RefCell<Option<AlLauncher>>,
+    /// Lo mismo, del menú de sistema.
+    al_ajustes: RefCell<Option<AlAjustes>>,
 }
 
 type AlLauncher = Rc<dyn Fn(vista::EventoLauncher)>;
+type AlAjustes = Rc<dyn Fn(vista::EventoAjustes)>;
 
 struct MenuAbierto {
     elegir: Box<dyn Fn(i32)>,
@@ -200,6 +202,7 @@ impl Centro {
             escuchar: RefCell::default(),
             menu: RefCell::default(),
             al_launcher: RefCell::default(),
+            al_ajustes: RefCell::default(),
         });
         let c = Centro { inner };
         let weak = Rc::downgrade(&c.inner);
@@ -263,6 +266,10 @@ impl Centro {
 
     pub fn al_launcher(&self, f: impl Fn(vista::EventoLauncher) + 'static) {
         self.inner.al_launcher.replace(Some(Rc::new(f)));
+    }
+
+    pub fn al_ajustes(&self, f: impl Fn(vista::EventoAjustes) + 'static) {
+        self.inner.al_ajustes.replace(Some(Rc::new(f)));
     }
 
     pub fn al_abrir(&self, f: impl Fn(bool) + 'static) {
@@ -416,6 +423,12 @@ impl Centro {
                 }
             }
             // Lo mismo que en la lista, y el toast se va (copiar lo deja).
+            Evento::Ajustes(e) => {
+                let f = i.al_ajustes.borrow().clone();
+                if let Some(f) = f {
+                    f(e);
+                }
+            }
             Evento::Launcher(e) => {
                 let f = i.al_launcher.borrow().clone();
                 if let Some(f) = f {

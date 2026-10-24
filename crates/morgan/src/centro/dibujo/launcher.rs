@@ -74,11 +74,11 @@ fn letra_chica() -> f32 {
     letra() / 1.2
 }
 
-fn ease_out(t: f64) -> f64 {
+pub(super) fn ease_out(t: f64) -> f64 {
     1.0 - (1.0 - t.clamp(0.0, 1.0)).powi(3)
 }
 
-fn avance(desde: Instant, dura: Duration, ahora: Instant) -> f64 {
+pub(super) fn avance(desde: Instant, dura: Duration, ahora: Instant) -> f64 {
     let d = crate::animaciones::dur(dura).as_secs_f64();
     if d <= 0.0 {
         return 1.0;
@@ -105,15 +105,15 @@ pub enum Pedido {
 }
 
 /// Un valor que va hacia otro con la salida cúbica: cada paso sigue al destino del anterior.
-struct Recorrido {
+pub(super) struct Recorrido {
     desde: f64,
-    hasta: f64,
+    pub(super) hasta: f64,
     t0: Instant,
     dura: Duration,
 }
 
 impl Recorrido {
-    fn new(dura: Duration) -> Self {
+    pub(super) fn new(dura: Duration) -> Self {
         Recorrido {
             desde: 0.0,
             hasta: 0.0,
@@ -122,22 +122,22 @@ impl Recorrido {
         }
     }
 
-    fn valor(&self, ahora: Instant) -> f64 {
+    pub(super) fn valor(&self, ahora: Instant) -> f64 {
         self.desde + (self.hasta - self.desde) * ease_out(avance(self.t0, self.dura, ahora))
     }
 
-    fn ir(&mut self, v: f64, ahora: Instant) {
+    pub(super) fn ir(&mut self, v: f64, ahora: Instant) {
         self.desde = self.valor(ahora);
         self.hasta = v;
         self.t0 = ahora;
     }
 
-    fn poner(&mut self, v: f64) {
+    pub(super) fn poner(&mut self, v: f64) {
         self.desde = v;
         self.hasta = v;
     }
 
-    fn anda(&self, ahora: Instant) -> bool {
+    pub(super) fn anda(&self, ahora: Instant) -> bool {
         self.desde != self.hasta && avance(self.t0, self.dura, ahora) < 1.0
     }
 }
@@ -871,7 +871,7 @@ impl LauncherUi {
 }
 
 /// `texto` partido en lo que coincide (`resaltes`, en caracteres) y lo que no.
-fn tramos(
+pub(super) fn tramos(
     texto: &str,
     resaltes: &[(usize, usize)],
     rol: u8,

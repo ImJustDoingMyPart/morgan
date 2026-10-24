@@ -314,6 +314,73 @@ pub enum EventoLauncher {
     Cerrado { escape: bool },
 }
 
+/// Una fila del índice del menú de sistema: una categoría (con su glifo), una de sus secciones
+/// o un resultado de la búsqueda (con dónde está).
+#[derive(Clone, Debug)]
+pub struct FilaIndice {
+    pub glifo: Option<char>,
+    pub titulo: String,
+    pub donde: Option<String>,
+    /// Lo que coincide con lo buscado, en caracteres.
+    pub resaltes: Vec<(usize, usize)>,
+    pub resaltes_donde: Vec<(usize, usize)>,
+    /// Una sección de la página que se ve: su número (se marca la que está a la vista).
+    pub seccion: Option<usize>,
+    /// Adónde lleva en la página al pasar a ella: sección y fila.
+    pub destino: Option<(usize, Option<usize>)>,
+}
+
+pub struct IndiceAjustes {
+    pub filas: Vec<FilaIndice>,
+    pub elegida: usize,
+    /// Las secciones de la categoría recién abierta bajan.
+    pub desplegar: bool,
+    pub version: u64,
+}
+
+pub struct PaginaAjustes {
+    pub titulo: String,
+    /// Sin leer todavía: «Leyendo…».
+    pub secciones: Option<Vec<crate::menu::arbol::Seccion>>,
+    /// Una página nueva entra subiendo; releer la misma, no.
+    pub entra: bool,
+    pub version: u64,
+    /// Lo elegido con el teclado tras releer (tras probar un monitor, «Mantener»).
+    pub elegir: Option<usize>,
+}
+
+/// Dónde está lo que se tocó en la página: la sección, la fila y, si la fila tiene varias
+/// (una lista, una galería, los monitores a escala), cuál.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Lugar {
+    pub seccion: usize,
+    pub fila: usize,
+    pub opcion: Option<usize>,
+}
+
+/// Lo que pide el menú de sistema al hilo de GTK.
+#[derive(Debug)]
+pub enum EventoAjustes {
+    /// Lo escrito en el buscador.
+    Texto(String),
+    /// La fila del índice elegida.
+    Navegar { version: u64, indice: usize },
+    Hacer {
+        version: u64,
+        lugar: Lugar,
+        que: crate::menu::arbol::Que,
+    },
+    /// Grabando un atajo: la tecla, con su código (de xkb), su keysym y los modificadores
+    /// (Super, Ctrl, Alt, Shift).
+    Tecla {
+        codigo: u32,
+        keysym: u32,
+        mods: [bool; 4],
+    },
+    /// Lo cerró el menú mismo (Escape, un click afuera).
+    Cerrado,
+}
+
 /// Lo que se tocó, para el hilo de GTK.
 #[derive(Debug)]
 pub enum Evento {
@@ -340,6 +407,7 @@ pub enum Evento {
     MenuCerrado,
     Toast(EventoToast),
     Launcher(EventoLauncher),
+    Ajustes(EventoAjustes),
 }
 
 /// Lo que se hizo en un toast. Salvo copiar, el toast se va.

@@ -8,9 +8,15 @@ use crate::launcher::fuentes::Atajo;
 
 /// Lo que no cae en ninguna sección va a la última.
 const GRUPOS: &[(&str, &[&str])] = &[
-    ("Menús y avisos", &["menú", "lanzador", "notificac", "bloqueo"]),
+    (
+        "Menús y avisos",
+        &["menú", "lanzador", "notificac", "bloqueo"],
+    ),
     ("Aplicaciones", &["aplicac"]),
-    ("Ventanas y workspaces", &["ventana", "layout", "workspace", "foco"]),
+    (
+        "Ventanas y workspaces",
+        &["ventana", "layout", "workspace", "foco"],
+    ),
     ("Multimedia y brillo", &["multimedia", "brillo", "volumen"]),
     ("Capturas y grabación", &["captura", "grabaci"]),
     // Los que se crean acá (`[[keybinds.custom]]`): su cabecera en morgan.lua.
@@ -69,7 +75,13 @@ pub fn grupos_de_binds_lua(lua: &str) -> Vec<(String, bool, usize)> {
 fn grupo_de_desc(desc: &str, grupos: &[(String, bool, usize)]) -> usize {
     grupos
         .iter()
-        .find(|(d, prefijo, _)| if *prefijo { desc.starts_with(d.as_str()) } else { d == desc })
+        .find(|(d, prefijo, _)| {
+            if *prefijo {
+                desc.starts_with(d.as_str())
+            } else {
+                d == desc
+            }
+        })
         .map_or(GRUPOS.len() - 1, |(_, _, g)| *g)
 }
 
@@ -119,16 +131,29 @@ fn juntar_series(g: Vec<(String, Vec<String>)>) -> Vec<(String, Vec<String>)> {
 }
 
 fn fila_propia(p: &binds::Propio, defecto: &Atajos) -> Fila {
-    let quitar = |tecla: &str| Que::Config(Cambio::Teclas(vec![(p.id.to_owned(), tecla.to_owned())]));
-    let mut opciones = vec![opcion("Cambiar la tecla…", "", Que::GrabarTecla(p.id.to_owned()))];
+    let quitar =
+        |tecla: &str| Que::Config(Cambio::Teclas(vec![(p.id.to_owned(), tecla.to_owned())]));
+    let mut opciones = vec![opcion(
+        "Cambiar la tecla…",
+        "",
+        Que::GrabarTecla(p.id.to_owned()),
+    )];
     if !p.tecla.is_empty() {
         opciones.push(opcion("Sin tecla", "", quitar("")));
     }
     let siempre = defecto.tecla(p.id).unwrap_or_default();
     if !siempre.is_empty() && binds::normalizar(&siempre) != binds::normalizar(&p.tecla) {
-        opciones.push(opcion(&format!("La de siempre: {siempre}"), "", quitar(&siempre)));
+        opciones.push(opcion(
+            &format!("La de siempre: {siempre}"),
+            "",
+            quitar(&siempre),
+        ));
     }
-    let sub = if p.tecla.is_empty() { "Sin tecla" } else { &p.tecla };
+    let sub = if p.tecla.is_empty() {
+        "Sin tecla"
+    } else {
+        &p.tecla
+    };
     ajuste(p.desc, sub, Control::Lista(opciones))
 }
 
@@ -141,17 +166,34 @@ fn nombre_propio(p: &AtajoPropio, apps: &[(String, String)]) -> String {
 
 /// Todo lo de un atajo propio en su lista; lo marcado es lo puesto.
 /// `prefijo` va delante del nombre: el del modo, para los de adentro.
-fn fila_propio_usuario(donde: Donde, p: &AtajoPropio, apps: &[(String, String)], prefijo: &str) -> Fila {
+fn fila_propio_usuario(
+    donde: Donde,
+    p: &AtajoPropio,
+    apps: &[(String, String)],
+    prefijo: &str,
+) -> Fila {
     let id = donde.id();
     let campo = |c: CampoPropio| Que::Config(Cambio::Propio(donde, c));
-    let mut o = vec![opcion(tr!("Cambiar la tecla…"), "", Que::GrabarTecla(id.clone()))];
+    let mut o = vec![opcion(
+        tr!("Cambiar la tecla…"),
+        "",
+        Que::GrabarTecla(id.clone()),
+    )];
     if !p.key.is_empty() {
-        o.push(opcion(tr!("Sin tecla"), "", Que::Config(Cambio::Teclas(vec![(id, String::new())]))));
+        o.push(opcion(
+            tr!("Sin tecla"),
+            "",
+            Que::Config(Cambio::Teclas(vec![(id, String::new())])),
+        ));
     }
     if !p.app.is_empty() {
         o.push(
-            opcion(tr!("Abrir otra ventana siempre"), "", campo(CampoPropio::NuevaVentana(!p.new_window)))
-                .activa(p.new_window),
+            opcion(
+                tr!("Abrir otra ventana siempre"),
+                "",
+                campo(CampoPropio::NuevaVentana(!p.new_window)),
+            )
+            .activa(p.new_window),
         );
     }
     for (cuando, t) in [
@@ -163,13 +205,21 @@ fn fila_propio_usuario(donde: Donde, p: &AtajoPropio, apps: &[(String, String)],
     }
     if p.when == Cuando::Press {
         o.push(
-            opcion(tr!("Repetir mientras se mantiene"), "", campo(CampoPropio::Repetir(!p.repeat)))
-                .activa(p.repeat),
+            opcion(
+                tr!("Repetir mientras se mantiene"),
+                "",
+                campo(CampoPropio::Repetir(!p.repeat)),
+            )
+            .activa(p.repeat),
         );
     }
     o.push(
-        opcion(tr!("También con la pantalla bloqueada"), "", campo(CampoPropio::Bloqueada(!p.locked)))
-            .activa(p.locked),
+        opcion(
+            tr!("También con la pantalla bloqueada"),
+            "",
+            campo(CampoPropio::Bloqueada(!p.locked)),
+        )
+        .activa(p.locked),
     );
     o.push(
         opcion(
@@ -179,14 +229,26 @@ fn fila_propio_usuario(donde: Donde, p: &AtajoPropio, apps: &[(String, String)],
         )
         .activa(p.non_consuming),
     );
-    o.push(opcion(tr!("Quitar el atajo"), "", Que::Config(Cambio::QuitarPropio(donde))));
-    let mut sub = if p.key.is_empty() { tr!("Sin tecla").to_owned() } else { p.key.clone() };
+    o.push(opcion(
+        tr!("Quitar el atajo"),
+        "",
+        Que::Config(Cambio::QuitarPropio(donde)),
+    ));
+    let mut sub = if p.key.is_empty() {
+        tr!("Sin tecla").to_owned()
+    } else {
+        p.key.clone()
+    };
     if p.app.is_empty() {
         sub.push_str(tr!(" · comando"));
     } else if p.new_window {
         sub.push_str(tr!(" · otra ventana"));
     }
-    ajuste(&format!("{prefijo}{}", nombre_propio(p, apps)), &sub, Control::Lista(o))
+    ajuste(
+        &format!("{prefijo}{}", nombre_propio(p, apps)),
+        &sub,
+        Control::Lista(o),
+    )
 }
 
 /// «Nuevo atajo para una app» y «… con un comando», sueltos o para un modo.
@@ -202,7 +264,11 @@ fn nuevos(modo: Option<usize>, apps: &[(String, String)], prefijo: &str) -> [Fil
         ajuste(
             &format!("{prefijo}{}", tr!("Nuevo atajo para una app")),
             tr!("la abre, o va a su ventana si ya está abierta"),
-            Control::Lista(apps.iter().map(|(id, n)| opcion(n, "", nuevo(id))).collect()),
+            Control::Lista(
+                apps.iter()
+                    .map(|(id, n)| opcion(n, "", nuevo(id)))
+                    .collect(),
+            ),
         ),
         ajuste(
             &format!("{prefijo}{}", tr!("Nuevo atajo con un comando")),
@@ -229,16 +295,36 @@ fn propios_usuario(c: &Atajos, apps: &[(String, String)]) -> Vec<Fila> {
 
 fn fila_modo(m: usize, modo: &Modo) -> Fila {
     let id = format!("{MODO}{m}");
-    let mut o = vec![opcion(tr!("Cambiar la tecla…"), "", Que::GrabarTecla(id.clone()))];
+    let mut o = vec![opcion(
+        tr!("Cambiar la tecla…"),
+        "",
+        Que::GrabarTecla(id.clone()),
+    )];
     if !modo.key.is_empty() {
-        o.push(opcion(tr!("Sin tecla"), "", Que::Config(Cambio::Teclas(vec![(id, String::new())]))));
+        o.push(opcion(
+            tr!("Sin tecla"),
+            "",
+            Que::Config(Cambio::Teclas(vec![(id, String::new())])),
+        ));
     }
     o.push(
-        opcion(tr!("Salir después de cada atajo"), "", Que::Config(Cambio::ModoUnaVez(m, !modo.once)))
-            .activa(modo.once),
+        opcion(
+            tr!("Salir después de cada atajo"),
+            "",
+            Que::Config(Cambio::ModoUnaVez(m, !modo.once)),
+        )
+        .activa(modo.once),
     );
-    o.push(opcion(tr!("Quitar el modo"), "", Que::Config(Cambio::QuitarModo(m))));
-    let tecla = if modo.key.is_empty() { tr!("Sin tecla").to_owned() } else { modo.key.clone() };
+    o.push(opcion(
+        tr!("Quitar el modo"),
+        "",
+        Que::Config(Cambio::QuitarModo(m)),
+    ));
+    let tecla = if modo.key.is_empty() {
+        tr!("Sin tecla").to_owned()
+    } else {
+        modo.key.clone()
+    };
     let sale = if modo.once {
         tr!("sale después de un atajo o con Escape")
     } else {
@@ -327,12 +413,16 @@ pub fn pagina(
                     },
                 ));
             }
-            v.extend(juntar_series(g).into_iter().map(|(d, teclas)| Fila::Ajuste {
-                titulo: d,
-                sub: teclas.join("  ·  "),
-                control: Control::Nada,
-                nota: String::new(),
-            }));
+            v.extend(
+                juntar_series(g)
+                    .into_iter()
+                    .map(|(d, teclas)| Fila::Ajuste {
+                        titulo: d,
+                        sub: teclas.join("  ·  "),
+                        control: Control::Nada,
+                        nota: String::new(),
+                    }),
+            );
             if v.is_empty() {
                 v.push(ajuste("Ninguno", "", Control::Nada));
             }
@@ -369,7 +459,13 @@ bind(mod .. " + Z", x, { desc = "Zeta" })
     }
 
     fn solo_lectura(f: &Fila) -> bool {
-        matches!(f, Fila::Ajuste { control: Control::Nada, .. })
+        matches!(
+            f,
+            Fila::Ajuste {
+                control: Control::Nada,
+                ..
+            }
+        )
     }
 
     #[test]
@@ -402,7 +498,10 @@ bind(mod .. " + Z", x, { desc = "Zeta" })
                 })
                 .collect()
         };
-        assert_eq!(filas(0), [("Lanzador de prueba".into(), "SUPER + space".into())]);
+        assert_eq!(
+            filas(0),
+            [("Lanzador de prueba".into(), "SUPER + space".into())]
+        );
         assert_eq!(
             filas(2),
             [
@@ -416,7 +515,10 @@ bind(mod .. " + Z", x, { desc = "Zeta" })
                 .flat_map(|n| {
                     [
                         atajo(&format!("Workspace {n}"), &format!("SUPER + {n}")),
-                        atajo(&format!("Mover a workspace {n}"), &format!("SUPER + CTRL + {n}")),
+                        atajo(
+                            &format!("Mover a workspace {n}"),
+                            &format!("SUPER + CTRL + {n}"),
+                        ),
                     ]
                 })
                 .chain([atajo("Workspace de juegos", "SUPER + 0")])
@@ -466,9 +568,12 @@ bind(mod .. " + Z", x, { desc = "Zeta" })
             p[s].filas
                 .iter()
                 .find_map(|f| match f {
-                    Fila::Ajuste { titulo, sub, control: Control::Lista(o), .. } if titulo == t => {
-                        Some((sub.clone(), o.clone()))
-                    }
+                    Fila::Ajuste {
+                        titulo,
+                        sub,
+                        control: Control::Lista(o),
+                        ..
+                    } if titulo == t => Some((sub.clone(), o.clone())),
                     _ => None,
                 })
                 .unwrap_or_else(|| panic!("falta {t}"))
@@ -477,11 +582,21 @@ bind(mod .. " + Z", x, { desc = "Zeta" })
         // Una sola fila de Launcher, la editable, con la vuelta a la de siempre.
         let (sub, o) = fila(0, "Launcher");
         assert_eq!(sub, "SUPER + K");
-        assert_eq!(titulos(&o), ["Cambiar la tecla…", "Sin tecla", "La de siempre: SUPER + space"]);
+        assert_eq!(
+            titulos(&o),
+            [
+                "Cambiar la tecla…",
+                "Sin tecla",
+                "La de siempre: SUPER + space"
+            ]
+        );
         assert_eq!(o[0].que, Que::GrabarTecla("launcher".into()));
         assert_eq!(
             o[2].que,
-            Que::Config(Cambio::Teclas(vec![("launcher".into(), "SUPER + space".into())]))
+            Que::Config(Cambio::Teclas(vec![(
+                "launcher".into(),
+                "SUPER + space".into()
+            )]))
         );
         // Sin tecla por defecto: solo grabar una.
         let (sub, o) = fila(0, "Atajos de teclado");
@@ -490,10 +605,22 @@ bind(mod .. " + Z", x, { desc = "Zeta" })
         // El lienzo, con las ventanas; la casilla de las multimedia, con las suyas.
         let (_, o) = fila(2, "Lienzo de ventanas");
         assert_eq!(titulos(&o), ["Cambiar la tecla…", "Sin tecla"]);
-        assert!(p[3].filas.iter().any(|f| matches!(f, Fila::Ajuste {
-            control: Control::Casilla { activa: false, que: Que::Config(Cambio::Multimedia(true)) },
-            ..
-        })));
-        assert_eq!(p[0].filas.iter().filter(|f| matches!(f, Fila::Ajuste { titulo, .. } if titulo == "Launcher")).count(), 1);
+        assert!(p[3].filas.iter().any(|f| matches!(
+            f,
+            Fila::Ajuste {
+                control: Control::Casilla {
+                    activa: false,
+                    que: Que::Config(Cambio::Multimedia(true))
+                },
+                ..
+            }
+        )));
+        assert_eq!(
+            p[0].filas
+                .iter()
+                .filter(|f| matches!(f, Fila::Ajuste { titulo, .. } if titulo == "Launcher"))
+                .count(),
+            1
+        );
     }
 }

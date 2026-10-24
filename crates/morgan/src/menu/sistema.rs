@@ -1,4 +1,3 @@
-
 use super::arbol::{Cambio, Control, Fila, Opcion, Que, Seccion, ajuste, opcion};
 use crate::config::Capturas;
 
@@ -130,15 +129,27 @@ fn filas_capturas(c: &Capturas, imagenes: &str) -> Vec<Fila> {
         Que::Config(Cambio::Capturas(n))
     };
     let destinos = [
-        ("Imágenes › Screenshots", !c.portapapeles && c.carpeta.is_empty(), con(&|n| {
-            n.portapapeles = false;
-            n.carpeta = String::new();
-        })),
-        ("Imágenes", !c.portapapeles && c.carpeta == imagenes, con(&|n| {
-            n.portapapeles = false;
-            n.carpeta = imagenes.to_owned();
-        })),
-        ("Solo al portapapeles, sin archivo", c.portapapeles, con(&|n| n.portapapeles = true)),
+        (
+            "Imágenes › Screenshots",
+            !c.portapapeles && c.carpeta.is_empty(),
+            con(&|n| {
+                n.portapapeles = false;
+                n.carpeta = String::new();
+            }),
+        ),
+        (
+            "Imágenes",
+            !c.portapapeles && c.carpeta == imagenes,
+            con(&|n| {
+                n.portapapeles = false;
+                n.carpeta = imagenes.to_owned();
+            }),
+        ),
+        (
+            "Solo al portapapeles, sin archivo",
+            c.portapapeles,
+            con(&|n| n.portapapeles = true),
+        ),
     ];
     let puesto = destinos
         .iter()
@@ -208,11 +219,18 @@ pub fn snapshots(csv: Option<&str>) -> Vec<Fila> {
                 (false, true) => format!("{desc} · después"),
                 (false, false) => desc.to_owned(),
             };
-            Some((n, ajuste(&titulo, &format!("nº {n} · {fecha}"), Control::Nada)))
+            Some((
+                n,
+                ajuste(&titulo, &format!("nº {n} · {fecha}"), Control::Nada),
+            ))
         })
         .collect();
     if v.is_empty() {
-        return vec![ajuste("Ninguno", "snapper no tiene snapshots", Control::Nada)];
+        return vec![ajuste(
+            "Ninguno",
+            "snapper no tiene snapshots",
+            Control::Nada,
+        )];
     }
     v.sort_by_key(|x| std::cmp::Reverse(x.0));
     v.into_iter().take(SNAPSHOTS).map(|(_, f)| f).collect()
@@ -389,7 +407,10 @@ mod tests {
         assert_eq!(encendida("185.2 1.0"), "3 min");
         assert_eq!(encendida("7500 1"), "2 h 5 min");
         assert_eq!(encendida("200000 1"), "2 d 7 h");
-        assert_eq!(equipo(&[("Kernel", "7.2".into()), ("Vacío", String::new())]).len(), 1);
+        assert_eq!(
+            equipo(&[("Kernel", "7.2".into()), ("Vacío", String::new())]).len(),
+            1
+        );
     }
 
     #[test]
@@ -407,15 +428,23 @@ mod tests {
         };
         let v = destinos(&c);
         assert!(v[0].activa && !v[1].activa && !v[2].activa);
-        let Que::Config(Cambio::Capturas(n)) = &v[1].que else { panic!() };
+        let Que::Config(Cambio::Capturas(n)) = &v[1].que else {
+            panic!()
+        };
         assert_eq!(n.carpeta, img);
-        let Que::Config(Cambio::Capturas(n)) = &v[2].que else { panic!() };
+        let Que::Config(Cambio::Capturas(n)) = &v[2].que else {
+            panic!()
+        };
         assert!(n.portapapeles);
         c = n.clone();
         assert!(destinos(&c)[2].activa);
         // La casilla de congelar no toca el destino.
         let Fila::Ajuste {
-            control: Control::Casilla { activa, que: Que::Config(Cambio::Capturas(n)) },
+            control:
+                Control::Casilla {
+                    activa,
+                    que: Que::Config(Cambio::Capturas(n)),
+                },
             ..
         } = &filas_capturas(&c, img)[0]
         else {
@@ -437,12 +466,23 @@ mod tests {
         assert_eq!(
             f,
             [
-                ("Sin descripción".into(), "nº 13 · 2026-10-08 15:21:00".into()),
-                ("pacman -S foo, bar · después".into(), "nº 12 · 2026-10-07 21:40:01".into()),
-                ("pacman -S foo, bar".into(), "nº 11 · 2026-10-07 21:39:58".into()),
+                (
+                    "Sin descripción".into(),
+                    "nº 13 · 2026-10-08 15:21:00".into()
+                ),
+                (
+                    "pacman -S foo, bar · después".into(),
+                    "nº 12 · 2026-10-07 21:40:01".into()
+                ),
+                (
+                    "pacman -S foo, bar".into(),
+                    "nº 11 · 2026-10-07 21:39:58".into()
+                ),
             ]
         );
         assert_eq!(campos_csv(r#"1,"di ""hola""","#), ["1", r#"di "hola""#, ""]);
-        assert!(matches!(&snapshots(None)[0], Fila::Ajuste { titulo, .. } if titulo.starts_with("Sin permiso")));
+        assert!(
+            matches!(&snapshots(None)[0], Fila::Ajuste { titulo, .. } if titulo.starts_with("Sin permiso"))
+        );
     }
 }

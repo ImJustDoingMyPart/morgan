@@ -354,7 +354,12 @@ impl Ui {
                 }
             }
             // El menú de la bandeja responde por su cuenta (`menu.rs`).
-            Objetivo::Slider(_) | Objetivo::Fila(_) => {}
+            Objetivo::Slider(_)
+            | Objetivo::Fila(_)
+            | Objetivo::Indice(_)
+            | Objetivo::Ajuste(_)
+            | Objetivo::OpcionAjuste(_)
+            | Objetivo::Pantalla(_) => {}
             Objetivo::Cuota(i) => {
                 let abrir = self.cuota != Some(i);
                 let d = crate::animaciones::dur(super::DESPLIEGUE);

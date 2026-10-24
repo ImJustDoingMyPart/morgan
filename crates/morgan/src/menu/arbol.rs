@@ -1,7 +1,7 @@
 //! Lo que el menú marca como activo sale siempre de lo que se lee o de la configuración ya
 //! releída, nunca del click.
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use super::cursores::Muestra;
 use crate::config::Config;
@@ -91,15 +91,34 @@ impl Categoria {
                 tr_const!("Reglas por app"),
             ],
             Categoria::Atajos => super::atajos::secciones(),
-            Categoria::Aplicaciones => &[tr_const!("Predeterminadas"), tr_const!("Autoarranque"), tr_const!("Capturas de pantalla")],
+            Categoria::Aplicaciones => &[
+                tr_const!("Predeterminadas"),
+                tr_const!("Autoarranque"),
+                tr_const!("Capturas de pantalla"),
+            ],
             // Snapshots, solo con snapper instalado.
-            Categoria::Sistema if super::sistema::hay_snapper() => {
-                &[tr_const!("Equipo"), tr_const!("Snapshots"), tr_const!("Privacidad")]
-            }
+            Categoria::Sistema if super::sistema::hay_snapper() => &[
+                tr_const!("Equipo"),
+                tr_const!("Snapshots"),
+                tr_const!("Privacidad"),
+            ],
             Categoria::Sistema => &[tr_const!("Equipo"), tr_const!("Privacidad")],
-            Categoria::Sonido => &[tr_const!("Volumen"), tr_const!("Salidas"), tr_const!("Tema"), tr_const!("Sonidos del sistema")],
-            Categoria::Pantalla => &[tr_const!("Monitores"), tr_const!("Luz nocturna"), tr_const!("Inactividad")],
-            Categoria::Notificaciones => &[tr_const!("Generales"), tr_const!("Modo juego"), tr_const!("Por app")],
+            Categoria::Sonido => &[
+                tr_const!("Volumen"),
+                tr_const!("Salidas"),
+                tr_const!("Tema"),
+                tr_const!("Sonidos del sistema"),
+            ],
+            Categoria::Pantalla => &[
+                tr_const!("Monitores"),
+                tr_const!("Luz nocturna"),
+                tr_const!("Inactividad"),
+            ],
+            Categoria::Notificaciones => &[
+                tr_const!("Generales"),
+                tr_const!("Modo juego"),
+                tr_const!("Por app"),
+            ],
         }
     }
 }
@@ -213,7 +232,10 @@ pub enum Donde {
 }
 
 impl Donde {
-    fn lista(self, a: &mut crate::config::Atajos) -> Option<(&mut Vec<crate::config::AtajoPropio>, usize)> {
+    fn lista(
+        self,
+        a: &mut crate::config::Atajos,
+    ) -> Option<(&mut Vec<crate::config::AtajoPropio>, usize)> {
         match self {
             Donde::Suelto(n) => Some((&mut a.propios, n)),
             Donde::EnModo(m, n) => Some((&mut a.modos.get_mut(m)?.binds, n)),
@@ -439,7 +461,7 @@ pub struct Opcion {
     pub activa: bool,
     pub que: Que,
     pub fuente: Option<String>,
-    pub cursor: Option<Rc<[Muestra]>>,
+    pub cursor: Option<Arc<[Muestra]>>,
 }
 
 pub fn opcion(titulo: &str, sub: &str, que: Que) -> Opcion {
@@ -462,14 +484,21 @@ impl Opcion {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Control {
-    Casilla { activa: bool, que: Que },
+    Casilla {
+        activa: bool,
+        que: Que,
+    },
     Lista(Vec<Opcion>),
     Boton(Que),
     /// El primer toque pide confirmar, el segundo lo hace.
     Confirmar(Que),
     /// El toque abre la caja del buscador debajo de la fila; Enter guarda lo escrito con
     /// [`Que::con_texto`], Escape lo deja.
-    Texto { valor: String, pista: String, que: Que },
+    Texto {
+        valor: String,
+        pista: String,
+        que: Que,
+    },
     Nada,
 }
 
@@ -526,15 +555,14 @@ pub fn armar(cat: Categoria, filas: Vec<Vec<Fila>>) -> Vec<Seccion> {
     cat.secciones()
         .iter()
         .zip(filas)
-        .map(|(t, filas)| Seccion { titulo: idioma::t(t), filas })
+        .map(|(t, filas)| Seccion {
+            titulo: idioma::t(t),
+            filas,
+        })
         .collect()
 }
 
-pub fn pagina_fija(
-    cat: Categoria,
-    c: &Config,
-    apps_historial: &[String],
-) -> Option<Vec<Seccion>> {
+pub fn pagina_fija(cat: Categoria, c: &Config, apps_historial: &[String]) -> Option<Vec<Seccion>> {
     let filas = match cat {
         Categoria::Apariencia
         | Categoria::Compositor
@@ -546,7 +574,10 @@ pub fn pagina_fija(
             vec![
                 ajuste(
                     tr!("Opacidad"),
-                    &trf!("fondo de las superficies · {}", porcentaje(c.shell.opacidad)),
+                    &trf!(
+                        "fondo de las superficies · {}",
+                        porcentaje(c.shell.opacidad)
+                    ),
                     Control::Lista(
                         OPACIDADES
                             .iter()
@@ -571,7 +602,10 @@ pub fn pagina_fija(
                     tr!("Calendario"),
                     &match crate::agenda::resumen_calendarios() {
                         Some(r) => trf!("los eventos del calendario · {}", r),
-                        None => tr!("sin calendario · los eventos de Google, Outlook o cualquier iCal").into(),
+                        None => {
+                            tr!("sin calendario · los eventos de Google, Outlook o cualquier iCal")
+                                .into()
+                        }
                     },
                     Control::Boton(Que::Calendario),
                 ),
@@ -608,31 +642,35 @@ pub fn pagina_fija(
             por_app(apps_historial, c),
         ],
         // Los monitores salen de Hyprland: los pone `lectura::monitores`.
-        Categoria::Pantalla => vec![Vec::new(), luz(c), vec![
-            ajuste(
-                tr!("Apagar pantallas"),
-                &trf!("sin actividad · {}", minutos(c.idle.apagar)),
-                Control::Lista(opciones_idle(c.idle.apagar, Cambio::Apagar)),
-            ),
-            ajuste(
-                tr!("Bloquear"),
-                &trf!("sin actividad · {}", minutos(c.idle.bloquear)),
-                Control::Lista(opciones_idle(c.idle.bloquear, Cambio::Bloquear)),
-            ),
-            ajuste(
-                tr!("Suspender"),
-                &trf!("sin actividad · {}", minutos(c.idle.suspender)),
-                Control::Lista(
-                    [0, 30, 60, 120]
-                        .iter()
-                        .map(|&m| {
-                            opcion(&minutos(m), "", Que::Config(Cambio::Suspender(m)))
-                                .activa(m == c.idle.suspender)
-                        })
-                        .collect(),
+        Categoria::Pantalla => vec![
+            Vec::new(),
+            luz(c),
+            vec![
+                ajuste(
+                    tr!("Apagar pantallas"),
+                    &trf!("sin actividad · {}", minutos(c.idle.apagar)),
+                    Control::Lista(opciones_idle(c.idle.apagar, Cambio::Apagar)),
                 ),
-            ),
-        ]],
+                ajuste(
+                    tr!("Bloquear"),
+                    &trf!("sin actividad · {}", minutos(c.idle.bloquear)),
+                    Control::Lista(opciones_idle(c.idle.bloquear, Cambio::Bloquear)),
+                ),
+                ajuste(
+                    tr!("Suspender"),
+                    &trf!("sin actividad · {}", minutos(c.idle.suspender)),
+                    Control::Lista(
+                        [0, 30, 60, 120]
+                            .iter()
+                            .map(|&m| {
+                                opcion(&minutos(m), "", Que::Config(Cambio::Suspender(m)))
+                                    .activa(m == c.idle.suspender)
+                            })
+                            .collect(),
+                    ),
+                ),
+            ],
+        ],
     };
     Some(armar(cat, filas))
 }
@@ -650,7 +688,7 @@ fn juego(c: &Config) -> Vec<Fila> {
     )]
 }
 
-pub type MuestrasCursor = std::collections::HashMap<String, Rc<[Muestra]>>;
+pub type MuestrasCursor = std::collections::HashMap<String, Arc<[Muestra]>>;
 
 #[derive(Debug, Default)]
 pub struct Lecturas {
@@ -684,7 +722,12 @@ pub fn apariencia(l: &Lecturas, c: &Config) -> Vec<Seccion> {
             } else {
                 tr!("curado")
             };
-            opcion(&bonito(n), sub, aplicar(&["morganctl", "theme", "apply", n])).activa(*n == l.tema_activo)
+            opcion(
+                &bonito(n),
+                sub,
+                aplicar(&["morganctl", "theme", "apply", n]),
+            )
+            .activa(*n == l.tema_activo)
         })
         .collect();
 
@@ -723,8 +766,8 @@ pub fn apariencia(l: &Lecturas, c: &Config) -> Vec<Seccion> {
     ];
 
     use crate::apariencia::{Ambito, Cambio as Ap};
-    let fuentes = |ambito: Ambito, activa: &str, lista: &[(String, String)], titulo: &str| {
-        Fila::Galeria {
+    let fuentes =
+        |ambito: Ambito, activa: &str, lista: &[(String, String)], titulo: &str| Fila::Galeria {
             titulo: Some(titulo.into()),
             opciones: lista
                 .iter()
@@ -735,8 +778,7 @@ pub fn apariencia(l: &Lecturas, c: &Config) -> Vec<Seccion> {
                     o
                 })
                 .collect(),
-        }
-    };
+        };
 
     let iconos: Vec<Opcion> = l
         .iconos
@@ -755,8 +797,12 @@ pub fn apariencia(l: &Lecturas, c: &Config) -> Vec<Seccion> {
         .cursores
         .iter()
         .map(|n| {
-            opcion(&bonito(n), n, Que::Apariencia(Ap::Cursor(n.clone(), tamano)))
-                .activa(n == cursor)
+            opcion(
+                &bonito(n),
+                n,
+                Que::Apariencia(Ap::Cursor(n.clone(), tamano)),
+            )
+            .activa(n == cursor)
         })
         .collect();
     for (o, n) in cursores.iter_mut().zip(&l.cursores) {
@@ -767,16 +813,24 @@ pub fn apariencia(l: &Lecturas, c: &Config) -> Vec<Seccion> {
     let animaciones = crate::animaciones::COMPOSICIONES
         .iter()
         .map(|a| {
-            opcion(idioma::t(a.nombre), idioma::t(a.descripcion), Que::Config(Cambio::Animacion(a.id.into())))
-                .activa(a.id == animacion)
+            opcion(
+                idioma::t(a.nombre),
+                idioma::t(a.descripcion),
+                Que::Config(Cambio::Animacion(a.id.into())),
+            )
+            .activa(a.id == animacion)
         })
         .collect();
     let velocidad = crate::animaciones::velocidad(&c.apariencia.velocidad).id;
     let velocidades = crate::animaciones::VELOCIDADES
         .iter()
         .map(|v| {
-            opcion(idioma::t(v.nombre), idioma::t(v.descripcion), Que::Config(Cambio::Velocidad(v.id.into())))
-                .activa(v.id == velocidad)
+            opcion(
+                idioma::t(v.nombre),
+                idioma::t(v.descripcion),
+                Que::Config(Cambio::Velocidad(v.id.into())),
+            )
+            .activa(v.id == velocidad)
         })
         .collect();
     let sombras_ = crate::hypr_cfg::SOMBRAS;
@@ -787,7 +841,12 @@ pub fn apariencia(l: &Lecturas, c: &Config) -> Vec<Seccion> {
     let sombras = sombras_
         .iter()
         .map(|(id, nombre, desc, _)| {
-            opcion(idioma::t(nombre), idioma::t(desc), Que::Config(Cambio::Sombra((*id).into()))).activa(*id == sombra)
+            opcion(
+                idioma::t(nombre),
+                idioma::t(desc),
+                Que::Config(Cambio::Sombra((*id).into())),
+            )
+            .activa(*id == sombra)
         })
         .collect();
 
@@ -951,7 +1010,11 @@ fn bloqueo(b: &Bloqueo) -> Vec<Fila> {
             tr_const!("Símbolos"),
             tr_const!("cada carácter se revuelve y queda en un glifo"),
         ),
-        (Escritura::Fijo, tr_const!("Fijo"), tr_const!("un glifo por carácter, sin animar")),
+        (
+            Escritura::Fijo,
+            tr_const!("Fijo"),
+            tr_const!("un glifo por carácter, sin animar"),
+        ),
     ];
     const VERIFICAR: [(Verificar, &str, &str); 4] = [
         (
@@ -959,8 +1022,16 @@ fn bloqueo(b: &Bloqueo) -> Vec<Fila> {
             tr_const!("Anillo girando"),
             tr_const!("dos tramos de luz por el borde"),
         ),
-        (Verificar::Latido, tr_const!("Latido"), tr_const!("lo tipeado queda latiendo")),
-        (Verificar::Ambos, tr_const!("Los dos"), tr_const!("el giro y el latido")),
+        (
+            Verificar::Latido,
+            tr_const!("Latido"),
+            tr_const!("lo tipeado queda latiendo"),
+        ),
+        (
+            Verificar::Ambos,
+            tr_const!("Los dos"),
+            tr_const!("el giro y el latido"),
+        ),
         (
             Verificar::Borde,
             tr_const!("Solo el borde"),
@@ -973,12 +1044,16 @@ fn bloqueo(b: &Bloqueo) -> Vec<Fila> {
     vec![
         ajuste(
             tr!("Al escribir"),
-            &trf!("lo que se ve en el campo · {}", idioma::t(nombre(&ESCRITURAS, b.escritura)).to_lowercase()),
+            &trf!(
+                "lo que se ve en el campo · {}",
+                idioma::t(nombre(&ESCRITURAS, b.escritura)).to_lowercase()
+            ),
             Control::Lista(
                 ESCRITURAS
                     .iter()
                     .map(|&(v, t, s)| {
-                        opcion(idioma::t(t), idioma::t(s), con(CambioBloqueo::Escritura(v))).activa(v == b.escritura)
+                        opcion(idioma::t(t), idioma::t(s), con(CambioBloqueo::Escritura(v)))
+                            .activa(v == b.escritura)
                     })
                     .collect(),
             ),
@@ -991,12 +1066,16 @@ fn bloqueo(b: &Bloqueo) -> Vec<Fila> {
         ),
         ajuste(
             tr!("Mientras verifica"),
-            &trf!("lo que se mueve hasta que responde la contraseña · {}", idioma::t(nombre(&VERIFICAR, b.verificar)).to_lowercase()),
+            &trf!(
+                "lo que se mueve hasta que responde la contraseña · {}",
+                idioma::t(nombre(&VERIFICAR, b.verificar)).to_lowercase()
+            ),
             Control::Lista(
                 VERIFICAR
                     .iter()
                     .map(|&(v, t, s)| {
-                        opcion(idioma::t(t), idioma::t(s), con(CambioBloqueo::Verificar(v))).activa(v == b.verificar)
+                        opcion(idioma::t(t), idioma::t(s), con(CambioBloqueo::Verificar(v)))
+                            .activa(v == b.verificar)
                     })
                     .collect(),
             ),
@@ -1123,7 +1202,10 @@ pub fn por_app(apps_historial: &[String], c: &Config) -> Vec<Fila> {
                 (ModoApp::Normal, tr!("flota y suena")),
                 (ModoApp::SinSonido, tr!("flota, sin sonido")),
                 (ModoApp::UnaSola, tr!("flota y suena · sin acumular")),
-                (ModoApp::Silenciada, tr!("silenciada · directo al historial")),
+                (
+                    ModoApp::Silenciada,
+                    tr!("silenciada · directo al historial"),
+                ),
             ];
             let sub = modos
                 .iter()
@@ -1276,7 +1358,9 @@ pub fn sonido(
         },
         ajuste(
             tr!("Escuchar"),
-            tr!("cada sonido de morgan con el tema puesto; lo que no trae propio, suena del Default"),
+            tr!(
+                "cada sonido de morgan con el tema puesto; lo que no trae propio, suena del Default"
+            ),
             Control::Lista(escuchar),
         ),
     ];
@@ -1363,7 +1447,11 @@ fn matugen(c: &Config) -> Vec<Fila> {
             otro => otro,
         }
     }
-    let modo = if m.modo == "light" { tr!("clara") } else { tr!("oscura") };
+    let modo = if m.modo == "light" {
+        tr!("clara")
+    } else {
+        tr!("oscura")
+    };
     let contraste = |v: f64| match v {
         v if v < -0.25 => tr!("bajo"),
         v if v > 0.75 => tr!("máximo"),
@@ -1373,7 +1461,10 @@ fn matugen(c: &Config) -> Vec<Fila> {
     vec![
         ajuste(
             tr!("Paleta de matugen"),
-            &trf!("{} · con el tema Matugen, se regenera al cambiar", nombre(&m.tipo)),
+            &trf!(
+                "{} · con el tema Matugen, se regenera al cambiar",
+                nombre(&m.tipo)
+            ),
             Control::Lista(
                 crate::config::TIPOS_MATUGEN
                     .iter()
@@ -1415,16 +1506,22 @@ fn matugen(c: &Config) -> Vec<Fila> {
 
 pub fn privacidad(portapapeles: usize, recientes: usize) -> Vec<Fila> {
     vec![
-            ajuste(
-                tr!("Borrar el historial del portapapeles"),
-                &trf!("{} guardadas por cliphist", plural(portapapeles, tr!("entrada"), tr!("entradas"))),
-                Control::Confirmar(Que::Aplicar(vec!["cliphist".into(), "wipe".into()])),
+        ajuste(
+            tr!("Borrar el historial del portapapeles"),
+            &trf!(
+                "{} guardadas por cliphist",
+                plural(portapapeles, tr!("entrada"), tr!("entradas"))
             ),
-            ajuste(
-                tr!("Borrar la lista de archivos recientes"),
-                &trf!("{} en la lista que comparten las apps GTK", plural(recientes, tr!("archivo"), tr!("archivos"))),
-                Control::Confirmar(Que::BorrarRecientes),
+            Control::Confirmar(Que::Aplicar(vec!["cliphist".into(), "wipe".into()])),
+        ),
+        ajuste(
+            tr!("Borrar la lista de archivos recientes"),
+            &trf!(
+                "{} en la lista que comparten las apps GTK",
+                plural(recientes, tr!("archivo"), tr!("archivos"))
             ),
+            Control::Confirmar(Que::BorrarRecientes),
+        ),
     ]
 }
 
@@ -1534,8 +1631,11 @@ mod tests {
                 }
                 (Some(p), _) => p,
                 (None, Categoria::Compositor) => {
-                    let mut p =
-                        super::super::compositor::pagina(&Default::default(), &Default::default(), &[]);
+                    let mut p = super::super::compositor::pagina(
+                        &Default::default(),
+                        &Default::default(),
+                        &[],
+                    );
                     p.push(super::super::reglas::seccion(&[], &[]));
                     p
                 }
@@ -1548,7 +1648,8 @@ mod tests {
                 ),
                 (None, Categoria::Sonido) => sonido(&c, &[tema_prueba("ocean", 7)], "ocean", &[]),
                 (None, Categoria::Sistema) => {
-                    let mut filas = vec![super::super::sistema::equipo(&[("Kernel", "7.2".into())])];
+                    let mut filas =
+                        vec![super::super::sistema::equipo(&[("Kernel", "7.2".into())])];
                     if super::super::sistema::hay_snapper() {
                         filas.push(super::super::sistema::snapshots(None));
                     }
@@ -1638,7 +1739,8 @@ mod tests {
     #[test]
     fn resumen_alterna() {
         let mut c = Config::default();
-        let casilla = |c: &Config| match &pagina_fija(Categoria::Notificaciones, c, &[]).unwrap()[1].filas[0]
+        let casilla = |c: &Config| match &pagina_fija(Categoria::Notificaciones, c, &[]).unwrap()[1]
+            .filas[0]
         {
             Fila::Ajuste {
                 control: Control::Casilla { activa, que },
@@ -1727,17 +1829,27 @@ mod tests {
         let v = casillas(&c);
         assert_eq!(v.len(), 2);
         assert!(v.iter().all(|(_, activa, _)| *activa));
-        let Que::Config(ocultar) = &v[1].2 else { panic!() };
+        let Que::Config(ocultar) = &v[1].2 else {
+            panic!()
+        };
         ocultar.aplicar(&mut c);
         assert_eq!(c.sonido.ocultas, ["alsa_output.hdmi"]);
         // Desconectada, sigue en la lista para poder volver a mostrarla.
         c.sonido.ocultas.push("alsa_output.vieja".into());
         let v = casillas(&c);
         assert_eq!(
-            v.iter().map(|(t, a, _)| (t.as_str(), *a)).collect::<Vec<_>>(),
-            [("Auriculares", true), ("HDMI", false), ("alsa_output.vieja", false)]
+            v.iter()
+                .map(|(t, a, _)| (t.as_str(), *a))
+                .collect::<Vec<_>>(),
+            [
+                ("Auriculares", true),
+                ("HDMI", false),
+                ("alsa_output.vieja", false)
+            ]
         );
-        let Que::Config(mostrar) = &v[1].2 else { panic!() };
+        let Que::Config(mostrar) = &v[1].2 else {
+            panic!()
+        };
         mostrar.aplicar(&mut c);
         assert_eq!(c.sonido.ocultas, ["alsa_output.vieja"]);
     }
@@ -1882,5 +1994,4 @@ mod tests {
         assert_eq!(bonito("diablo-1"), "Diablo 1");
         assert_eq!(bonito("gruvbox-dark_medium"), "Gruvbox Dark Medium");
     }
-
 }

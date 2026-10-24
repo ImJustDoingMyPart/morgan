@@ -191,7 +191,6 @@ fn main() -> ExitCode {
             fondos: fondos.clone(),
             ventanas: ventanas::Ventanas::new(app, hyprland.clone()),
             menu: Menu::new(
-                app,
                 menu::Servicios {
                     config: config.clone(),
                     ruta_config: config_path.clone(),

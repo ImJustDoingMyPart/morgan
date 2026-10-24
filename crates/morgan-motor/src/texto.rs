@@ -51,11 +51,23 @@ impl Textos {
         peso: f32,
         escala: f32,
     ) -> Layout<u8> {
+        self.armar_en(partes, FAMILIA, px, peso, escala)
+    }
+
+    /// En otra familia (la galería de fuentes del menú, cada una en la suya).
+    pub fn armar_en(
+        &mut self,
+        partes: &[(&str, u8)],
+        familia: &str,
+        px: f32,
+        peso: f32,
+        escala: f32,
+    ) -> Layout<u8> {
         let texto: String = partes.iter().map(|(t, _)| *t).collect();
         let mut b = self
             .cx
             .ranged_builder(&mut self.fuentes, &texto, escala, true);
-        b.push_default(StyleProperty::FontFamily(FontFamily::from(FAMILIA)));
+        b.push_default(StyleProperty::FontFamily(FontFamily::from(familia)));
         b.push_default(StyleProperty::FontSize(px));
         b.push_default(StyleProperty::FontWeight(FontWeight::new(peso)));
         let mut desde = 0;
@@ -403,7 +415,22 @@ pub fn armar_recortado_con_peso(
     escala: f32,
     max: f32,
 ) -> Layout<u8> {
-    let l = t.armar_con_peso(&[(texto, rol)], px, peso, escala);
+    armar_recortado_en(t, texto, FAMILIA, rol, px, peso, escala, max)
+}
+
+/// `armar_recortado` en otra familia.
+#[allow(clippy::too_many_arguments)]
+pub fn armar_recortado_en(
+    t: &mut Textos,
+    texto: &str,
+    familia: &str,
+    rol: u8,
+    px: f32,
+    peso: f32,
+    escala: f32,
+    max: f32,
+) -> Layout<u8> {
+    let l = t.armar_en(&[(texto, rol)], familia, px, peso, escala);
     if l.width() <= max {
         return l;
     }
@@ -413,7 +440,7 @@ pub fn armar_recortado_con_peso(
     while lo < hi {
         let m = (lo + hi).div_ceil(2);
         let prueba = format!("{}…", &texto[..cortes[m]]);
-        if t.armar_con_peso(&[(&prueba, rol)], px, peso, escala)
+        if t.armar_en(&[(&prueba, rol)], familia, px, peso, escala)
             .width()
             <= max
         {
@@ -423,7 +450,7 @@ pub fn armar_recortado_con_peso(
         }
     }
     let corte = cortes.get(lo).copied().unwrap_or(0);
-    t.armar_con_peso(&[(&format!("{}…", &texto[..corte]), rol)], px, peso, escala)
+    t.armar_en(&[(&format!("{}…", &texto[..corte]), rol)], familia, px, peso, escala)
 }
 
 /// La caja de la tinta de `l` (lo que se dibuja de verdad), en sus coordenadas: x0, y0, x1,

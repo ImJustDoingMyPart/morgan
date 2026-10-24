@@ -122,7 +122,9 @@ impl Cambios {
         }
         let mut out = String::new();
         if !self.0.is_empty() {
-            out.push_str("\n-- Compositor (menú › Escritorio; lo guardado está en morgan/hyprland.toml).\n");
+            out.push_str(
+                "\n-- Compositor (menú › Escritorio; lo guardado está en morgan/hyprland.toml).\n",
+            );
             out.push_str("hl.config({\n");
             escribir(&raiz, 1, &mut out);
             out.push_str("})\n");
@@ -657,7 +659,10 @@ mod tests {
         assert_eq!(m.len(), 2);
         assert_eq!(m["input:touchpad:tap-to-click"], Valor::Bool(true));
         assert_eq!(m["cursor:inactive_timeout"], Valor::Float(0.0));
-        assert_eq!(pedido_batch().matches("j/getoption ").count(), claves().count());
+        assert_eq!(
+            pedido_batch().matches("j/getoption ").count(),
+            claves().count()
+        );
     }
 
     #[test]

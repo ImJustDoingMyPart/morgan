@@ -130,31 +130,48 @@ fn fila(n: usize, r: &ReglaApp, nombre: &str) -> Fila {
     if r.flotante {
         for t in TAMANOS {
             o.push(
-                opcion(&trf!("Tamaño: {}", texto_tamano(t)), "", cambio(Campo::Tamano(t)))
-                    .activa(r.tamano == t),
+                opcion(
+                    &trf!("Tamaño: {}", texto_tamano(t)),
+                    "",
+                    cambio(Campo::Tamano(t)),
+                )
+                .activa(r.tamano == t),
             );
         }
     }
     for op in OPACIDADES {
         o.push(
-            opcion(&trf!("Opacidad: {}", texto_opacidad(op)), "", cambio(Campo::Opacidad(op)))
-                .activa(r.opacidad == op),
+            opcion(
+                &trf!("Opacidad: {}", texto_opacidad(op)),
+                "",
+                cambio(Campo::Opacidad(op)),
+            )
+            .activa(r.opacidad == op),
         );
     }
     o.push(
-        opcion(tr!("Sin animación"), "", cambio(Campo::SinAnimacion(!r.sin_animacion)))
-            .activa(r.sin_animacion),
+        opcion(
+            tr!("Sin animación"),
+            "",
+            cambio(Campo::SinAnimacion(!r.sin_animacion)),
+        )
+        .activa(r.sin_animacion),
     );
-    o.push(opcion(tr!("Quitar la regla"), "", Que::Config(Cambio::QuitarRegla(n))));
+    o.push(opcion(
+        tr!("Quitar la regla"),
+        "",
+        Que::Config(Cambio::QuitarRegla(n)),
+    ));
     ajuste(nombre, &resumen(r), Control::Lista(o))
 }
 
 /// `apps`: id y nombre de las que muestra el launcher.
 pub fn filas(reglas: &[ReglaApp], apps: &[(String, String)]) -> Vec<Fila> {
     let nombre = |id: &str| {
-        apps.iter()
-            .find(|(i, _)| i == id)
-            .map_or_else(|| id.trim_end_matches(".desktop").to_owned(), |(_, n)| n.clone())
+        apps.iter().find(|(i, _)| i == id).map_or_else(
+            || id.trim_end_matches(".desktop").to_owned(),
+            |(_, n)| n.clone(),
+        )
     };
     let mut v: Vec<Fila> = reglas
         .iter()
@@ -216,7 +233,10 @@ mod tests {
             },
         ];
         let l = lua(&reglas, &app);
-        let lineas: Vec<&str> = l.lines().filter(|x| x.starts_with("hl.window_rule")).collect();
+        let lineas: Vec<&str> = l
+            .lines()
+            .filter(|x| x.starts_with("hl.window_rule"))
+            .collect();
         assert_eq!(
             lineas,
             [concat!(
@@ -237,7 +257,13 @@ mod tests {
         };
         assert!(!lua(std::slice::from_ref(&r), &app).contains("size"));
         let f = filas(&[r], &[("mpv.desktop".into(), "mpv".into())]);
-        let Fila::Ajuste { control: Control::Lista(o), .. } = &f[0] else { panic!() };
+        let Fila::Ajuste {
+            control: Control::Lista(o),
+            ..
+        } = &f[0]
+        else {
+            panic!()
+        };
         assert!(!o.iter().any(|o| o.titulo.starts_with("Tamaño")));
     }
 
@@ -253,7 +279,13 @@ mod tests {
         };
         let f = filas(&[r], &apps);
         assert_eq!(f.len(), 2);
-        let Fila::Ajuste { control: Control::Lista(o), .. } = &f[1] else { panic!() };
+        let Fila::Ajuste {
+            control: Control::Lista(o),
+            ..
+        } = &f[1]
+        else {
+            panic!()
+        };
         let n: Vec<_> = o.iter().map(|o| o.titulo.as_str()).collect();
         assert_eq!(n, ["kitty"]);
     }

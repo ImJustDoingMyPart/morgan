@@ -173,10 +173,19 @@ mod tests {
         let mut bgra = vec![0u8; 4 * 3 * 4];
         bgra[(4 + 1) * 4..(4 + 3) * 4].copy_from_slice(&[1, 2, 3, 255, 5, 6, 7, 128]);
         bgra[3] = 40; // sombra en (0,0): no cuenta
-        let m = recortar(Muestra { ancho: 4, alto: 3, bgra }).unwrap();
+        let m = recortar(Muestra {
+            ancho: 4,
+            alto: 3,
+            bgra,
+        })
+        .unwrap();
         assert_eq!((m.ancho, m.alto), (2, 1));
         assert_eq!(m.bgra, vec![1, 2, 3, 255, 5, 6, 7, 128]);
-        let vacia = Muestra { ancho: 2, alto: 2, bgra: vec![0; 16] };
+        let vacia = Muestra {
+            ancho: 2,
+            alto: 2,
+            bgra: vec![0; 16],
+        };
         assert_eq!(recortar(vacia), None);
     }
 
