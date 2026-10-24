@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
+use morgan_motor::vello::peniko::ImageData;
 
 pub fn imagen(display: &gdk::Display, icono: Option<&gio::Icon>, tamano: i32) -> gtk::Image {
     let imagen = match icono {
@@ -20,6 +21,33 @@ pub fn imagen(display: &gdk::Display, icono: Option<&gio::Icon>, tamano: i32) ->
     imagen.set_pixel_size(tamano);
     imagen
 }
+
+/// El de `imagen`, en píxeles para el motor propio: `tamano` lógicos a `escala`.
+pub fn pixeles(
+    display: &gdk::Display,
+    icono: Option<&gio::Icon>,
+    tamano: i32,
+    escala: i32,
+    pintor: &mut crate::pixeles::Pintor,
+) -> Option<ImageData> {
+    let lado = tamano * escala;
+    let Some(i) = icono else {
+        return pintor.icono("application-x-executable", tamano, escala, &BLANCO);
+    };
+    if let Some(png) = respaldo(display, i, tamano) {
+        return crate::pixeles::archivo(&png, lado);
+    }
+    let p = gtk::IconTheme::for_display(display).lookup_by_gicon(
+        i,
+        tamano,
+        escala,
+        gtk::TextDirection::None,
+        gtk::IconLookupFlags::empty(),
+    );
+    pintor.paintable(p.upcast_ref(), lado, &BLANCO)
+}
+
+const BLANCO: gdk::RGBA = gdk::RGBA::WHITE;
 
 fn respaldo(display: &gdk::Display, icono: &gio::Icon, tamano: i32) -> Option<PathBuf> {
     let nombres = icono.downcast_ref::<gio::ThemedIcon>()?.names();

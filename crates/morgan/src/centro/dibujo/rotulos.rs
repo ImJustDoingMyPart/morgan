@@ -17,6 +17,11 @@ enum Clave {
         /// Con «…» si no entra (en píxeles del buffer), o entero.
         max: Option<u32>,
     },
+    /// Tramos con su rol y su tamaño, con «…» si no entran.
+    Tramos {
+        partes: Vec<(String, u8, u32)>,
+        max: u32,
+    },
     Parrafo {
         markup: String,
         px: u32,
@@ -94,6 +99,20 @@ impl Rotulos {
         self.buscar(c, |t, e| {
             texto::armar_recortado_con_peso(t, s, 0, px, peso, e, max_b as f32)
         })
+    }
+
+    /// Una etiqueta con tramos de distinto rol y tamaño (lo resaltado de una búsqueda, el
+    /// genérico más chico), con «…» si no entra en `max` lógicos.
+    pub fn tramos(&mut self, partes: &[(&str, u8, f32)], max: f64) -> Rc<Layout<u8>> {
+        let max_b = (max * f64::from(self.escala)).max(0.0) as u32;
+        let c = Clave::Tramos {
+            partes: partes
+                .iter()
+                .map(|(s, r, px)| ((*s).to_owned(), *r, (px * 100.0) as u32))
+                .collect(),
+            max: max_b,
+        };
+        self.buscar(c, |t, e| t.armar_tramos_recortado(partes, e, max_b as f32))
     }
 
     /// El cuerpo de una notificación: markup seguro (`b`, `i`, `u`), en renglones de `ancho`

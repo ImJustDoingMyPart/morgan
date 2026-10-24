@@ -45,7 +45,6 @@ mod pliegue;
 mod privacidad;
 mod red;
 mod reproductor;
-mod riel;
 mod setup;
 mod sistema;
 mod sonidos;
@@ -188,7 +187,7 @@ fn main() -> ExitCode {
             luz: luz.clone(),
             brillo,
             centro: centro.clone(),
-            launcher: Launcher::new(app, &agenda),
+            launcher: Launcher::new(&centro, &agenda),
             fondos: fondos.clone(),
             ventanas: ventanas::Ventanas::new(app, hyprland.clone()),
             menu: Menu::new(
@@ -293,6 +292,7 @@ fn main() -> ExitCode {
             launcher::ParaElMenu::Calendario => m.abrir(NivelMenu::Clima),
         });
         servicios.menu.precalentar();
+        servicios.launcher.precalentar();
         let m = servicios.menu.clone();
         servicios
             .fondos

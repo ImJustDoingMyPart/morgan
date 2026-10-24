@@ -250,6 +250,70 @@ pub struct NodoMenu {
     pub hijos: Vec<Vec<NodoMenu>>,
 }
 
+/// El ícono de una fila del launcher: una imagen tal cual, o un simbólico que se pinta del
+/// color del texto.
+#[derive(Clone)]
+pub enum IconoFila {
+    Imagen(ImageData),
+    Simbolico(ImageData),
+}
+
+/// Qué pasa al elegir una fila del launcher.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TipoFila {
+    /// Se hace y el launcher se cierra (con el destello de la elegida).
+    Cierra,
+    /// Se hace con el launcher abierto (una carpeta de emoji, probar un calendario).
+    Queda,
+    /// Una fila que explica: no hace nada.
+    Nada,
+}
+
+#[derive(Clone)]
+pub struct FilaLauncher {
+    /// Sin ícono, el texto arranca donde iría (los símbolos, el portapapeles).
+    pub icono: Option<IconoFila>,
+    pub nombre: String,
+    pub generico: Option<String>,
+    /// Lo que coincide con lo escrito, en caracteres: del nombre y del genérico.
+    pub resaltes: Vec<(usize, usize)>,
+    pub resaltes_generico: Vec<(usize, usize)>,
+    pub tipo: TipoFila,
+    /// Una carpeta de emoji (la flecha a la derecha la abre).
+    pub carpeta: bool,
+}
+
+/// El turno de lo escrito en el launcher: la apertura (o el vaciado) que lo empezó, y cada
+/// cambio desde ahí.
+pub type Turno = (u64, u64);
+
+/// Lo que muestra el launcher para lo escrito.
+#[derive(Clone)]
+pub struct ListaLauncher {
+    /// El turno del texto al que responde (`EventoLauncher::Texto`): Enter espera a la lista
+    /// del texto que se ve.
+    pub texto: Turno,
+    /// Sube con cada lista: lo elegido se reconoce por ella.
+    pub version: u64,
+    pub filas: Vec<FilaLauncher>,
+    pub elegida: usize,
+    /// Adentro de una carpeta de emoji: Escape, ← y Retroceso con el campo vacío salen.
+    pub en_carpeta: bool,
+    /// El campo vuelve a vacío con este placeholder (al entrar o salir de una carpeta).
+    pub vaciar: Option<String>,
+}
+
+/// Lo que pide el launcher al hilo de GTK.
+#[derive(Debug)]
+pub enum EventoLauncher {
+    /// Lo escrito, con su turno.
+    Texto(Turno, String),
+    Elegido { version: u64, indice: usize },
+    SalirCarpeta,
+    /// Lo cerró el launcher mismo; con Escape (que desde el menú vuelve a él) o no.
+    Cerrado { escape: bool },
+}
+
 /// Lo que se tocó, para el hilo de GTK.
 #[derive(Debug)]
 pub enum Evento {
@@ -275,6 +339,7 @@ pub enum Evento {
     Elegido(i32),
     MenuCerrado,
     Toast(EventoToast),
+    Launcher(EventoLauncher),
 }
 
 /// Lo que se hizo en un toast. Salvo copiar, el toast se va.

@@ -50,6 +50,12 @@ pub fn degrade_horizontal(r: Rect, a: Color, b: Color) -> Gradient {
         .with_stops([pincel(&a), pincel(&b)].as_slice())
 }
 
+/// `linear-gradient(to bottom, a, b)` de CSS sobre `r`.
+pub fn degrade_vertical(r: Rect, a: Color, b: Color) -> Gradient {
+    Gradient::new_linear(Point::new(r.x0, r.y0), Point::new(r.x0, r.y1))
+        .with_stops([pincel(&a), pincel(&b)].as_slice())
+}
+
 /// Una imagen en `r` (lógicos, bajo `tr`), estirada a su tamaño.
 pub fn imagen(s: &mut Scene, tr: Affine, img: &ImageData, r: Rect, alfa: f32) {
     let (w, h) = (f64::from(img.width.max(1)), f64::from(img.height.max(1)));
@@ -133,25 +139,34 @@ pub fn panel(s: &mut Scene, tr: Affine, p: &Paleta, opacidad: f32, r: Rect, bord
         p.surface_container_low[3] * opacidad,
     );
     s.fill(Fill::NonZero, tr, pincel(&fondo), None, &adentro);
+    anillo(s, tr, r, RADIO, BORDE, p.primary, p.tertiary);
+}
+
+/// Un anillo de `ancho` adentro de `r` (un `border` de GTK), `a` arriba y a la izquierda, `b`
+/// abajo y a la derecha, partido en diagonal en las esquinas como lo parte GTK: el de los
+/// paneles y el destello de lo elegido en el launcher.
+pub fn anillo(s: &mut Scene, tr: Affine, r: Rect, radio: f64, ancho: f64, a: Color, b: Color) {
+    let rr = RoundedRect::from_rect(r, radio);
+    let adentro = RoundedRect::from_rect(r.inflate(-ancho, -ancho), (radio - ancho).max(0.0));
     let mut anillo = BezPath::new();
     anillo.extend(rr.path_elements(0.1));
     anillo.extend(adentro.path_elements(0.1));
-    // Arriba a la izquierda de la diagonal que une las esquinas de adentro: `primary`.
+    // Arriba a la izquierda de la diagonal que une las esquinas de adentro: `a`.
     let mut arriba = BezPath::new();
     arriba.move_to((r.x0, r.y0));
     arriba.line_to((r.x1, r.y0));
-    arriba.line_to((r.x1 - BORDE, r.y0 + BORDE));
-    arriba.line_to((r.x0 + BORDE, r.y1 - BORDE));
+    arriba.line_to((r.x1 - ancho, r.y0 + ancho));
+    arriba.line_to((r.x0 + ancho, r.y1 - ancho));
     arriba.line_to((r.x0, r.y1));
     arriba.close_path();
     let mut abajo = BezPath::new();
     abajo.move_to((r.x1, r.y0));
     abajo.line_to((r.x1, r.y1));
     abajo.line_to((r.x0, r.y1));
-    abajo.line_to((r.x0 + BORDE, r.y1 - BORDE));
-    abajo.line_to((r.x1 - BORDE, r.y0 + BORDE));
+    abajo.line_to((r.x0 + ancho, r.y1 - ancho));
+    abajo.line_to((r.x1 - ancho, r.y0 + ancho));
     abajo.close_path();
-    for (lado, c) in [(arriba, p.primary), (abajo, p.tertiary)] {
+    for (lado, c) in [(arriba, a), (abajo, b)] {
         s.push_clip_layer(Fill::NonZero, tr, &lado);
         s.fill(Fill::EvenOdd, tr, pincel(&c), None, &anillo);
         s.pop_layer();

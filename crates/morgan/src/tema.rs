@@ -199,8 +199,7 @@ fn recarga(event: FileMonitorEvent) -> bool {
 /// Con la sombra negra, lo de afuera del anillo de los paneles es el de
 /// `forma::Borde::Sombra` (una línea negra y una sombra suave) en vez del brillo de la hoja.
 const BORDE_SOMBRA: &str = "
-.control-center,
-.launcher {
+.control-center {
     box-shadow:
         0 0 0 1px black,
         0 0 6px 1px alpha(black, 0.5);

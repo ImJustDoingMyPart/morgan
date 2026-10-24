@@ -9,7 +9,7 @@ use morgan_motor::forma::{self, degrade_135, degrade_horizontal, sombra};
 use morgan_motor::parley::Layout;
 use morgan_motor::texto;
 use morgan_motor::vello::Scene;
-use morgan_motor::vello::kurbo::{Affine, Point, Rect, RoundedRect};
+use morgan_motor::vello::kurbo::{Affine, Point, Rect, RoundedRect, Shape};
 use morgan_motor::vello::peniko::{BlendMode, Fill, ImageData};
 
 pub enum Degrade {
@@ -18,6 +18,8 @@ pub enum Degrade {
     /// `linear-gradient(to right, …)` sobre `de`: los sliders y las barras, que muestran su
     /// tramo de un degradé más largo.
     Horizontal { de: Rect },
+    /// `linear-gradient(to bottom, …)` sobre `de`: el riel del launcher.
+    Vertical { de: Rect },
 }
 
 pub enum Trazo {
@@ -48,12 +50,35 @@ pub enum Trazo {
         spread: f64,
         blur: f64,
     },
+    /// `box-shadow` corrida en `d`, sin spread (los brillos del destello del launcher).
+    Brillo {
+        r: Rect,
+        radio: f64,
+        color: Color,
+        d: (f64, f64),
+        blur: f64,
+    },
+    /// Un anillo bicolor de `ancho` adentro de `r` (`forma::anillo`).
+    Anillo {
+        r: Rect,
+        radio: f64,
+        ancho: f64,
+        a: Color,
+        b: Color,
+    },
     /// Arriba a la izquierda en `(x, y)`.
     Texto {
         l: Rc<Layout<u8>>,
         x: f64,
         y: f64,
         color: Color,
+    },
+    /// Arriba a la izquierda en `(x, y)`, con un color por rol.
+    Tramos {
+        l: Rc<Layout<u8>>,
+        x: f64,
+        y: f64,
+        colores: Vec<Color>,
     },
     /// Centrado por su tinta en `c`.
     Glifo {
@@ -156,6 +181,7 @@ pub fn pintar(s: &mut Scene, trazos: &[Trazo], base: Affine, escala: f64) {
                 let g = match forma {
                     Degrade::Diagonal => degrade_135(*r, *a, *b),
                     Degrade::Horizontal { de } => degrade_horizontal(*de, *a, *b),
+                    Degrade::Vertical { de } => forma::degrade_vertical(*de, *a, *b),
                 };
                 s.fill(
                     Fill::NonZero,
@@ -191,6 +217,28 @@ pub fn pintar(s: &mut Scene, trazos: &[Trazo], base: Affine, escala: f64) {
                     sombra(s, actual, *r, *radio, *color, (0.0, 0.0), *spread, *blur);
                 }
             }
+            Trazo::Brillo {
+                r,
+                radio,
+                color,
+                d,
+                blur,
+            } => {
+                // Como el `box-shadow` de GTK: solo por fuera de la caja.
+                let mut afuera = morgan_motor::vello::kurbo::BezPath::new();
+                afuera.extend(r.inflate(2.0 * blur + 2.0, 2.0 * blur + 2.0).path_elements(0.1));
+                afuera.extend(RoundedRect::from_rect(*r, *radio).path_elements(0.1));
+                s.push_layer(Fill::EvenOdd, BlendMode::default(), 1.0, actual, &afuera);
+                sombra(s, actual, *r, *radio, *color, *d, 0.0, *blur);
+                s.pop_layer();
+            }
+            Trazo::Anillo {
+                r,
+                radio,
+                ancho,
+                a,
+                b,
+            } => forma::anillo(s, actual, *r, *radio, *ancho, *a, *b),
             Trazo::Texto { l, x, y, color } => {
                 let p = actual * Point::new(*x, *y);
                 let pos = Affine::translate((p.x.round(), p.y.round()));
@@ -198,6 +246,19 @@ pub fn pintar(s: &mut Scene, trazos: &[Trazo], base: Affine, escala: f64) {
                 // alrededor de su esquina.
                 let lineal = sin_traslacion(actual, escala);
                 texto::dibujar_en(s, l, pos * lineal, |_| *color, 1.0);
+            }
+            Trazo::Tramos { l, x, y, colores } => {
+                let p = actual * Point::new(*x, *y);
+                let pos = Affine::translate((p.x.round(), p.y.round()));
+                let lineal = sin_traslacion(actual, escala);
+                let transparente = [0.0; 4];
+                texto::dibujar_en(
+                    s,
+                    l,
+                    pos * lineal,
+                    |rol| *colores.get(usize::from(rol)).unwrap_or(&transparente),
+                    1.0,
+                );
             }
             Trazo::Glifo { l, c, color } => {
                 let p = actual * *c;

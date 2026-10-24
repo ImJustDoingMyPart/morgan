@@ -14,6 +14,7 @@
 mod armar;
 pub mod avisos;
 pub mod campo;
+pub mod launcher;
 pub mod menu;
 #[cfg(test)]
 mod prueba;

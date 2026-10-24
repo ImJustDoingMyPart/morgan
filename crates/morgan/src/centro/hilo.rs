@@ -43,13 +43,15 @@ use wayland_client::globals::registry_queue_init;
 use wayland_client::protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface};
 use wayland_client::{Connection, QueueHandle};
 
+use super::dibujo::launcher::{self, LauncherUi};
 use super::dibujo::menu::{MenuUi, Salida};
 use super::dibujo::toasts::{self, ToastsUi};
 use super::dibujo::toque::{IZQUIERDO, Pedido};
 use super::dibujo::{Objetivo, Ui};
 use super::ecualizador;
 use super::vista::{
-    Aviso, Contenido, Evento, Grupo, Iconos, ListaId, Menu, Nivel, Reproductor, Tarjeta,
+    Aviso, Contenido, Evento, EventoLauncher, Grupo, Iconos, ListaId, ListaLauncher, Menu, Nivel,
+    Reproductor, Tarjeta,
 };
 use crate::lamina::Lamina;
 
@@ -77,6 +79,13 @@ pub enum Orden {
     Menu(Option<Box<Menu>>),
     /// Los toasts que flotan, el más nuevo primero; sin ninguno, su capa se va.
     Toasts(Vec<Aviso>),
+    /// Abre el launcher (o cambia de modo), con su prompt.
+    LauncherAbrir {
+        prompt: String,
+        simbolos: bool,
+    },
+    LauncherLista(ListaLauncher),
+    LauncherCerrar,
 }
 
 /// Si no hay Wayland o la GPU no abre, el hilo termina: morgan sigue sin centro.
@@ -122,6 +131,13 @@ struct ToastsSup {
     inicio: Option<Instant>,
 }
 
+/// El launcher abierto: cubre la salida enfocada, para cerrar con un click afuera.
+struct LauncherSup {
+    lamina: Lamina,
+    capa: LayerSurface,
+    inicio: Option<Instant>,
+}
+
 /// cava corriendo, con el hilo que lee sus renglones.
 struct Cava {
     proceso: std::process::Child,
@@ -158,6 +174,8 @@ struct Hilo {
     menu: Option<MenuSup>,
     toasts: Option<ToastsSup>,
     toasts_ui: ToastsUi,
+    launcher: Option<LauncherSup>,
+    launcher_ui: LauncherUi,
     /// Abrir con la sesión desplegada espera a la primera hoja para enfocar.
     enfocar_al_armar: Option<Enfoque>,
     cava: Option<Cava>,
@@ -217,6 +235,8 @@ fn correr(
         menu: None,
         toasts: None,
         toasts_ui: ToastsUi::new(paleta, opacidad, borde),
+        launcher: None,
+        launcher_ui: LauncherUi::new(paleta, opacidad, borde),
         enfocar_al_armar: None,
         cava: None,
         reloj: None,
@@ -247,6 +267,9 @@ impl Hilo {
         if let Some(t) = &mut self.toasts {
             t.lamina.sucio = true;
         }
+        if let Some(l) = &mut self.launcher {
+            l.lamina.sucio = true;
+        }
     }
 
     fn orden(&mut self, o: Orden) {
@@ -259,6 +282,8 @@ impl Hilo {
                 }
                 let t = &mut self.toasts_ui;
                 (t.paleta, t.opacidad, t.borde) = (p, o, b);
+                let l = &mut self.launcher_ui;
+                (l.paleta, l.opacidad, l.borde) = (p, o, b);
             }
             Orden::Abrir { sesion } => self.abrir(sesion),
             Orden::Cerrar => self.cerrar(false),
@@ -298,6 +323,12 @@ impl Hilo {
                 }
             }
             Orden::Toasts(v) => self.poner_toasts(v),
+            Orden::LauncherAbrir { prompt, simbolos } => self.abrir_launcher(prompt, simbolos),
+            Orden::LauncherLista(l) => {
+                let pedidos = self.launcher_ui.poner_lista(l);
+                self.pedidos_launcher(pedidos);
+            }
+            Orden::LauncherCerrar => self.cerrar_launcher(),
         }
         self.ensuciar();
     }
@@ -334,6 +365,62 @@ impl Hilo {
             capa,
             inicio: None,
         });
+    }
+
+    fn abrir_launcher(&mut self, prompt: String, simbolos: bool) {
+        self.launcher_ui.abrir(prompt, simbolos);
+        if self.launcher.is_some() {
+            return;
+        }
+        let wl = self.compositor.create_surface(&self.qh);
+        let capa = self.capas.create_layer_surface(
+            &self.qh,
+            wl,
+            Layer::Overlay,
+            Some("morgan-launcher"),
+            None,
+        );
+        capa.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
+        capa.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        capa.commit();
+        self.launcher = Some(LauncherSup {
+            lamina: Lamina::new((0, 0)),
+            capa,
+            inicio: None,
+        });
+    }
+
+    fn cerrar_launcher(&mut self) {
+        if self.launcher.take().is_none() {
+            return;
+        }
+        self.launcher_ui.cerrar();
+        if self.panel.is_none()
+            && let Some((_, t)) = self.parpadeo.take()
+        {
+            self.bucle.remove(t);
+        }
+    }
+
+    fn pedidos_launcher(&mut self, pedidos: Vec<launcher::Pedido>) {
+        for p in pedidos {
+            match p {
+                launcher::Pedido::Gtk(e) => {
+                    let cierra = matches!(e, EventoLauncher::Cerrado { .. });
+                    self.avisar(Evento::Launcher(e));
+                    if cierra {
+                        self.cerrar_launcher();
+                    }
+                }
+                launcher::Pedido::Pegar => self.pegar(|h, t| {
+                    let pedidos = h.launcher_ui.pegar(t);
+                    h.pedidos_launcher(pedidos);
+                }),
+            }
+        }
+        if let Some(l) = &mut self.launcher {
+            l.lamina.sucio = true;
+        }
     }
 
     fn abrir_menu(&mut self, m: Menu) {
@@ -448,14 +535,14 @@ impl Hilo {
             match p {
                 Pedido::Gtk(e) => self.avisar(e),
                 Pedido::Cerrar => self.cerrar(true),
-                Pedido::Pegar(l) => self.pegar(l),
+                Pedido::Pegar(l) => self.pegar(move |h, t| h.ui.pegar(l, t)),
             }
         }
         self.ensuciar();
     }
 
     /// Lo que hay en el portapapeles, con `wl-paste` (sin esperar: lo trae un hilo).
-    fn pegar(&mut self, l: ListaId) {
+    fn pegar(&mut self, al_llegar: impl Fn(&mut Hilo, &str) + 'static) {
         let (tx, rx) = channel::channel::<String>();
         let leido = std::thread::Builder::new()
             .name("morgan-pegar".into())
@@ -475,7 +562,7 @@ impl Hilo {
         }
         let _ = self.bucle.insert_source(rx, move |ev, _, h| {
             if let channel::Event::Msg(t) = ev {
-                h.ui.pegar(l, &t);
+                al_llegar(h, &t);
                 h.ensuciar();
             }
         });
@@ -519,7 +606,11 @@ impl Hilo {
 
     /// El cursor del campo con el foco parpadea: se despierta en cada cambio.
     fn programar_parpadeo(&mut self, ahora: Instant) {
-        let proximo = self.ui.proximo_parpadeo(ahora);
+        let proximo = if self.launcher.is_some() {
+            self.launcher_ui.proximo_parpadeo(ahora)
+        } else {
+            self.ui.proximo_parpadeo(ahora)
+        };
         if self.parpadeo.as_ref().map(|(t, _)| *t) == proximo {
             return;
         }
@@ -546,6 +637,7 @@ impl Hilo {
         }
         self.pintar_menu(ahora);
         self.pintar_toasts(ahora);
+        self.pintar_launcher(ahora);
         let Some(p) = &mut self.panel else {
             let _ = self.conn.flush();
             return;
@@ -575,6 +667,81 @@ impl Hilo {
             self.programar_parpadeo(ahora);
         }
         let _ = self.conn.flush();
+    }
+
+    /// Baja desde su borde de abajo al abrir (`bajada.rs`), como el centro.
+    fn pintar_launcher(&mut self, ahora: Instant) {
+        let Some(l) = &mut self.launcher else { return };
+        if !l.lamina.lista() {
+            return;
+        }
+        // El cuadro del destello ya se vio: se hace y se cierra.
+        let hechos = self.launcher_ui.al_cuadro();
+        if !hechos.is_empty() {
+            self.pedidos_launcher(hechos.into_iter().map(launcher::Pedido::Gtk).collect());
+            return;
+        }
+        let ui = &mut self.launcher_ui;
+        let anda = ui.anda(ahora)
+            || l.inicio
+                .is_none_or(|t| ahora.saturating_duration_since(t) < crate::bajada::duracion());
+        if !(l.lamina.sucio || anda) {
+            return;
+        }
+        ui.tam = l.lamina.tam;
+        let escala = l.lamina.escala;
+        ui.armar(escala as f32, ahora);
+        let inicio = *l.inicio.get_or_insert(ahora);
+        let micros = ahora.saturating_duration_since(inicio).as_micros() as i64;
+        let bajada = crate::bajada::desplazamiento(micros, ui.panel().y1 as f32);
+        ui.pintar(&mut self.escena, f64::from(escala), f64::from(bajada));
+        let wl = l.capa.wl_surface().clone();
+        l.lamina
+            .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+        self.programar_parpadeo(ahora);
+    }
+
+    fn puntero_launcher(&mut self, e: &PointerEvent) {
+        let (x, y) = e.position;
+        let ui = &mut self.launcher_ui;
+        let pedidos = match e.kind {
+            PointerEventKind::Enter { serial } => {
+                self.serial_puntero = serial;
+                self.forma_puesta = None;
+                ui.mover_puntero(x, y, false);
+                Vec::new()
+            }
+            PointerEventKind::Motion { .. } => {
+                ui.mover_puntero(x, y, true);
+                Vec::new()
+            }
+            PointerEventKind::Leave { .. } => {
+                ui.salir_puntero();
+                Vec::new()
+            }
+            PointerEventKind::Press { .. } => {
+                ui.apretar(x, y);
+                Vec::new()
+            }
+            PointerEventKind::Release { button, .. } => ui.soltar(x, y, button == IZQUIERDO),
+            PointerEventKind::Axis { vertical, .. } => {
+                if vertical.value120 != 0 {
+                    ui.rueda(f64::from(vertical.value120) / 120.0, true);
+                } else if vertical.discrete != 0 {
+                    ui.rueda(f64::from(vertical.discrete), true);
+                } else if vertical.absolute != 0.0 {
+                    ui.rueda(vertical.absolute, false);
+                }
+                Vec::new()
+            }
+        };
+        self.pedidos_launcher(pedidos);
+        if self.forma_puesta != Some(Shape::Default)
+            && let Some(f) = &self.forma
+        {
+            f.set_shape(self.serial_puntero, Shape::Default);
+            self.forma_puesta = Some(Shape::Default);
+        }
     }
 
     fn pintar_menu(&mut self, ahora: Instant) {
@@ -768,6 +935,13 @@ impl Hilo {
             self.salida_menu(s);
             return;
         }
+        if self.launcher.is_some() {
+            let pedidos = self
+                .launcher_ui
+                .tecla(ev.keysym, ev.utf8.as_deref(), self.mods.ctrl);
+            self.pedidos_launcher(pedidos);
+            return;
+        }
         if self.panel.is_none() {
             return;
         }
@@ -840,6 +1014,15 @@ fn lanzar_cava() -> Result<(std::process::Child, channel::Channel<Vec<f64>>), St
 
 impl LayerShellHandler for Hilo {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, capa: &LayerSurface) {
+        if self
+            .launcher
+            .as_ref()
+            .is_some_and(|l| l.capa.wl_surface() == capa.wl_surface())
+        {
+            self.pedidos_launcher(vec![launcher::Pedido::Gtk(EventoLauncher::Cerrado {
+                escape: false,
+            })]);
+        }
         // La salida se fue: la próxima lista la vuelve a crear en otra.
         if self
             .toasts
@@ -873,6 +1056,17 @@ impl LayerShellHandler for Hilo {
         _: u32,
     ) {
         let wl = capa.wl_surface();
+        if let Some(l) = self.launcher.as_mut().filter(|l| l.capa.wl_surface() == wl) {
+            if c.new_size.0 > 0 && c.new_size.1 > 0 {
+                l.lamina.tam = c.new_size;
+            }
+            if l.lamina.lienzo.is_none() {
+                // SAFETY: el lienzo se suelta antes que la capa (orden de los campos de LauncherSup).
+                l.lamina.lienzo = unsafe { Lienzo::nuevo(&mut self.gpu, &self.conn, wl) };
+            }
+            l.lamina.sucio = true;
+            return;
+        }
         if let Some(t) = self.toasts.as_mut().filter(|t| t.capa.wl_surface() == wl) {
             if c.new_size.0 > 0 && c.new_size.1 > 0 {
                 t.lamina.tam = c.new_size;
@@ -970,6 +1164,9 @@ impl Hilo {
         }
         if let Some(t) = self.toasts.as_mut().filter(|t| t.capa.wl_surface() == wl) {
             return Some(&mut t.lamina);
+        }
+        if let Some(l) = self.launcher.as_mut().filter(|l| l.capa.wl_surface() == wl) {
+            return Some(&mut l.lamina);
         }
         self.menu
             .as_mut()
@@ -1139,6 +1336,12 @@ impl PointerHandler for Hilo {
                 .is_some_and(|t| t.capa.wl_surface() == &e.surface)
             {
                 self.puntero_toasts(e);
+            } else if self
+                .launcher
+                .as_ref()
+                .is_some_and(|l| l.capa.wl_surface() == &e.surface)
+            {
+                self.puntero_launcher(e);
             } else if self
                 .panel
                 .as_ref()

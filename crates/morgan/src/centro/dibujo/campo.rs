@@ -120,7 +120,7 @@ impl Entrada {
         self.tocar();
     }
 
-    fn encendido(&self, ahora: Instant) -> bool {
+    pub fn encendido(&self, ahora: Instant) -> bool {
         let t = ahora.saturating_duration_since(self.tocado);
         if t >= DEJA_DE_PARPADEAR {
             return true;

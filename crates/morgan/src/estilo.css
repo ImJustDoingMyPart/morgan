@@ -11,7 +11,6 @@ window.morgan {
  * la región donde hay un `backdrop-filter: blur` de 20px o más; el radio no importa más allá
  * de eso: el desenfoque es el de `decoration:blur` de Hyprland. */
 .control-center,
-.launcher,
 .fondos .banda,
 .ventanas {
     backdrop-filter: blur(20px);
@@ -166,26 +165,7 @@ window.blank-window {
     opacity: 1;
 }
 
-/* ─── Launcher ─── */
-.launcher,
-.launcher * {
-    font-family: "JetBrainsMono Nerd Font", monospace;
-    font-size: 10pt;
-}
-
-.launcher {
-    margin: 8px;
-    padding: 14px;
-    border-radius: 4px;
-    color: @on_surface;
-    border: 2px solid;
-    border-color: @primary @tertiary @tertiary @primary;
-    background: @morgan_fondo;
-    box-shadow:
-        1px 1px 5px 1px alpha(@tertiary, 0.3),
-        -1px -1px 5px 1px alpha(@primary, 0.3);
-}
-
+/* ─── El buscador y la lista del menú de sistema (el launcher es del motor propio) ─── */
 .launcher-entrada {
     margin-bottom: 8px;
     padding: 8px 12px;
@@ -214,8 +194,6 @@ window.blank-window {
     opacity: 1;
 }
 
-.launcher scrolledwindow,
-.launcher viewport,
 .launcher-lista {
     background: transparent;
 }
@@ -245,43 +223,8 @@ window.blank-window {
     color: @on_surface;
 }
 
-/* El recuadro de la elegida lo dibuja el widget que envuelve a la lista, para que se deslice;
- * `color` es el del recuadro y la fila no pinta fondo. El índice del menú de sistema también
- * es .launcher-lista, sin foco: lo de abajo no lo toca. */
-.launcher-foco {
-    color: alpha(@primary, 0.14);
-}
-
-.launcher-lista.con-foco > row:selected {
-    background: transparent;
-}
-
-/* El borde transparente es el lugar del destello: la fila mide lo mismo (4 + 2 = 6). */
-.launcher-lista.con-foco > row {
-    padding: 4px 8px;
-    border: 2px solid transparent;
-}
-
-/* El destello dura un cuadro; la capa se lo lleva fundiéndose al cerrar. */
-.launcher-lista.con-foco > row.elegida {
-    border-color: @primary @tertiary @tertiary @primary;
-    background: alpha(@primary, 0.24);
-    box-shadow:
-        -1px -1px 4px 0 alpha(@primary, 0.45),
-        1px 1px 4px 0 alpha(@tertiary, 0.45);
-}
-
-/* tema.rs no lo usa: lo lee el launcher para el markup. */
+/* tema.rs no lo usa: lo lee el menú para el markup. */
 .launcher-resaltado {
-    color: @tertiary;
-}
-
-/* El degradé va de `color` a `.fin`; el riel lo muestra tenue y la perilla, su tramo. */
-.riel {
-    color: @primary;
-}
-
-.riel .fin {
     color: @tertiary;
 }
 

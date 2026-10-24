@@ -263,3 +263,95 @@ fn captura_del_fallo() {
         &[Duration::ZERO, Duration::from_millis(500)],
     );
 }
+
+/// El launcher con lo escrito «fi», lo resaltado y el genérico, y el destello de la elegida.
+#[test]
+#[ignore]
+fn captura_del_launcher() {
+    use super::launcher::LauncherUi;
+    use crate::centro::vista::{FilaLauncher, IconoFila, ListaLauncher, TipoFila};
+    use smithay_client_toolkit::seat::keyboard::Keysym;
+
+    let Some(dir) = std::env::var_os("MORGAN_CENTRO_CAPTURA") else {
+        panic!("MORGAN_CENTRO_CAPTURA");
+    };
+    let css = std::env::var_os("HOME")
+        .map(|h| std::path::PathBuf::from(h).join(".config/morgan/theme.css"))
+        .and_then(|d| std::fs::read_to_string(d).ok())
+        .unwrap_or_default();
+    let cuadrado = crate::pixeles::rgba([200u8, 120, 60, 255].repeat(24 * 24), 24, 24);
+    let fila = |nombre: &str, generico: Option<&str>, resaltes: Vec<(usize, usize)>| FilaLauncher {
+        icono: Some(IconoFila::Imagen(cuadrado.clone())),
+        nombre: nombre.into(),
+        generico: generico.map(Into::into),
+        resaltes,
+        resaltes_generico: Vec::new(),
+        tipo: TipoFila::Cierra,
+        carpeta: false,
+    };
+    let mut filas = vec![
+        fila("Archivos", None, vec![]),
+        fila("Configure lsfg-vk", None, vec![(4, 6)]),
+        fila("Editor de imágenes Pinta", Some("Editor de imágenes"), vec![]),
+        fila("MAKO Renderer Configuration", None, vec![(18, 20)]),
+        fila("Obsidian", None, vec![]),
+        fila("ONLYOFFICE", Some("Document Editor"), vec![(6, 8)]),
+        fila("Firefox", Some("Navegador web"), vec![(0, 2)]),
+        fila(
+            "Una app con un nombre larguísimo que no entra en la fila del launcher",
+            Some("y un genérico"),
+            vec![],
+        ),
+    ];
+    filas[1].icono = None;
+    for (nombre, destello) in [("launcher.ppm", false), ("launcher-destello.ppm", true)] {
+        let mut ui = LauncherUi::new(Paleta::desde_css(&css), 0.85, Borde::Sombra);
+        ui.abrir("Apps".into(), false);
+        ui.poner_lista(ListaLauncher {
+            texto: (1, 0),
+            version: 1,
+            filas: Vec::new(),
+            elegida: 0,
+            en_carpeta: false,
+            vaciar: Some("Buscar…".into()),
+        });
+        ui.tecla(Keysym::f, Some("f"), false);
+        ui.tecla(Keysym::i, Some("i"), false);
+        ui.poner_lista(ListaLauncher {
+            texto: (1, 2),
+            version: 2,
+            filas: filas.clone(),
+            elegida: 0,
+            en_carpeta: false,
+            vaciar: None,
+        });
+        ui.tecla(Keysym::Down, None, false);
+        if destello {
+            ui.tecla(Keysym::Return, None, false);
+        }
+        let (w, h) = (2560u32, 1440u32);
+        ui.tam = (w, h);
+        let t0 = Instant::now();
+        ui.armar(1.0, t0 + Duration::from_secs(2));
+        let mut s = Scene::new();
+        ui.pintar(&mut s, 1.0, 0.0);
+        let mut gpu = Gpu::sin_display("morgan");
+        let tex = gpu.textura(w, h, wgpu::TextureUsages::COPY_SRC);
+        assert!(gpu.dibujar(
+            &s,
+            &tex.create_view(&Default::default()),
+            (w, h),
+            peniko::Color::from_rgb8(30, 34, 38),
+        ));
+        let px = leer(&gpu.device, &gpu.cola, &tex, w, h).expect("leer");
+        let (cx, cy, cw, ch) = (930usize, 510usize, 700usize, 420usize);
+        let mut ppm = format!("P6\n{cw} {ch}\n255\n").into_bytes();
+        for y in cy..cy + ch {
+            for x in cx..cx + cw {
+                let i = (y * w as usize + x) * 4;
+                ppm.extend_from_slice(&px[i..i + 3]);
+            }
+        }
+        std::fs::write(std::path::Path::new(&dir).join(nombre), ppm).expect("escribir");
+    }
+}

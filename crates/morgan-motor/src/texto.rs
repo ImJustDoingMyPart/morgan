@@ -68,6 +68,101 @@ impl Textos {
         l
     }
 
+    /// Una línea con un rol y un tamaño por tramo, sobre una misma línea de base (un `span
+    /// size` de Pango).
+    pub fn armar_tramos(&mut self, partes: &[(&str, u8, f32)], escala: f32) -> Layout<u8> {
+        let texto: String = partes.iter().map(|(t, _, _)| *t).collect();
+        let mut b = self
+            .cx
+            .ranged_builder(&mut self.fuentes, &texto, escala, true);
+        b.push_default(StyleProperty::FontFamily(FontFamily::from(FAMILIA)));
+        b.push_default(StyleProperty::FontWeight(FontWeight::new(400.0)));
+        // El tamaño de la etiqueta es el del primer tramo; sin esto, la línea se arma con el
+        // de parley (16 px) y queda más alta.
+        if let Some((_, _, px)) = partes.first() {
+            b.push_default(StyleProperty::FontSize(*px));
+        }
+        let mut desde = 0;
+        for (t, rol, px) in partes {
+            let r = desde..desde + t.len();
+            b.push(StyleProperty::Brush(*rol), r.clone());
+            b.push(StyleProperty::FontSize(*px), r);
+            desde += t.len();
+        }
+        let mut l = b.build(&texto);
+        l.break_all_lines(None);
+        l
+    }
+
+    /// `armar_tramos` que, si no entra en `max` (píxeles del buffer), se corta y termina en
+    /// «…» con el rol y el tamaño del último tramo que queda, como una etiqueta de GTK con
+    /// `ellipsize = End`.
+    pub fn armar_tramos_recortado(
+        &mut self,
+        partes: &[(&str, u8, f32)],
+        escala: f32,
+        max: f32,
+    ) -> Layout<u8> {
+        let l = self.armar_tramos(partes, escala);
+        if l.width() <= max {
+            return l;
+        }
+        let total: usize = partes.iter().map(|(t, _, _)| t.len()).sum();
+        let cortes: Vec<usize> = (0..total)
+            .filter(|&i| {
+                let mut i = i;
+                for (t, _, _) in partes {
+                    if i < t.len() {
+                        return t.is_char_boundary(i);
+                    }
+                    i -= t.len();
+                }
+                false
+            })
+            .collect();
+        let recortar = |corte: usize| {
+            let mut v: Vec<(String, u8, f32)> = Vec::new();
+            let mut falta = corte;
+            for (t, rol, px) in partes {
+                if falta == 0 {
+                    break;
+                }
+                let n = falta.min(t.len());
+                v.push((t[..n].to_owned(), *rol, *px));
+                falta -= n;
+            }
+            while let Some((t, rol, px)) = v.pop() {
+                let t = t.trim_end().to_owned();
+                if !t.is_empty() {
+                    v.push((t, rol, px));
+                    break;
+                }
+            }
+            let (rol, px) = v
+                .last()
+                .map(|(_, r, p)| (*r, *p))
+                .or_else(|| partes.first().map(|(_, r, p)| (*r, *p)))
+                .unwrap_or((0, 14.0));
+            v.push(("…".to_owned(), rol, px));
+            v
+        };
+        let armar = |t: &mut Textos, v: &[(String, u8, f32)]| {
+            let p: Vec<(&str, u8, f32)> = v.iter().map(|(s, r, x)| (s.as_str(), *r, *x)).collect();
+            t.armar_tramos(&p, escala)
+        };
+        // El corte más largo que entra con los puntos suspensivos.
+        let (mut lo, mut hi) = (0, cortes.len().saturating_sub(1));
+        while lo < hi {
+            let m = (lo + hi).div_ceil(2);
+            if armar(self, &recortar(cortes[m])).width() <= max {
+                lo = m;
+            } else {
+                hi = m - 1;
+            }
+        }
+        armar(self, &recortar(cortes.get(lo).copied().unwrap_or(0)))
+    }
+
     /// Un párrafo con estilos por tramo, partido en renglones de `ancho` (píxeles del buffer)
     /// como una etiqueta de GTK con `wrap` y `WordChar`: por palabras, y una palabra que no
     /// entra se parte. Con más de `lineas`, el último renglón termina en «…».
@@ -387,6 +482,13 @@ pub fn esquina_por_tinta(l: &Layout<u8>, cx: f64, cy: f64) -> (f64, f64) {
     ((cx - tx).round(), (cy - ty).round())
 }
 
+/// Dónde cae la línea de base del primer renglón de `l`, desde su borde de arriba.
+pub fn linea_de_base(l: &Layout<u8>) -> f64 {
+    l.lines()
+        .next()
+        .map_or(0.0, |r| f64::from(r.metrics().baseline))
+}
+
 /// El alto de la caja de una etiqueta de GTK con el texto de `l`: ascenso más descenso de la
 /// fuente, sin redondear cada uno (parley los redondea por separado y queda un píxel corto).
 pub fn alto_de_linea(l: &Layout<u8>) -> f64 {
@@ -406,3 +508,4 @@ pub fn alto_de_linea(l: &Layout<u8>) -> f64 {
     });
     alto.map_or_else(|| caja(l).1, f64::ceil)
 }
+

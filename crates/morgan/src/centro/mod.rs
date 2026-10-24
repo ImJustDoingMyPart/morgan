@@ -113,7 +113,11 @@ struct Inner {
     escuchar: RefCell<Option<glib::JoinHandle<()>>>,
     /// El menú de la bandeja abierto: qué hacer al elegir y al cerrarse.
     menu: RefCell<Option<MenuAbierto>>,
+    /// El launcher dibuja en el hilo del centro: lo que hace allá le llega acá.
+    al_launcher: RefCell<Option<AlLauncher>>,
 }
+
+type AlLauncher = Rc<dyn Fn(vista::EventoLauncher)>;
 
 struct MenuAbierto {
     elegir: Box<dyn Fn(i32)>,
@@ -195,6 +199,7 @@ impl Centro {
             reloj: RefCell::default(),
             escuchar: RefCell::default(),
             menu: RefCell::default(),
+            al_launcher: RefCell::default(),
         });
         let c = Centro { inner };
         let weak = Rc::downgrade(&c.inner);
@@ -249,6 +254,15 @@ impl Centro {
         };
         self.mandar(Orden::Menu(None));
         (m.al_cerrar)();
+    }
+
+    /// El canal del hilo del centro, para las superficies que dibujan en él (el launcher).
+    pub fn hilo(&self) -> Sender<Orden> {
+        self.inner.hilo.clone()
+    }
+
+    pub fn al_launcher(&self, f: impl Fn(vista::EventoLauncher) + 'static) {
+        self.inner.al_launcher.replace(Some(Rc::new(f)));
     }
 
     pub fn al_abrir(&self, f: impl Fn(bool) + 'static) {
@@ -402,6 +416,12 @@ impl Centro {
                 }
             }
             // Lo mismo que en la lista, y el toast se va (copiar lo deja).
+            Evento::Launcher(e) => {
+                let f = i.al_launcher.borrow().clone();
+                if let Some(f) = f {
+                    f(e);
+                }
+            }
             Evento::Toast(t) => match t {
                 EventoToast::Accion(id) => {
                     self.evento(Evento::Accion(id));
