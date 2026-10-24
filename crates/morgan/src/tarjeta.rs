@@ -318,7 +318,7 @@ fn opcion_en_fila(glifo: Option<&str>, texto: &str, centrada: bool) -> gtk::Butt
     b
 }
 
-fn texto_plano(n: &Notificacion) -> String {
+pub fn texto_plano(n: &Notificacion) -> String {
     let cuerpo = pango::parse_markup(&n.cuerpo, '\0')
         .map(|(_, t, _)| t.to_string())
         .unwrap_or_else(|_| n.cuerpo.clone());

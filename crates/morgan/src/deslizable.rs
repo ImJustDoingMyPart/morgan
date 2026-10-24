@@ -12,7 +12,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{glib, graphene, gsk};
 
-const ARRANQUE: f64 = 20.0;
+pub const ARRANQUE: f64 = 20.0;
 pub const UMBRAL: f64 = 0.5;
 const TIRON_MIN: f64 = 100.0;
 const TIRON_VELOCIDAD: f64 = 2.0;

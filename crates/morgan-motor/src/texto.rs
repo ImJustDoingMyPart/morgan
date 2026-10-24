@@ -202,9 +202,28 @@ pub fn esquina(l: &Layout<u8>, cx: f64, cy: f64) -> (f64, f64) {
     ((cx - w / 2.0).floor(), (cy - h / 2.0).floor())
 }
 
-/// El tamaño de la caja de `l`, en píxeles enteros.
+/// El tamaño de la caja de `l`, en píxeles enteros. El ancho, como el de Pango: cada letra
+/// avanza en unidades de 1/1024 de píxel (redondeadas), así que un texto que mide justo un
+/// número entero (5 letras de 7,2 px) se pasa por poco y su caja lleva un píxel más.
 pub fn caja(l: &Layout<u8>) -> (f64, f64) {
-    (l.width().ceil() as f64, l.height().ceil() as f64)
+    (ancho_pango(l).ceil(), l.height().ceil() as f64)
+}
+
+fn ancho_pango(l: &Layout<u8>) -> f64 {
+    let mut ancho: f64 = 0.0;
+    for linea in l.lines() {
+        let mut w: i64 = 0;
+        for item in linea.items() {
+            let PositionedLayoutItem::GlyphRun(g) = item else {
+                continue;
+            };
+            for gl in g.glyphs() {
+                w += (f64::from(gl.advance) * 1024.0).round() as i64;
+            }
+        }
+        ancho = ancho.max(w as f64 / 1024.0);
+    }
+    ancho
 }
 
 /// Con la esquina del layout donde la ponga `tr` (para escalarlo, como los símbolos).

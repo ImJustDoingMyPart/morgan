@@ -9,12 +9,11 @@ use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use gtk::prelude::*;
-use gtk::{gdk, gio, glib, graphene, gsk};
+use gtk::{gdk, gio, glib, gsk};
 use morgan_motor::color::Paleta;
-use morgan_motor::vello::peniko::{Blob, ImageAlphaType, ImageData, ImageFormat};
+use morgan_motor::vello::peniko::ImageData;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use super::dibujo::Icono;
@@ -116,7 +115,7 @@ impl Contexto {
             }
             *pintor = Some(r.upcast());
         }
-        pixeles(&p, TAMANO * escala, &self.color.get(), pintor.as_ref()?)
+        crate::pixeles::pixeles(&p, TAMANO * escala, &self.color.get(), pintor.as_ref()?)
     }
 
     pub fn click(self: &Rc<Self>, clave: &str, boton: u32, salida: &str, derecha: i32) {
@@ -149,39 +148,6 @@ impl Contexto {
             _ => {}
         }
     }
-}
-
-/// El ícono en píxeles RGBA sin premultiplicar, de `tam` × `tam`. Los simbólicos, con `color`.
-fn pixeles(
-    p: &gdk::Paintable,
-    tam: i32,
-    color: &gdk::RGBA,
-    pintor: &gsk::Renderer,
-) -> Option<ImageData> {
-    let snap = gtk::Snapshot::new();
-    let lado = f64::from(tam);
-    match p.dynamic_cast_ref::<gtk::SymbolicPaintable>() {
-        Some(s) => s.snapshot_symbolic(&snap, lado, lado, std::slice::from_ref(color)),
-        None => p.snapshot(&snap, lado, lado),
-    }
-    let nodo = snap.to_node()?;
-    let caja = graphene::Rect::new(0.0, 0.0, tam as f32, tam as f32);
-    let textura = pintor.render_texture(&nodo, Some(&caja));
-    let mut bajada = gdk::TextureDownloader::new(&textura);
-    bajada.set_format(gdk::MemoryFormat::R8g8b8a8);
-    let (bytes, paso) = bajada.download_bytes();
-    let (w, h) = (textura.width() as usize, textura.height() as usize);
-    let mut px = Vec::with_capacity(w * h * 4);
-    for fila in bytes.chunks(paso).take(h) {
-        px.extend_from_slice(fila.get(..w * 4)?);
-    }
-    Some(ImageData {
-        data: Blob::new(Arc::new(px)),
-        format: ImageFormat::Rgba8,
-        alpha_type: ImageAlphaType::Alpha,
-        width: w as u32,
-        height: h as u32,
-    })
 }
 
 struct Menu {

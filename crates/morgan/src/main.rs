@@ -40,6 +40,7 @@ mod mezclador;
 mod mpris;
 mod notificaciones;
 mod osd;
+mod pixeles;
 mod pila;
 mod pliegue;
 mod privacidad;
@@ -165,17 +166,15 @@ fn main() -> ExitCode {
         let luz = luz::Luz::new(&config.luz, osd.clone());
         let brillo = brillo::Brillo::new();
         let fondos = fondos::Fondos::new(app, hyprland.clone(), &config.fondos);
-        let centro = Centro::new(
-            app,
-            centro::Servicios {
-                notificaciones: notificaciones.clone(),
-                osd: osd.clone(),
-                toasts: toasts.clone(),
-                idle: idle.clone(),
-                luz: luz.clone(),
-                brillo: brillo.clone(),
-            },
-        );
+        let centro = Centro::new(centro::Servicios {
+            notificaciones: notificaciones.clone(),
+            osd: osd.clone(),
+            toasts: toasts.clone(),
+            idle: idle.clone(),
+            luz: luz.clone(),
+            brillo: brillo.clone(),
+            tema: tema.clone(),
+        });
         centro.aplicar_config(&config.sonido);
         let (hilo_barra, eventos_barra) = barra::lanzar(&tema, &config.barra.fijos);
         let iconos_bandeja = config.barra.iconos_bandeja.clone();

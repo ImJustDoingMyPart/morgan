@@ -1,48 +1,49 @@
-//! El panel crece con el contenido hasta el alto de la salida y lo que no entra se scrollea
-//! adentro, sin medir nada a mano. Los servicios se escuchan solo mientras está abierto.
+//! El centro de control, sin GTK: lo dibuja su propio hilo con el motor de `morgan-motor`
+//! (`hilo.rs`, `dibujo/`). Acá, en el hilo de GTK, quedan los servicios (audio, red, bluetooth,
+//! energía, el reproductor, las notificaciones) y lo que hace cada click: se le manda al hilo lo
+//! que se ve, en palabras y glifos (`vista.rs`), y vuelve lo que se tocó.
+//!
+//! Los servicios se escuchan solo mientras está abierto.
 
+mod acciones;
 mod bt;
-mod campo;
-mod cuotas;
-mod deslizador;
 pub mod desplegable;
+mod dibujo;
 mod ecualizador;
+pub mod hilo;
 mod lista;
 pub mod marquesina;
-mod nivel;
-mod reproductor;
 mod resumen;
-mod tarjetas;
+pub mod vista;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::prelude::*;
-use gtk::{gdk, glib};
-use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
+use gtk::glib;
+use morgan_motor::color::Paleta;
+use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
-use crate::bajada::Bajada;
 use crate::bluetooth::Bluetooth;
 use crate::comando;
 use crate::energia::Energia;
 use crate::idle::Idle;
-use crate::mezclador::{Estado as Audio, Mezclador};
-use crate::mpris::Mpris;
-use crate::notificaciones::{Cambio, Notificaciones};
 use crate::luz::Luz;
+use crate::mezclador::Mezclador;
+use crate::mpris::Mpris;
+use crate::notificaciones::servidor::Razon;
+use crate::notificaciones::{Cambio, Notificaciones};
 use crate::osd::Osd;
 use crate::red::{self, Red, Visible};
+use crate::tema::Tema;
 use crate::toasts::Toasts;
-use crate::deslizable::Accion;
-use campo::Campo;
-use desplegable::{Desplegable, Grupo, Item};
-use nivel::Nivel;
-use tarjetas::{Tarjeta, Tarjetas};
-
-/// Con las tarjetas en dos columnas de monoespaciada y los títulos a 14 px, menos no entra.
-const ANCHO: i32 = 380;
+use acciones::{Acciones, Parte};
+use hilo::Orden;
+use vista::{
+    BotonCampo, BotonRepro, Caja, Campo, Contenido, Cuota, Deslizar, Evento, ListaId, Nivel,
+    NivelId, Opcion, Tarjeta, Toque,
+};
 
 const CONFIRMAR_TRAS: Duration = Duration::from_millis(320);
 
@@ -53,9 +54,20 @@ pub struct Servicios {
     pub idle: Idle,
     pub luz: Luz,
     pub brillo: crate::brillo::Brillo,
+    pub tema: Tema,
 }
 
 type Oyentes = RefCell<Vec<Rc<dyn Fn(bool)>>>;
+
+/// El lugar de cada tarjeta en la grilla.
+const RED: usize = 0;
+const BT: usize = 1;
+const NO_MOLESTAR: usize = 2;
+const CAFFEINE: usize = 3;
+const LUZ: usize = 4;
+const ENERGIA: usize = 5;
+const CUOTAS: usize = 6;
+const SESION: usize = 7;
 
 #[derive(Clone)]
 pub struct Centro {
@@ -63,121 +75,124 @@ pub struct Centro {
 }
 
 struct Inner {
-    window: gtk::ApplicationWindow,
-    panel: gtk::ScrolledWindow,
-    bajada: Bajada,
-    grupo: Grupo,
+    hilo: Sender<Orden>,
+    acciones: Acciones,
     notificaciones: Notificaciones,
     osd: Osd,
     toasts: Toasts,
     idle: Idle,
-    luz_: Luz,
-    brillo_: crate::brillo::Brillo,
+    luz: Luz,
+    brillo: crate::brillo::Brillo,
     mezclador: Mezclador,
     red: Red,
     bluetooth: Bluetooth,
     energia: Energia,
     mpris: Mpris,
+    lista: Rc<lista::Lista>,
 
-    caffeine: RefCell<Option<Tarjeta>>,
-    no_molestar: RefCell<Option<Tarjeta>>,
-    luz: RefCell<Option<Tarjeta>>,
-    red_: RefCell<Option<(Tarjeta, Desplegable)>>,
-    /// La Wi-Fi nueva que pide su clave. Mientras el campo está abierto la lista de red no
-    /// se rehace: cada escaneo se llevaría lo escrito y el foco.
+    tarjetas: RefCell<Vec<Tarjeta>>,
+    /// La Wi-Fi nueva que pide su clave.
     clave: RefCell<Option<Pedido>>,
-    /// El dispositivo que se está emparejando, con su caja; congela la lista como `clave`.
+    /// El dispositivo que se está emparejando, con lo que muestra su campo.
     emparejo: RefCell<Option<bt::Emparejo>>,
-    bt: RefCell<Option<(Tarjeta, Desplegable)>>,
-    energia_: RefCell<Option<(Tarjeta, Desplegable)>>,
-    sesion: RefCell<Option<Tarjeta>>,
-    cuotas: RefCell<Option<(Tarjeta, cuotas::Vista)>>,
-    menu_sesion: RefCell<Option<Desplegable>>,
-    salida: RefCell<Option<(Nivel, Desplegable)>>,
-    microfono: RefCell<Option<(Nivel, Desplegable)>>,
-    brillo: RefCell<Option<Nivel>>,
-    apps: RefCell<Option<Apps>>,
-    reproductor: RefCell<Option<reproductor::Vista>>,
-    lista: RefCell<Option<lista::Lista>>,
+    /// La confirmación de sesión a medias: glifo, pregunta, comando y si ya se habilitó.
+    confirmando: RefCell<Option<(&'static str, &'static str, &'static [&'static str], bool)>>,
+    /// Cada campo nuevo lleva otro número: lo escrito se borra y toma el foco.
+    generaciones: Cell<u64>,
+    /// Las acciones de cada nivel, que no cambian mientras exista (un arrastre no se corta).
+    niveles: RefCell<HashMap<NivelId, (vista::Id, Option<vista::Id>)>>,
+    caratulas: RefCell<HashMap<std::path::PathBuf, Option<morgan_motor::vello::peniko::ImageData>>>,
 
     abierto: Cell<bool>,
     al_abrir: Oyentes,
-    lista_sucia: Cell<bool>,
     /// Para no rehacer las listas de audio en cada evento.
     salidas_vistas: RefCell<String>,
     entradas_vistas: RefCell<String>,
+    apps_vistas: RefCell<HashMap<u32, String>>,
     ocultas: RefCell<Vec<String>>,
     reloj: RefCell<Option<glib::SourceId>>,
+    escuchar: RefCell<Option<glib::JoinHandle<()>>>,
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        if let Some(h) = self.escuchar.take() {
+            h.abort();
+        }
+    }
+}
+
+struct Pedido {
+    visible: Visible,
+    generacion: u64,
+    aviso: Option<(String, bool)>,
+    ocupado: bool,
+}
+
+/// El color del texto del tema, para los íconos simbólicos.
+fn color_texto(tema: &Tema) -> [f32; 4] {
+    Paleta::desde_css(&tema.actual().0).on_surface
 }
 
 impl Centro {
-    pub fn new(app: &gtk::Application, s: Servicios) -> Self {
-        let window = gtk::ApplicationWindow::new(app);
-        window.add_css_class("morgan");
-        window.add_css_class("blank-window");
-        window.init_layer_shell();
-        window.set_namespace(Some("morgan-center"));
-        window.set_layer(Layer::Top);
-        window.set_keyboard_mode(KeyboardMode::Exclusive);
-        for borde in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {
-            window.set_anchor(borde, true);
-        }
-
-        let panel = gtk::ScrolledWindow::new();
-        panel.add_css_class("control-center");
-        panel.set_hscrollbar_policy(gtk::PolicyType::Never);
-        panel.set_overflow(gtk::Overflow::Hidden);
-        panel.set_halign(gtk::Align::End);
-        panel.set_valign(gtk::Align::Start);
-        panel.set_propagate_natural_height(true);
-        panel.set_size_request(ANCHO, -1);
-        let bajada = Bajada::new(&panel);
-        window.set_child(Some(&bajada));
-
+    pub fn new(s: Servicios) -> Self {
+        let (css, opacidad, borde) = s.tema.actual();
+        let (tx, rx) = hilo::lanzar(Paleta::desde_css(&css), opacidad as f32, borde);
+        let t = tx.clone();
+        let lista = lista::Lista::new(&s.notificaciones, color_texto(&s.tema));
+        let l = lista.clone();
+        s.tema.al_cambiar(move |css, opacidad, borde| {
+            let p = Paleta::desde_css(css);
+            l.poner_color(p.on_surface);
+            let _ = t.send(Orden::Tema(p, opacidad as f32, borde));
+        });
         let inner = Rc::new(Inner {
-            window,
-            panel,
-            bajada,
-            grupo: Grupo::default(),
+            hilo: tx,
+            acciones: Acciones::default(),
             notificaciones: s.notificaciones,
             osd: s.osd,
             toasts: s.toasts,
             idle: s.idle,
-            luz_: s.luz,
-            brillo_: s.brillo,
+            luz: s.luz,
+            brillo: s.brillo,
             mezclador: Mezclador::new(),
             red: Red::default(),
             bluetooth: Bluetooth::default(),
             energia: Energia::default(),
             mpris: Mpris::default(),
-            caffeine: RefCell::default(),
-            no_molestar: RefCell::default(),
-            luz: RefCell::default(),
-            red_: RefCell::default(),
+            lista,
+            tarjetas: RefCell::default(),
             clave: RefCell::default(),
             emparejo: RefCell::default(),
-            bt: RefCell::default(),
-            energia_: RefCell::default(),
-            sesion: RefCell::default(),
-            cuotas: RefCell::default(),
-            menu_sesion: RefCell::default(),
-            salida: RefCell::default(),
-            microfono: RefCell::default(),
-            brillo: RefCell::default(),
-            apps: RefCell::default(),
-            reproductor: RefCell::default(),
-            lista: RefCell::default(),
+            confirmando: RefCell::default(),
+            generaciones: Cell::new(0),
+            niveles: RefCell::default(),
+            caratulas: RefCell::default(),
             abierto: Cell::new(false),
             al_abrir: RefCell::default(),
-            lista_sucia: Cell::new(true),
             salidas_vistas: RefCell::default(),
             entradas_vistas: RefCell::default(),
+            apps_vistas: RefCell::default(),
             ocultas: RefCell::default(),
             reloj: RefCell::default(),
+            escuchar: RefCell::default(),
         });
         let c = Centro { inner };
+        let weak = Rc::downgrade(&c.inner);
+        let escuchar = glib::MainContext::default().spawn_local(async move {
+            while let Ok(e) = rx.recv().await {
+                let Some(inner) = weak.upgrade() else { return };
+                Centro { inner }.evento(e);
+            }
+        });
+        c.inner.escuchar.replace(Some(escuchar));
         c.armar();
         c
+    }
+
+    fn mandar(&self, o: Orden) {
+        // Si el hilo terminó (sin Wayland o sin GPU) ya lo dijo al terminar.
+        let _ = self.inner.hilo.send(o);
     }
 
     pub fn abierto(&self) -> bool {
@@ -185,11 +200,6 @@ impl Centro {
     }
 
     pub fn limpiar_notificaciones(&self) {
-        if self.abierto()
-            && let Some(l) = self.inner.lista.borrow().as_ref()
-        {
-            return l.limpiar();
-        }
         self.inner.notificaciones.limpiar();
     }
 
@@ -213,8 +223,16 @@ impl Centro {
     }
 
     pub fn abrir(&self) {
+        self.abrir_con(false);
+    }
+
+    fn abrir_con(&self, sesion: bool) {
         let i = &self.inner;
         if i.abierto.replace(true) {
+            if sesion {
+                self.llenar_sesion();
+                self.mandar(Orden::Abrir { sesion });
+            }
             return;
         }
         i.toasts.callar(true);
@@ -223,58 +241,44 @@ impl Centro {
         i.bluetooth.abrir();
         i.energia.abrir();
         i.mpris.abrir();
-        // Si sonaba al cerrar y sigue igual, el reproductor no avisa nada: se retoma acá.
-        if let Some(v) = i.reproductor.borrow().as_ref() {
-            v.reanudar();
-        }
         self.leer_comandos();
         self.marcar_no_molestar();
         self.pintar_sesion();
         self.pintar_cuotas();
-        if i.lista_sucia.get() {
-            self.armar_lista();
-        }
-        if let Some(l) = i.lista.borrow().as_ref() {
-            l.refrescar_horas();
-        }
-        // Las horas relativas siguen andando mientras se mira.
+        self.mandar_avisos();
+        self.mandar(Orden::Abrir { sesion });
+        // Las cuotas siguen al reloj mientras se mira.
         let yo = self.clone();
         let id = glib::timeout_add_seconds_local(60, move || {
-            if let Some(l) = yo.inner.lista.borrow().as_ref() {
-                l.refrescar_horas();
-            }
             yo.pintar_cuotas();
             glib::ControlFlow::Continue
         });
         if let Some(viejo) = i.reloj.replace(Some(id)) {
             viejo.remove();
         }
-        i.panel.vadjustment().set_value(0.0);
-        i.bajada.arrancar();
-        i.window.set_visible(true);
         self.avisar(true);
-        let con_foco = i.lista.borrow().as_ref().is_some_and(|l| l.enfocar());
-        if !con_foco {
-            GtkWindowExt::set_focus(&i.window, None::<&gtk::Widget>);
-        }
     }
 
     pub fn cerrar(&self) {
+        if !self.inner.abierto.get() {
+            return;
+        }
+        self.mandar(Orden::Cerrar);
+        self.cerrado();
+    }
+
+    /// Lo que pasa al cerrarse, lo haya cerrado quien sea.
+    fn cerrado(&self) {
         let i = &self.inner;
         if !i.abierto.replace(false) {
             return;
         }
-        i.window.set_visible(false);
         self.avisar(false);
         i.toasts.callar(false);
-        i.grupo.cerrar();
-        if let Some((_, v)) = i.cuotas.borrow().as_ref() {
-            v.cerrar();
-        }
         // Una confirmación a medias no queda para la próxima apertura, ni una clave.
         self.llenar_sesion();
         if i.clave.take().is_some() {
-            self.pintar_red(true);
+            self.pintar_red();
         }
         self.cancelar_emparejo();
         i.mezclador.cerrar();
@@ -282,328 +286,374 @@ impl Centro {
         i.bluetooth.cerrar();
         i.energia.cerrar();
         i.mpris.cerrar();
-        if let Some(v) = i.reproductor.borrow().as_ref() {
-            v.detener();
-        }
         if let Some(id) = i.reloj.take() {
             id.remove();
         }
+        i.lista.barrer_previas();
     }
+
+    pub fn abrir_sesion(&self) {
+        self.llenar_sesion();
+        self.abrir_con(true);
+    }
+
+    fn generacion(&self) -> u64 {
+        let g = self.inner.generaciones.get() + 1;
+        self.inner.generaciones.set(g);
+        g
+    }
+
+    fn evento(&self, e: Evento) {
+        let i = &self.inner;
+        match e {
+            Evento::Tocar(id) => i.acciones.hacer(id),
+            Evento::Nivel(id, v) => i.acciones.hacer_mover(id, v),
+            Evento::Enviar(id, s) => i.acciones.hacer_enviar(id, s),
+            Evento::Repro(b) => match b {
+                BotonRepro::Mezcla => i.mpris.alternar_mezcla(),
+                BotonRepro::Anterior => i.mpris.pedir("Previous"),
+                BotonRepro::Play => i.mpris.pedir("PlayPause"),
+                BotonRepro::Siguiente => i.mpris.pedir("Next"),
+                BotonRepro::Repetir => i.mpris.ciclar_repeticion(),
+            },
+            Evento::Accion(id) => i.notificaciones.accion(id, "default"),
+            Evento::Boton(id, clave) => i.notificaciones.accion(id, &clave),
+            Evento::Cerrar(id) => i.notificaciones.cerrar(id, Razon::Usuario),
+            Evento::Copiar(id) => {
+                if let Some(n) = i.notificaciones.get(id) {
+                    let texto = crate::tarjeta::texto_plano(&n);
+                    comando::lanzar(&["wl-copy", "--", &texto]);
+                }
+            }
+            Evento::CerrarGrupo(grupo) => {
+                let ids: Vec<u32> = i
+                    .notificaciones
+                    .lista()
+                    .iter()
+                    .filter(|n| n.grupo() == grupo)
+                    .map(|n| n.id)
+                    .collect();
+                for id in ids {
+                    i.notificaciones.cerrar(id, Razon::Usuario);
+                }
+            }
+            Evento::Limpiar(ids) => {
+                for id in ids {
+                    i.notificaciones.cerrar(id, Razon::Usuario);
+                }
+            }
+            Evento::Cerrado => self.cerrado(),
+            Evento::Elegido(_) | Evento::MenuCerrado => {}
+        }
+    }
+
+    // ── Armar ──
 
     fn armar(&self) {
         let i = &self.inner;
-        // 8 px entre bloques: el ritmo del panel.
-        let caja = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        caja.add_css_class("widgets");
-        caja.set_vexpand(true);
-        caja.set_size_request(ANCHO, -1);
-        i.panel.set_child(Some(&caja));
-
-        caja.append(&self.armar_tarjetas());
-        caja.append(&self.armar_niveles());
-
-        let vista = reproductor::Vista::new(&i.mpris);
-        caja.append(&vista.raiz);
-        i.reproductor.replace(Some(vista));
-
-        let lista = lista::Lista::new(&i.notificaciones);
-        caja.append(&lista.raiz);
-        i.lista.replace(Some(lista));
-
-        self.conectar();
-    }
-
-    fn armar_tarjetas(&self) -> gtk::Box {
-        let i = &self.inner;
-        let t = Tarjetas::new(&i.grupo);
-        i.red_.replace(Some(t.con_lista("󰈀", tr!("Red"))));
-        i.bt.replace(Some(t.con_lista("󰂯", tr!("Bluetooth"))));
-
+        let a = &i.acciones;
+        let lista = |glifo: &str, titulo: &str, l: ListaId| Tarjeta {
+            glifo: glifo.into(),
+            titulo: titulo.into(),
+            estado: String::new(),
+            encendida: false,
+            alerta: false,
+            que: Toque::Lista(l),
+        };
+        let interruptor = |glifo: &str, titulo: &str, id: vista::Id| Tarjeta {
+            glifo: glifo.into(),
+            titulo: titulo.into(),
+            estado: String::new(),
+            encendida: false,
+            alerta: false,
+            que: Toque::Accion(id),
+        };
         let yo = self.clone();
-        let dnd = t.interruptor("󰂛", tr!("No molestar"), move || {
+        let dnd = a.tocar(Parte::Fija, move || {
             let n = &yo.inner.notificaciones;
             n.set_no_molestar(!n.no_molestar());
             yo.inner
                 .osd
                 .mostrar(&crate::aviso_no_molestar(n.no_molestar()));
         });
-        i.no_molestar.replace(Some(dnd));
         let yo = self.clone();
-        let caffeine = t.interruptor("󰅶", tr!("Caffeine"), move || yo.alternar_caffeine());
-        i.caffeine.replace(Some(caffeine));
+        let caffeine = a.tocar(Parte::Fija, move || yo.alternar_caffeine());
+        let yo = self.clone();
+        let luz = a.tocar(Parte::Fija, move || yo.inner.luz.alternar());
+        i.tarjetas.replace(vec![
+            lista("󰈀", tr!("Red"), ListaId::Red),
+            lista("󰂯", tr!("Bluetooth"), ListaId::Bluetooth),
+            interruptor("󰂛", tr!("No molestar"), dnd),
+            interruptor("󰅶", tr!("Caffeine"), caffeine),
+            interruptor("󰖔", tr!("Luz nocturna"), luz),
+            lista("󰾅", tr!("Energía"), ListaId::Energia),
+            lista("󰊚", tr!("Cuotas de IA"), ListaId::Cuotas),
+            lista("󰐥", tr!("Sesión"), ListaId::Sesion),
+        ]);
+        self.marcar_no_molestar();
+        self.pintar_caffeine();
+        self.pintar_luz();
+        self.pintar_sesion();
+        self.pintar_cuotas();
+        self.llenar_sesion();
+        self.mandar_iconos();
+        self.conectar();
+    }
+
+    fn poner_tarjeta(&self, i: usize, r: &resumen::Resumen, alerta: bool) {
+        {
+            let mut t = self.inner.tarjetas.borrow_mut();
+            let Some(t) = t.get_mut(i) else { return };
+            let nueva = Tarjeta {
+                glifo: r.glifo.into(),
+                estado: r.estado.clone(),
+                encendida: r.encendida,
+                alerta,
+                ..t.clone()
+            };
+            if *t == nueva {
+                return;
+            }
+            *t = nueva;
+        }
+        self.mandar(Orden::Tarjetas(self.inner.tarjetas.borrow().clone()));
+    }
+
+    fn mandar_iconos(&self) {
+        let mut p = crate::pixeles::Pintor::default();
+        let escala = crate::pixeles::escala();
+        let blanco = crate::pixeles::color([1.0, 1.0, 1.0, 1.0]);
+        let mut icono = |n: &str| p.icono(n, 16, escala, &blanco);
+        let iconos = vista::Iconos {
+            play: icono("media-playback-start-symbolic"),
+            pausa: icono("media-playback-pause-symbolic"),
+            anterior: icono("media-seek-backward-symbolic"),
+            siguiente: icono("media-seek-forward-symbolic"),
+            mezcla: icono("media-playlist-shuffle-symbolic"),
+            repetir: icono("media-playlist-repeat-symbolic"),
+            repetir_uno: icono("media-playlist-repeat-song-symbolic"),
+            contraer: icono("pan-up-symbolic"),
+            cerrar: icono("window-close-symbolic"),
+        };
+        self.mandar(Orden::Iconos(iconos));
+    }
+
+    fn conectar(&self) {
+        let i = &self.inner;
+        let yo = self.clone();
+        i.notificaciones.al_cambiar(move |c| match c {
+            Cambio::NoMolestar(_) => yo.marcar_no_molestar(),
+            Cambio::Llego { .. } | Cambio::Cerrada(_) => yo.mandar_avisos(),
+        });
+        let yo = self.clone();
+        i.lista.al_llegar(move || yo.mandar_avisos());
         let yo = self.clone();
         i.idle.al_cambiar(move || yo.pintar_caffeine());
         let yo = self.clone();
-        let luz = t.interruptor("󰖔", tr!("Luz nocturna"), move || yo.inner.luz_.alternar());
-        i.luz.replace(Some(luz));
+        i.luz.al_cambiar(move || yo.pintar_luz());
         let yo = self.clone();
-        i.luz_.al_cambiar(move || yo.pintar_luz());
-        i.energia_.replace(Some(t.con_lista("󰾅", tr!("Energía"))));
-        let (tarjeta, lista) = t.con_lista("󰊚", tr!("Cuotas de IA"));
-        let vista = cuotas::Vista::new();
-        lista.revealer.set_child(Some(&vista.raiz));
-        i.cuotas.replace(Some((tarjeta, vista)));
-        let (tarjeta, menu) = t.con_lista("󰐥", tr!("Sesión"));
-        i.sesion.replace(Some(tarjeta));
-        i.menu_sesion.replace(Some(menu));
-        self.llenar_sesion();
-        t.raiz
+        i.brillo.al_cambiar(move || yo.mostrar_niveles());
+        let yo = self.clone();
+        i.mezclador.al_cambiar(move || yo.mostrar_audio());
+        let yo = self.clone();
+        i.red.al_cambiar(move || yo.pintar_red());
+        let yo = self.clone();
+        i.bluetooth.al_cambiar(move || yo.pintar_bt());
+        let yo = self.clone();
+        i.bluetooth.al_pedido(move |p| yo.atender_pedido(p));
+        let yo = self.clone();
+        i.energia.al_cambiar(move || yo.mostrar_energia());
+        let yo = self.clone();
+        i.mpris.al_cambiar(move || yo.mostrar_reproductor());
+        self.pintar_red();
+        self.pintar_bt();
+        self.mostrar_energia();
+        self.mostrar_niveles();
+        // Antes de la primera apertura y sin demorar el arranque.
+        let yo = self.clone();
+        glib::idle_add_local_once(move || yo.mandar_avisos());
     }
 
-    fn armar_niveles(&self) -> gtk::Box {
-        let i = &self.inner;
-        let raiz = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        raiz.add_css_class("cc-niveles");
-
-        let m = i.mezclador.clone();
-        let m2 = i.mezclador.clone();
-        let salida = Nivel::new(
-            "󰕾",
-            move |v| {
-                if let Some(s) = m.estado().predeterminada {
-                    m.volumen_salida(&s, v);
-                }
-            },
-            Some(Box::new(move || {
-                if let Some(s) = m2.estado().salida_predeterminada() {
-                    m2.silenciar_salida(&s.nombre, !s.mudo);
-                }
-            })),
-        );
-        let lista = salida.con_lista(&i.grupo);
-        raiz.append(&salida.raiz);
-        i.salida.replace(Some((salida, lista)));
-        let apps = Apps::new(&i.mezclador, &i.grupo);
-        raiz.append(&apps.raiz);
-        i.apps.replace(Some(apps));
-
-        let m = i.mezclador.clone();
-        let m2 = i.mezclador.clone();
-        let microfono = Nivel::new(
-            "󰍬",
-            move |v| {
-                if let Some(e) = m.estado().entrada_predeterminada {
-                    m.volumen_entrada(&e, v);
-                }
-            },
-            Some(Box::new(move || {
-                if let Some(e) = m2.estado().entrada_predeterminada() {
-                    m2.silenciar_entrada(&e.nombre, !e.mudo);
-                }
-            })),
-        );
-        let lista = microfono.con_lista(&i.grupo);
-        raiz.append(&microfono.raiz);
-        i.microfono.replace(Some((microfono, lista)));
-
-        let yo = self.clone();
-        let brillo = Nivel::new("󰖙", move |v| yo.mover_brillo(v), None);
-        brillo.set_nombre(tr!("Brillo"));
-        raiz.append(&brillo.raiz);
-        i.brillo.replace(Some(brillo));
-        let yo = self.clone();
-        i.brillo_.al_cambiar(move || yo.pintar_brillo());
-        self.pintar_brillo();
-        raiz
+    fn mandar_avisos(&self) {
+        let g = self.inner.lista.grupos();
+        self.mandar(Orden::Avisos(g));
     }
 
-    pub fn abrir_sesion(&self) {
-        self.abrir();
-        if let Some(m) = self.inner.menu_sesion.borrow().as_ref() {
-            m.desplegar();
-        }
-        if let Some(b) = self.llenar_sesion().first() {
-            b.grab_focus();
-        }
-        // Se abre por un bind, no por una tecla de GTK: sin esto el foco no se marca.
-        self.inner.window.set_focus_visible(true);
-    }
+    // ── Sesión ──
 
     /// Bloquear y suspender actúan directo; cerrar sesión, reiniciar y apagar piden
     /// confirmación.
-    fn llenar_sesion(&self) -> Vec<gtk::Button> {
-        let Some(menu) = self.inner.menu_sesion.borrow().clone() else {
-            return Vec::new();
-        };
+    fn llenar_sesion(&self) {
+        let a = &self.inner.acciones;
+        let p = Parte::Lista(ListaId::Sesion);
+        a.soltar(p);
+        self.inner.confirmando.replace(None);
         let directo = |glifo: &str, texto: &str, args: &'static [&'static str]| {
             let yo = self.clone();
-            Item::new(glifo, texto, None, move || {
-                yo.cerrar();
-                comando::lanzar(args);
-            })
+            Opcion::new(
+                glifo,
+                texto,
+                None,
+                a.tocar(p, move || {
+                    yo.cerrar();
+                    comando::lanzar(args);
+                }),
+            )
         };
         let confirmar = |glifo: &'static str,
                          texto: &str,
                          pregunta: &'static str,
                          args: &'static [&'static str]| {
             let yo = self.clone();
-            Item::new(glifo, texto, None, move || {
-                yo.confirmar(glifo, pregunta, args)
-            })
+            Opcion::new(
+                glifo,
+                texto,
+                None,
+                a.tocar(p, move || yo.confirmar(glifo, pregunta, args)),
+            )
         };
-        menu.llenar(vec![
+        let ops = vec![
             directo("󰌾", tr!("Bloquear pantalla"), &["loginctl", "lock-session"]),
             directo("󰤄", tr!("Suspender"), &["systemctl", "suspend"]),
             confirmar("󰍃", tr!("Cerrar sesión"), tr!("Sí, cerrar sesión"), comando::salir_de_la_sesion()),
             confirmar("󰜉", tr!("Reiniciar"), tr!("Sí, reiniciar"), &["systemctl", "reboot"]),
             confirmar("󰐥", tr!("Apagar"), tr!("Sí, apagar"), &["systemctl", "poweroff"]),
-        ])
+        ];
+        self.mandar(Orden::Lista(ListaId::Sesion, Contenido::Opciones(ops)));
     }
 
     /// El "Sí" se habilita un rato después: un doble click no confirma solo.
-    fn confirmar(
-        &self,
-        glifo: &'static str,
-        pregunta: &'static str,
-        args: &'static [&'static str],
-    ) {
-        let Some(menu) = self.inner.menu_sesion.borrow().clone() else {
+    fn confirmar(&self, glifo: &'static str, pregunta: &'static str, args: &'static [&'static str]) {
+        self.inner
+            .confirmando
+            .replace(Some((glifo, pregunta, args, false)));
+        self.pintar_confirmacion();
+        self.mandar(Orden::Enfocar(ListaId::Sesion, 1));
+        let yo = self.clone();
+        glib::timeout_add_local_once(CONFIRMAR_TRAS, move || {
+            let mut c = yo.inner.confirmando.borrow_mut();
+            let Some(x) = c.as_mut() else { return };
+            if x.0 != glifo || x.3 {
+                return;
+            }
+            x.3 = true;
+            drop(c);
+            yo.pintar_confirmacion();
+        });
+    }
+
+    fn pintar_confirmacion(&self) {
+        let Some((glifo, pregunta, args, listo)) = *self.inner.confirmando.borrow() else {
             return;
         };
+        let a = &self.inner.acciones;
+        let p = Parte::Lista(ListaId::Sesion);
+        a.soltar(p);
         let yo = self.clone();
-        let si = Item::new(glifo, pregunta, None, move || {
-            yo.cerrar();
-            comando::lanzar(args);
-        });
-        let yo = self.clone();
-        let volver = Item::new("󰁍", tr!("Volver"), None, move || {
-            if let Some(b) = yo.llenar_sesion().first() {
-                b.grab_focus();
-            }
-        });
-        let botones = menu.llenar(vec![si, volver]);
-        if let [si, volver] = botones.as_slice() {
-            volver.grab_focus();
-            self.inner.window.set_focus_visible(true);
-            si.set_sensitive(false);
-            let si = si.clone();
-            glib::timeout_add_local_once(CONFIRMAR_TRAS, move || si.set_sensitive(true));
-        }
-    }
-
-    fn conectar(&self) {
-        let i = &self.inner;
-
-        let teclas = gtk::EventControllerKey::new();
-        let yo = self.clone();
-        teclas.connect_key_pressed(move |_, tecla, _, _| {
-            if tecla == gdk::Key::Escape {
+        let mut si = Opcion::new(
+            glifo,
+            pregunta,
+            None,
+            a.tocar(p, move || {
                 yo.cerrar();
-                return glib::Propagation::Stop;
-            }
-            glib::Propagation::Proceed
-        });
-        i.window.add_controller(teclas);
-        let click = gtk::GestureClick::new();
+                comando::lanzar(args);
+            }),
+        );
+        si.habilitada = listo;
         let yo = self.clone();
-        click.connect_released(move |g, _, x, y| {
-            let w = &yo.inner.window;
-            let dentro = w.pick(x, y, gtk::PickFlags::DEFAULT).is_some_and(|p| {
-                p == *yo.inner.panel.upcast_ref::<gtk::Widget>() || p.is_ancestor(&yo.inner.panel)
-            });
-            if !dentro {
-                g.set_state(gtk::EventSequenceState::Claimed);
-                yo.cerrar();
-            }
-        });
-        i.window.add_controller(click);
-
-        let yo = self.clone();
-        i.notificaciones.al_cambiar(move |c| match c {
-            Cambio::NoMolestar(_) => yo.marcar_no_molestar(),
-            Cambio::Llego { id, .. } => yo.actualizar_lista(&[id]),
-            Cambio::Cerrada(_) => yo.actualizar_lista(&[]),
-        });
-        let yo = self.clone();
-        i.mezclador.al_cambiar(move || yo.mostrar_audio());
-        let yo = self.clone();
-        i.red.al_cambiar(move || yo.mostrar_red());
-        let yo = self.clone();
-        i.bluetooth.al_cambiar(move || yo.mostrar_bluetooth());
-        let yo = self.clone();
-        i.bluetooth.al_pedido(move |p| yo.atender_pedido(p));
-        let yo = self.clone();
-        i.energia.al_cambiar(move || yo.mostrar_energia());
-        let yo = self.clone();
-        i.mpris.al_cambiar(move || {
-            if let Some(v) = yo.inner.reproductor.borrow().as_ref() {
-                v.mostrar(yo.inner.mpris.actual());
-            }
-        });
-        self.mostrar_red();
-        self.mostrar_bluetooth();
-        self.mostrar_energia();
-        // Antes de la primera apertura y sin demorar el arranque.
-        let yo = self.clone();
-        glib::idle_add_local_once(move || {
-            if yo.inner.lista_sucia.get() {
-                yo.armar_lista();
-            }
-        });
+        let volver = Opcion::new(
+            "󰁍",
+            tr!("Volver"),
+            None,
+            a.tocar(p, move || {
+                yo.llenar_sesion();
+                yo.mandar(Orden::Enfocar(ListaId::Sesion, 0));
+            }),
+        );
+        self.mandar(Orden::Lista(
+            ListaId::Sesion,
+            Contenido::Opciones(vec![si, volver]),
+        ));
     }
 
-    fn armar_lista(&self) {
-        self.inner.lista_sucia.set(false);
-        if let Some(l) = self.inner.lista.borrow().as_ref() {
-            l.actualizar(&[]);
-        }
-    }
-
-    fn actualizar_lista(&self, cambiados: &[u32]) {
-        if self.inner.lista_sucia.get() {
-            return self.armar_lista();
-        }
-        if let Some(l) = self.inner.lista.borrow().as_ref() {
-            l.actualizar(cambiados);
-        }
-    }
+    // ── Tarjetas ──
 
     fn pintar_sesion(&self) {
         let segundos = std::fs::read_to_string("/proc/uptime")
             .ok()
             .and_then(|s| s.split_whitespace().next()?.parse::<f64>().ok())
             .unwrap_or_default();
-        if let Some(t) = self.inner.sesion.borrow().as_ref() {
-            t.poner(&resumen::sesion(segundos as u64));
-        }
+        self.poner_tarjeta(SESION, &resumen::sesion(segundos as u64), false);
     }
 
     fn pintar_cuotas(&self) {
-        if let Some((t, v)) = self.inner.cuotas.borrow().as_ref() {
-            let (estado, alerta) = v.refrescar();
-            t.poner(&resumen::Resumen {
+        use crate::cuotas;
+        let ahora = cuotas::ahora();
+        let lecturas: Vec<_> = cuotas::AGENTES
+            .into_iter()
+            .map(|a| (a, cuotas::leer(a)))
+            .collect();
+        let fila = |p: cuotas::Pintura, otras: Vec<Cuota>| Cuota {
+            glifo: p.glifo.into(),
+            nombre: p.nombre,
+            renueva: p.renueva,
+            porcentaje: p.porcentaje,
+            fraccion: p.fraccion,
+            apagada: p.apagada,
+            alerta: p.alerta,
+            otras,
+        };
+        let filas = lecturas
+            .iter()
+            .map(|(agente, l)| match cuotas::principal(l) {
+                None => fila(cuotas::sin_datos(*agente), Vec::new()),
+                Some(i) => {
+                    let otras = l
+                        .ventanas
+                        .iter()
+                        .enumerate()
+                        .filter(|(j, _)| *j != i)
+                        .map(|(_, v)| fila(cuotas::pintar(v, None, ahora), Vec::new()))
+                        .collect();
+                    fila(
+                        cuotas::pintar(&l.ventanas[i], Some((*agente, l.observada)), ahora),
+                        otras,
+                    )
+                }
+            })
+            .collect();
+        self.mandar(Orden::Lista(ListaId::Cuotas, Contenido::Cuotas(filas)));
+        let (estado, alerta) = cuotas::resumen(&lecturas, ahora);
+        self.poner_tarjeta(
+            CUOTAS,
+            &resumen::Resumen {
                 glifo: "󰊚",
                 estado,
                 encendida: false,
-            });
-            t.alertar(alerta);
-        }
+            },
+            alerta,
+        );
     }
 
     fn marcar_no_molestar(&self) {
-        if let Some(t) = self.inner.no_molestar.borrow().as_ref() {
-            t.poner(&resumen::no_molestar(
-                self.inner.notificaciones.no_molestar(),
-            ));
-        }
+        let r = resumen::no_molestar(self.inner.notificaciones.no_molestar());
+        self.poner_tarjeta(NO_MOLESTAR, &r, false);
     }
 
     fn leer_comandos(&self) {
         self.pintar_caffeine();
         self.pintar_luz();
-        self.pintar_brillo();
+        self.mostrar_niveles();
     }
 
     fn pintar_caffeine(&self) {
-        if let Some(t) = self.inner.caffeine.borrow().as_ref() {
-            t.poner(&resumen::caffeine(self.inner.idle.caffeine()));
-        }
+        let r = resumen::caffeine(self.inner.idle.caffeine());
+        self.poner_tarjeta(CAFFEINE, &r, false);
     }
 
     fn pintar_luz(&self) {
-        if let Some(t) = self.inner.luz.borrow().as_ref() {
-            t.poner(&resumen::luz(self.inner.luz_.prendida()));
-        }
+        let r = resumen::luz(self.inner.luz.prendida());
+        self.poner_tarjeta(LUZ, &r, false);
     }
 
     fn alternar_caffeine(&self) {
@@ -614,27 +664,83 @@ impl Centro {
             .mostrar(&crate::idle::aviso_caffeine(idle.caffeine()));
     }
 
-    fn pintar_brillo(&self) {
-        if let Some(n) = self.inner.brillo.borrow().as_ref() {
-            n.raiz.set_visible(self.inner.brillo_.disponible());
-            n.poner_valor(self.inner.brillo_.valor());
-        }
-    }
-
-    fn mover_brillo(&self, v: f64) {
-        if let Err(e) = self.inner.brillo_.poner(v) {
-            eprintln!("morgan: brillo: {e}");
-        }
-    }
-
     pub fn aplicar_config(&self, c: &crate::config::Sonido) {
         self.inner.ocultas.replace(c.ocultas.clone());
+        self.inner.salidas_vistas.replace(String::new());
         if self.inner.abierto.get() {
             self.mostrar_audio();
         }
     }
 
-    fn mostrar_audio(&self) {
+    // ── Niveles ──
+
+    /// Las acciones de un nivel: mover y, si tiene, el glifo. Se registran una vez.
+    fn acciones_nivel(&self, id: NivelId) -> (vista::Id, Option<vista::Id>) {
+        if let Some(a) = self.inner.niveles.borrow().get(&id) {
+            return *a;
+        }
+        let i = &self.inner;
+        let a = &i.acciones;
+        let m = i.mezclador.clone();
+        let par = match id {
+            NivelId::Salida => {
+                let m2 = m.clone();
+                (
+                    a.mover(Parte::Fija, move |v| {
+                        if let Some(s) = m.estado().predeterminada {
+                            m.volumen_salida(&s, v);
+                        }
+                    }),
+                    Some(a.tocar(Parte::Fija, move || {
+                        if let Some(s) = m2.estado().salida_predeterminada() {
+                            m2.silenciar_salida(&s.nombre, !s.mudo);
+                        }
+                    })),
+                )
+            }
+            NivelId::Microfono => {
+                let m2 = m.clone();
+                (
+                    a.mover(Parte::Fija, move |v| {
+                        if let Some(e) = m.estado().entrada_predeterminada {
+                            m.volumen_entrada(&e, v);
+                        }
+                    }),
+                    Some(a.tocar(Parte::Fija, move || {
+                        if let Some(e) = m2.estado().entrada_predeterminada() {
+                            m2.silenciar_entrada(&e.nombre, !e.mudo);
+                        }
+                    })),
+                )
+            }
+            NivelId::App(indice) => {
+                let m2 = m.clone();
+                (
+                    a.mover(Parte::Fija, move |v| m.volumen_app(indice, v)),
+                    Some(a.tocar(Parte::Fija, move || {
+                        if let Some(x) = m2.estado().apps.iter().find(|x| x.indice == indice) {
+                            m2.silenciar_app(indice, !x.mudo);
+                        }
+                    })),
+                )
+            }
+            NivelId::Brillo => {
+                let b = i.brillo.clone();
+                (
+                    a.mover(Parte::Fija, move |v| {
+                        if let Err(e) = b.poner(v) {
+                            eprintln!("morgan: brillo: {e}");
+                        }
+                    }),
+                    None,
+                )
+            }
+        };
+        self.inner.niveles.borrow_mut().insert(id, par);
+        par
+    }
+
+    fn mostrar_niveles(&self) {
         let i = &self.inner;
         let mut e = i.mezclador.estado();
         // Una salida oculta no se ofrece, salvo que esté en uso (la puesta o la de una app):
@@ -653,23 +759,70 @@ impl Centro {
                 .collect();
             e.salidas.retain(|s| !fuera.contains(&s.indice));
         }
-        if let (Some((n, _)), Some(s)) = (i.salida.borrow().as_ref(), e.salida_predeterminada()) {
-            let glifo = if s.mudo { "󰖁" } else { s.glifo() };
-            n.poner(glifo, &s.descripcion, s.volumen, s.mudo);
-        }
-        if let Some((n, _)) = i.microfono.borrow().as_ref() {
-            match e.entrada_predeterminada() {
-                Some(m) => {
-                    let glifo = if m.mudo { "󰍭" } else { "󰍬" };
-                    n.poner(glifo, &m.descripcion, m.volumen, m.mudo);
-                }
-                None => n.poner("󰍭", tr!("Sin micrófono"), 0.0, true),
+        let mut niveles = Vec::new();
+        let nivel = |id: NivelId, glifo: &str, nombre: &str, valor: f64, mudo: bool, lista: Option<ListaId>| {
+            let (mover, glifo_accion) = self.acciones_nivel(id);
+            Nivel {
+                id,
+                glifo: glifo.into(),
+                nombre: nombre.into(),
+                valor,
+                mudo,
+                glifo_accion,
+                lista,
+                mover,
             }
+        };
+        if let Some(s) = e.salida_predeterminada() {
+            let glifo = if s.mudo { "󰖁" } else { s.glifo() };
+            niveles.push(nivel(NivelId::Salida, glifo, &s.descripcion, s.volumen, s.mudo, Some(ListaId::Salida)));
         }
-        if let Some(a) = i.apps.borrow().as_ref() {
-            a.mostrar(&e);
+        for a in &e.apps {
+            let actual = e.salidas.iter().find(|s| s.indice == a.salida);
+            let glifo = if a.mudo {
+                "󰖁"
+            } else {
+                actual.map_or("󰓃", |s| s.glifo())
+            };
+            niveles.push(nivel(
+                NivelId::App(a.indice),
+                glifo,
+                &a.nombre,
+                a.volumen,
+                a.mudo,
+                Some(ListaId::App(a.indice)),
+            ));
         }
-        // Las opciones se rehacen solo si cambiaron (no en cada paso de volumen).
+        match e.entrada_predeterminada() {
+            Some(m) => {
+                let glifo = if m.mudo { "󰍭" } else { "󰍬" };
+                niveles.push(nivel(NivelId::Microfono, glifo, &m.descripcion, m.volumen, m.mudo, Some(ListaId::Microfono)));
+            }
+            None => niveles.push(nivel(NivelId::Microfono, "󰍭", tr!("Sin micrófono"), 0.0, true, Some(ListaId::Microfono))),
+        }
+        if i.brillo.disponible() {
+            niveles.push(nivel(NivelId::Brillo, "󰖙", tr!("Brillo"), i.brillo.valor(), false, None));
+        }
+        // Las apps que se fueron sueltan sus acciones.
+        {
+            let vivas: Vec<u32> = e.apps.iter().map(|a| a.indice).collect();
+            i.niveles
+                .borrow_mut()
+                .retain(|id, _| !matches!(id, NivelId::App(x) if !vivas.contains(x)));
+            i.apps_vistas.borrow_mut().retain(|x, _| vivas.contains(x));
+        }
+        self.mandar(Orden::Niveles(niveles));
+        self.listas_audio(&e);
+    }
+
+    fn mostrar_audio(&self) {
+        self.mostrar_niveles();
+    }
+
+    /// Las opciones se rehacen solo si cambiaron (no en cada paso de volumen).
+    fn listas_audio(&self, e: &crate::mezclador::Estado) {
+        let i = &self.inner;
+        let a = &i.acciones;
         let clave = format!(
             "{:?}|{:?}",
             e.predeterminada,
@@ -680,22 +833,20 @@ impl Centro {
         );
         if *i.salidas_vistas.borrow() != clave {
             i.salidas_vistas.replace(clave);
-            if let Some((_, lista)) = i.salida.borrow().as_ref() {
-                // La puesta no va: ya está en el nombre del nivel.
-                let items = e
-                    .salidas
-                    .iter()
-                    .filter(|s| e.predeterminada.as_deref() != Some(s.nombre.as_str()))
-                    .map(|s| {
-                        let m = i.mezclador.clone();
-                        let nombre = s.nombre.clone();
-                        Item::new(s.glifo(), &s.descripcion, None, move || {
-                            m.predeterminar(&nombre)
-                        })
-                    })
-                    .collect();
-                lista.llenar(items);
-            }
+            let p = Parte::Lista(ListaId::Salida);
+            a.soltar(p);
+            // La puesta no va: ya está en el nombre del nivel.
+            let ops = e
+                .salidas
+                .iter()
+                .filter(|s| e.predeterminada.as_deref() != Some(s.nombre.as_str()))
+                .map(|s| {
+                    let m = i.mezclador.clone();
+                    let nombre = s.nombre.clone();
+                    Opcion::new(s.glifo(), &s.descripcion, None, a.tocar(p, move || m.predeterminar(&nombre)))
+                })
+                .collect();
+            self.mandar(Orden::Lista(ListaId::Salida, Contenido::Opciones(ops)));
         }
         let clave = format!(
             "{:?}|{:?}",
@@ -707,58 +858,112 @@ impl Centro {
         );
         if *i.entradas_vistas.borrow() != clave {
             i.entradas_vistas.replace(clave);
-            if let Some((_, lista)) = i.microfono.borrow().as_ref() {
-                let items = e
-                    .entradas
+            let p = Parte::Lista(ListaId::Microfono);
+            a.soltar(p);
+            let ops = e
+                .entradas
+                .iter()
+                .filter(|s| e.entrada_predeterminada.as_deref() != Some(s.nombre.as_str()))
+                .map(|s| {
+                    let m = i.mezclador.clone();
+                    let nombre = s.nombre.clone();
+                    Opcion::new("󰍬", &s.descripcion, None, a.tocar(p, move || m.predeterminar_entrada(&nombre)))
+                })
+                .collect();
+            self.mandar(Orden::Lista(ListaId::Microfono, Contenido::Opciones(ops)));
+        }
+        // Las otras salidas de cada app: la puesta ya está en el glifo.
+        for app in &e.apps {
+            let clave = format!(
+                "{}|{:?}",
+                app.salida,
+                e.salidas
                     .iter()
-                    .filter(|s| e.entrada_predeterminada.as_deref() != Some(s.nombre.as_str()))
-                    .map(|s| {
-                        let m = i.mezclador.clone();
-                        let nombre = s.nombre.clone();
-                        Item::new("󰍬", &s.descripcion, None, move || {
-                            m.predeterminar_entrada(&nombre)
-                        })
-                    })
-                    .collect();
-                lista.llenar(items);
+                    .map(|s| (s.indice, &s.descripcion))
+                    .collect::<Vec<_>>()
+            );
+            if i.apps_vistas.borrow().get(&app.indice) == Some(&clave) {
+                continue;
             }
+            i.apps_vistas.borrow_mut().insert(app.indice, clave);
+            let l = ListaId::App(app.indice);
+            let p = Parte::Lista(l);
+            a.soltar(p);
+            let ops = e
+                .salidas
+                .iter()
+                .filter(|s| s.indice != app.salida)
+                .map(|s| {
+                    let (m, indice, nombre) = (i.mezclador.clone(), app.indice, s.nombre.clone());
+                    Opcion::new(s.glifo(), &s.descripcion, None, a.tocar(p, move || m.mover_app(indice, &nombre)))
+                })
+                .collect();
+            self.mandar(Orden::Lista(l, Contenido::Opciones(ops)));
         }
     }
 
-    fn mostrar_red(&self) {
-        self.pintar_red(false);
+    // ── Reproductor ──
+
+    fn mostrar_reproductor(&self) {
+        let r = self.inner.mpris.actual().map(|r| {
+            let caratula = r.caratula.as_ref().and_then(|p| self.caratula(p));
+            vista::Reproductor {
+                caratula,
+                titulo: r.titulo,
+                subtitulo: r.subtitulo,
+                sonando: r.estado == Some(crate::reproductor::Estado::Reproduciendo),
+                mezcla: r.mezcla,
+                repetir: r.repetir,
+                puede_anterior: r.puede_anterior,
+                puede_siguiente: r.puede_siguiente,
+            }
+        });
+        self.mandar(Orden::Reproductor(r));
     }
 
-    fn pintar_red(&self, forzar: bool) {
+    /// La carátula (solo local), a 72 px; se guarda la última.
+    fn caratula(&self, p: &std::path::Path) -> Option<morgan_motor::vello::peniko::ImageData> {
+        if let Some(c) = self.inner.caratulas.borrow().get(p) {
+            return c.clone();
+        }
+        let img = p
+            .exists()
+            .then(|| crate::pixeles::archivo(p, 72 * crate::pixeles::escala()))
+            .flatten();
+        let mut c = self.inner.caratulas.borrow_mut();
+        c.clear();
+        c.insert(p.to_owned(), img.clone());
+        img
+    }
+
+    // ── Red ──
+
+    fn pintar_red(&self) {
         let i = &self.inner;
-        let Some((tarjeta, lista)) = i.red_.borrow().clone() else {
-            return;
-        };
         let e = i.red.estado();
-        tarjeta.poner(&resumen::red(&e));
-        if !forzar && i.clave.borrow().is_some() {
-            return;
-        }
+        self.poner_tarjeta(RED, &resumen::red(&e), false);
+        let a = &i.acciones;
+        let p = Parte::Lista(ListaId::Red);
+        a.soltar(p);
+        a.soltar(Parte::Campo(ListaId::Red));
         // Cable y VPN arriba; las Wi-Fi, guardadas y a la vista, debajo de su radio y solo
         // con la radio prendida.
         let conexion = |c: &red::Conexion| {
             let r = i.red.clone();
             let ruta = c.ruta.clone();
-            Item::new(
+            Opcion::new(
                 c.tipo.glifo(),
                 &c.nombre,
                 Some(c.activa.is_some()),
-                move || r.alternar(&ruta),
+                a.tocar(p, move || r.alternar(&ruta)),
             )
         };
         let (wifis, otras): (Vec<_>, Vec<_>) =
             e.conexiones.iter().partition(|c| c.tipo == red::Tipo::Wifi);
-        let mut items: Vec<Item> = otras.into_iter().map(conexion).collect();
+        let mut ops: Vec<Opcion> = otras.into_iter().map(conexion).collect();
         if let Some(w) = e.wifi {
             let r = i.red.clone();
-            items.push(Item::new("󰤨", "Wi-Fi", Some(w), move || {
-                r.alternar_wifi()
-            }));
+            ops.push(Opcion::new("󰤨", "Wi-Fi", Some(w), a.tocar(p, move || r.alternar_wifi())));
         }
         if e.wifi == Some(true) {
             for c in wifis {
@@ -766,51 +971,43 @@ impl Centro {
                 let ruta = c.ruta.clone();
                 let yo2 = self.clone();
                 let ruta2 = c.ruta.clone();
-                items.push(
-                    conexion(c)
-                        .deslizable(Accion {
-                            glifo: "󰆴",
-                            texto: tr!("olvidar"),
-                            se_va: true,
-                            f: Rc::new(move || {
-                                let yo2 = yo.clone();
-                                yo.inner.red.olvidar(&ruta, move || yo2.pintar_red(true));
-                            }),
-                        })
-                        .deslizable_izquierda(Accion {
-                            glifo: "󰆏",
-                            texto: tr!("copiar la clave"),
-                            se_va: false,
-                            f: Rc::new(move || yo2.copiar_clave(&ruta2)),
-                        }),
-                );
+                let mut o = conexion(c);
+                o.derecha = Some(Deslizar {
+                    glifo: "󰆴",
+                    texto: tr!("olvidar").into(),
+                    se_va: true,
+                    accion: a.tocar(p, move || {
+                        let yo2 = yo.clone();
+                        yo.inner.red.olvidar(&ruta, move || yo2.pintar_red());
+                    }),
+                });
+                o.izquierda = Some(Deslizar {
+                    glifo: "󰆏",
+                    texto: tr!("copiar la clave").into(),
+                    se_va: false,
+                    accion: a.tocar(p, move || yo2.copiar_clave(&ruta2)),
+                });
+                ops.push(o);
             }
         }
-        let antes = items.len();
+        let pedida = i.clave.borrow().as_ref().map(|p| p.visible.ssid.clone());
+        // La red se fue de la vista: el campo no tiene adónde ir.
+        if let Some(ssid) = &pedida
+            && !e.visibles.iter().any(|v| &v.ssid == ssid)
+        {
+            i.clave.replace(None);
+        }
         for v in &e.visibles {
             let yo = self.clone();
             let v2 = v.clone();
-            items.push(Item::new(v.glifo(), &v.nombre, None, move || {
-                yo.elegir_wifi(&v2)
-            }));
+            let mut o = Opcion::new(v.glifo(), &v.nombre, None, a.tocar(p, move || yo.elegir_wifi(&v2)));
+            if pedida.as_ref() == Some(&v.ssid) {
+                o.abierta = true;
+                o.campo = self.campo_clave();
+            }
+            ops.push(o);
         }
-        let botones = lista.llenar(items);
-        let pedida = i.clave.borrow().as_ref().map(|p| p.visible.ssid.clone());
-        let Some(ssid) = pedida else { return };
-        // La red se fue de la vista: el campo no tiene adónde ir.
-        let Some(n) = e.visibles.iter().position(|v| v.ssid == ssid) else {
-            i.clave.replace(None);
-            return;
-        };
-        let Some(boton) = botones.get(antes + n) else {
-            return;
-        };
-        boton.add_css_class("abierto");
-        let campo = self.campo_clave();
-        lista
-            .opciones()
-            .insert_child_after(&campo.raiz, Some(&lista.fila(boton)));
-        campo.enfocar();
+        self.mandar(Orden::Lista(ListaId::Red, Contenido::Opciones(ops)));
     }
 
     /// Al portapapeles con `--sensitive`: el historial (cliphist) no la guarda.
@@ -840,7 +1037,7 @@ impl Centro {
         if !v.seguridad.pide_clave() {
             i.clave.replace(None);
             i.red.conectar_nueva(v, None, |_| {});
-            self.pintar_red(true);
+            self.pintar_red();
             return;
         }
         let misma = i
@@ -848,45 +1045,62 @@ impl Centro {
             .borrow()
             .as_ref()
             .is_some_and(|p| p.visible.ssid == v.ssid);
-        i.clave.replace((!misma).then(|| Pedido {
+        let nuevo = (!misma).then(|| Pedido {
             visible: v.clone(),
-            campo: None,
-        }));
-        self.pintar_red(true);
-    }
-
-    fn campo_clave(&self) -> Campo {
-        let c = Campo::clave(tr!("Contraseña"));
-        let yo = self.clone();
-        c.al_enviar(move || yo.enviar_clave());
-        let yo = self.clone();
-        c.al_escape(move || {
-            yo.inner.clave.replace(None);
-            yo.pintar_red(true);
+            generacion: self.generacion(),
+            aviso: None,
+            ocupado: false,
         });
-        if let Some(p) = self.inner.clave.borrow_mut().as_mut() {
-            p.campo = Some(c.clone());
-        }
-        c
+        i.clave.replace(nuevo);
+        self.pintar_red();
     }
 
-    fn enviar_clave(&self) {
+    fn campo_clave(&self) -> Option<Campo> {
         let i = &self.inner;
-        let Some((v, campo)) = i
-            .clave
-            .borrow()
-            .as_ref()
-            .and_then(|p| Some((p.visible.clone(), p.campo.clone()?)))
-        else {
+        let c = i.clave.borrow();
+        let pedido = c.as_ref()?;
+        let a = &i.acciones;
+        let p = Parte::Campo(ListaId::Red);
+        let yo = self.clone();
+        let enviar = a.enviar(p, move |s| yo.enviar_clave(s));
+        let yo = self.clone();
+        let escape = a.tocar(p, move || {
+            yo.inner.clave.replace(None);
+            yo.pintar_red();
+        });
+        Some(Campo {
+            generacion: pedido.generacion,
+            caja: Some(Caja {
+                glifo: "\u{F033E}",
+                placeholder: tr!("Contraseña").into(),
+                clave: true,
+                fijo: None,
+                boton: Some(BotonCampo::Ojo),
+                ocupado: pedido.ocupado,
+                enviar,
+                escape,
+            }),
+            aviso: pedido.aviso.clone(),
+        })
+    }
+
+    fn enviar_clave(&self, clave: String) {
+        let i = &self.inner;
+        let Some(v) = i.clave.borrow().as_ref().map(|p| p.visible.clone()) else {
             return;
         };
-        let clave = campo.texto.text().to_string();
         if !red::clave_valida(v.seguridad, &clave) {
-            campo.avisar(tr!("Tiene de 8 a 63 caracteres"), true);
+            if let Some(p) = i.clave.borrow_mut().as_mut() {
+                p.aviso = Some((tr!("Tiene de 8 a 63 caracteres").into(), true));
+            }
+            self.pintar_red();
             return;
         }
-        campo.ocupar(true);
-        campo.avisar(tr!("Conectando…"), false);
+        if let Some(p) = i.clave.borrow_mut().as_mut() {
+            p.ocupado = true;
+            p.aviso = Some((tr!("Conectando…").into(), false));
+        }
+        self.pintar_red();
         let yo = self.clone();
         let ssid = v.ssid.clone();
         i.red.conectar_nueva(&v, Some(clave), move |r| {
@@ -901,144 +1115,51 @@ impl Centro {
                     if sigue {
                         yo.inner.clave.replace(None);
                     }
-                    yo.pintar_red(true);
+                    yo.pintar_red();
                 }
                 Err(f) if sigue => {
-                    campo.ocupar(false);
-                    campo.texto.set_text("");
-                    campo.enfocar();
-                    let m = match f {
-                        red::Falla::Clave => tr!("Contraseña incorrecta"),
-                        red::Falla::Otra => tr!("No se pudo conectar"),
-                    };
-                    campo.avisar(m, true);
+                    let g = yo.generacion();
+                    if let Some(p) = yo.inner.clave.borrow_mut().as_mut() {
+                        // Lo escrito se borra y el campo vuelve a tomar el foco.
+                        p.ocupado = false;
+                        p.generacion = g;
+                        p.aviso = Some((
+                            match f {
+                                red::Falla::Clave => tr!("Contraseña incorrecta"),
+                                red::Falla::Otra => tr!("No se pudo conectar"),
+                            }
+                            .into(),
+                            true,
+                        ));
+                    }
+                    yo.pintar_red();
                 }
                 Err(_) => {}
             }
         });
     }
 
+    // ── Energía ──
+
     fn mostrar_energia(&self) {
         let i = &self.inner;
-        let Some((tarjeta, lista)) = i.energia_.borrow().clone() else {
-            return;
-        };
         let e = i.energia.estado();
-        tarjeta.poner(&resumen::energia(e.activo.as_deref()));
+        self.poner_tarjeta(ENERGIA, &resumen::energia(e.activo.as_deref()), false);
+        let a = &i.acciones;
+        let p = Parte::Lista(ListaId::Energia);
+        a.soltar(p);
         // El puesto no va: ya está en el estado de la tarjeta.
-        let items = e
+        let ops = e
             .perfiles
             .iter()
-            .filter(|p| e.activo.as_deref() != Some(p.as_str()))
-            .map(|p| {
-                let (glifo, nombre) = crate::energia::etiqueta(p);
+            .filter(|x| e.activo.as_deref() != Some(x.as_str()))
+            .map(|x| {
+                let (glifo, nombre) = crate::energia::etiqueta(x);
                 let en = i.energia.clone();
-                let perfil = p.clone();
-                Item::new(glifo, nombre, None, move || en.elegir(&perfil))
+                let perfil = x.clone();
+                Opcion::new(glifo, nombre, None, a.tocar(p, move || en.elegir(&perfil)))
             })
             .collect();
-        lista.llenar(items);
-    }
-}
-
-struct Pedido {
-    visible: Visible,
-    campo: Option<Campo>,
-}
-
-/// Se actualiza en el lugar: rehacerla en cada evento cortaría el arrastre de su slider.
-struct Apps {
-    raiz: gtk::Box,
-    mezclador: Mezclador,
-    grupo: Grupo,
-    filas: RefCell<HashMap<u32, FilaApp>>,
-}
-
-struct FilaApp {
-    nivel: Nivel,
-    lista: Desplegable,
-    vistas: RefCell<String>,
-}
-
-impl Apps {
-    fn new(mezclador: &Mezclador, grupo: &Grupo) -> Self {
-        let raiz = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        raiz.add_css_class("per-app-volume");
-        raiz.set_visible(false);
-        Apps {
-            raiz,
-            mezclador: mezclador.clone(),
-            grupo: grupo.clone(),
-            filas: RefCell::default(),
-        }
-    }
-
-    fn mostrar(&self, e: &Audio) {
-        let mut filas = self.filas.borrow_mut();
-        filas.retain(|indice, f| {
-            let sigue = e.apps.iter().any(|a| a.indice == *indice);
-            if !sigue {
-                self.raiz.remove(&f.nivel.raiz);
-                self.grupo.quitar(&f.lista);
-            }
-            sigue
-        });
-        for a in &e.apps {
-            let f = filas.entry(a.indice).or_insert_with(|| self.fila(a.indice));
-            let actual = e.salidas.iter().find(|s| s.indice == a.salida);
-            let glifo = if a.mudo {
-                "󰖁"
-            } else {
-                actual.map_or("󰓃", |s| s.glifo())
-            };
-            f.nivel.poner(glifo, &a.nombre, a.volumen, a.mudo);
-            // Las otras salidas: la puesta ya está en el glifo.
-            let clave = format!(
-                "{}|{:?}",
-                a.salida,
-                e.salidas
-                    .iter()
-                    .map(|s| (s.indice, &s.descripcion))
-                    .collect::<Vec<_>>()
-            );
-            if *f.vistas.borrow() != clave {
-                f.vistas.replace(clave);
-                let items = e
-                    .salidas
-                    .iter()
-                    .filter(|s| s.indice != a.salida)
-                    .map(|s| {
-                        let (m, indice, nombre) =
-                            (self.mezclador.clone(), a.indice, s.nombre.clone());
-                        Item::new(s.glifo(), &s.descripcion, None, move || {
-                            m.mover_app(indice, &nombre)
-                        })
-                    })
-                    .collect();
-                f.lista.llenar(items);
-            }
-        }
-        self.raiz.set_visible(!filas.is_empty());
-    }
-
-    fn fila(&self, indice: u32) -> FilaApp {
-        let m = self.mezclador.clone();
-        let m2 = self.mezclador.clone();
-        let nivel = Nivel::new(
-            "󰓃",
-            move |v| m.volumen_app(indice, v),
-            Some(Box::new(move || {
-                if let Some(a) = m2.estado().apps.iter().find(|a| a.indice == indice) {
-                    m2.silenciar_app(indice, !a.mudo);
-                }
-            })),
-        );
-        let lista = nivel.con_lista(&self.grupo);
-        self.raiz.append(&nivel.raiz);
-        FilaApp {
-            nivel,
-            lista,
-            vistas: RefCell::default(),
-        }
+        self.mandar(Orden::Lista(ListaId::Energia, Contenido::Opciones(ops)));
     }
 }
