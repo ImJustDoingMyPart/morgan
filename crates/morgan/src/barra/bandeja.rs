@@ -9,7 +9,6 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use gtk::glib;
 use morgan_motor::color::{Color, Paleta};
 use morgan_motor::vello::peniko::ImageData;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;

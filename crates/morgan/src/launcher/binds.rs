@@ -164,8 +164,8 @@ fn entre_comillas(ruta: &str) -> String {
 }
 
 fn carpeta_capturas() -> String {
-    gtk::glib::user_special_dir(gtk::glib::UserDirectory::Pictures)
-        .unwrap_or_else(gtk::glib::home_dir)
+    glib::user_special_dir(glib::UserDirectory::Pictures)
+        .unwrap_or_else(glib::home_dir)
         .join("Screenshots") // no-tr
         .to_string_lossy()
         .into_owned()

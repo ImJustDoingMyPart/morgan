@@ -339,8 +339,8 @@ impl Fondos {
         if !self.carpeta.is_empty() && elegida.is_dir() {
             return elegida;
         }
-        gtk::glib::user_special_dir(gtk::glib::UserDirectory::Pictures)
-            .unwrap_or_else(gtk::glib::home_dir)
+        glib::user_special_dir(glib::UserDirectory::Pictures)
+            .unwrap_or_else(glib::home_dir)
     }
 }
 

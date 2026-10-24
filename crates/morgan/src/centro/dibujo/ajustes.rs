@@ -1566,15 +1566,15 @@ impl AjustesUi {
         &mut self,
         k: Keysym,
         utf8: Option<&str>,
-        codigo: u32,
+        base: u32,
         mods: [bool; 4],
     ) -> Vec<Pedido> {
         let mut pedidos = Vec::new();
         let ctrl = mods[1];
         if self.grabando {
             pedidos.push(Pedido::Gtk(EventoAjustes::Tecla {
-                codigo,
                 keysym: k.raw(),
+                base,
                 mods,
             }));
             return pedidos;

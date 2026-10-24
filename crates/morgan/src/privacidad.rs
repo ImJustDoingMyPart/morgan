@@ -15,7 +15,6 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::glib;
 use libpulse_binding as pulse;
 use pulse::callbacks::ListResult;
 use pulse::context::State;

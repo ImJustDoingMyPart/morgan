@@ -12,7 +12,6 @@
 
 use std::time::{Duration, Instant};
 
-use gtk::glib;
 use morgan_motor::color::{Color, Paleta, con_alfa, pincel};
 use morgan_motor::curva::Transicion;
 use morgan_motor::forma::{Borde, degrade_135, panel, sombra};

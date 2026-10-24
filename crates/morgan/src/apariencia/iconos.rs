@@ -3,8 +3,7 @@
 
 use std::path::PathBuf;
 
-use gtk::gio;
-use gtk::prelude::*;
+use gio::prelude::*;
 
 use super::archivos::{self, reescribir};
 use super::cursores::bases;
@@ -81,7 +80,7 @@ fn mas_parecido<'a>(objetivo: &str, opciones: impl Iterator<Item = (&'a str, &'a
 
 /// Lo trae la hoja de colores de morgan, que todo tema renderiza.
 fn primary() -> Option<String> {
-    let t = std::fs::read_to_string(gtk::glib::user_config_dir().join("morgan/theme.css")).ok()?;
+    let t = std::fs::read_to_string(glib::user_config_dir().join("morgan/theme.css")).ok()?;
     t.lines().find_map(|l| {
         let hex = l.strip_prefix("@define-color primary ")?.strip_suffix(';')?;
         (hex.len() == 7 && hex.starts_with('#')).then(|| hex.to_owned())
@@ -163,7 +162,7 @@ fn poner_tema(tema: &str) {
         eprintln!("morgan: apariencia: gsettings icon-theme: {e}");
     }
     for ini in ["gtk-3.0/settings.ini", "gtk-4.0/settings.ini"] {
-        let ruta = gtk::glib::user_config_dir().join(ini);
+        let ruta = glib::user_config_dir().join(ini);
         reescribir(&ruta, |t| archivos::ini(t, "gtk-icon-theme-name", tema));
     }
 }
@@ -203,7 +202,7 @@ pub fn resincronizar() {
 }
 
 fn papirus_local() -> PathBuf {
-    gtk::glib::user_data_dir().join("icons")
+    glib::user_data_dir().join("icons")
 }
 
 /// En otro hilo y sin esperar: `papirus-folders` tarda segundos, casi todo en

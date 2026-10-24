@@ -19,8 +19,6 @@ url='https://github.com/ImJustDoingMyPart/morgan'
 license=('GPL-3.0-or-later' 'MIT')
 depends=(
     'hyprland>=0.56'
-    'gtk4>=1:4.22'
-    'gtk4-layer-shell'
     'libpulse'
     'glib2'
     'pam'

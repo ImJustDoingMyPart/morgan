@@ -239,47 +239,6 @@ pub fn dur(base: Duration) -> Duration {
     base.mul_f64(ritmo())
 }
 
-/// Los que van en `s` son latidos, no transiciones, y quedan como están.
-pub fn escalar_css(css: &str) -> String {
-    escalar_css_con(css, ritmo())
-}
-
-fn escalar_css_con(css: &str, r: f64) -> String {
-    if r == 1.0 {
-        return css.to_owned();
-    }
-    let mut out = String::with_capacity(css.len());
-    let mut resto = css;
-    while let Some(i) = resto.find("ms") {
-        let antes = &resto[..i];
-        let digitos = antes.len() - antes.trim_end_matches(|c: char| c.is_ascii_digit()).len();
-        let numero = &antes[antes.len() - digitos..];
-        // Un número suelto (no la cola de un nombre como `item2ms`) seguido de `ms` y de algo
-        // que no sigue la palabra.
-        let suelto = antes[..antes.len() - digitos]
-            .chars()
-            .next_back()
-            .is_none_or(|c| !c.is_alphanumeric() && c != '_' && c != '-' && c != '.');
-        let corta = resto[i + 2..]
-            .chars()
-            .next()
-            .is_none_or(|c| !c.is_alphanumeric() && c != '_' && c != '-');
-        match numero.parse::<f64>() {
-            Ok(n) if digitos > 0 && suelto && corta => {
-                out.push_str(&antes[..antes.len() - digitos]);
-                out.push_str(&format!("{}ms", (n * r).round() as u32));
-            }
-            _ => {
-                out.push_str(antes);
-                out.push_str("ms");
-            }
-        }
-        resto = &resto[i + 2..];
-    }
-    out.push_str(resto);
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -407,30 +366,5 @@ mod tests {
         assert_eq!(ds(150), "1.5");
         assert_eq!(ds(187), "1.87");
         assert_eq!(ds(90), "0.9");
-    }
-
-    #[test]
-    fn la_hoja_escala_los_ms_y_deja_los_segundos() {
-        let css = "transition: opacity 100ms ease, transform 150ms cubic-bezier(0.05, 0.7, 0.1, 1);\n\
-                   animation: grabando 1s ease-in-out infinite; .item2ms {}";
-        assert_eq!(
-            escalar_css_con(css, 0.6),
-            "transition: opacity 60ms ease, transform 90ms cubic-bezier(0.05, 0.7, 0.1, 1);\n\
-             animation: grabando 1s ease-in-out infinite; .item2ms {}"
-        );
-        assert_eq!(escalar_css_con(css, 1.0), css);
-    }
-
-    #[test]
-    fn la_hoja_real_escala_todos_sus_tiempos() {
-        // Suma de los `<n>ms` contada aparte, partiendo en lo que no es letra ni número.
-        let suma = |css: &str| -> u32 {
-            css.split(|c: char| !c.is_ascii_alphanumeric())
-                .filter_map(|t| t.strip_suffix("ms")?.parse::<u32>().ok())
-                .sum()
-        };
-        let css = include_str!("estilo.css");
-        // La hoja ya casi no tiene tiempos (lo demás se dibuja con el motor): lo que quede, escala.
-        assert_eq!(suma(&escalar_css_con(css, 2.0)), 2 * suma(css));
     }
 }

@@ -15,8 +15,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::prelude::*;
-use gtk::{gio, glib};
+use gio::prelude::*;
 use morgan_ipc::ModoLauncher as Modo;
 use morgan_motor::vello::peniko::ImageData;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;

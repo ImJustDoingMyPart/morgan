@@ -51,8 +51,62 @@ pub fn seguro(texto: &str) -> String {
     out
 }
 
-/// Los enlaces los entiende `GtkLabel`, no Pango: para pasarle a Pango la salida de
-/// [`seguro`], se sacan. El `href` va escapado, así que no contiene `>`.
+/// El texto de un markup sin etiquetas y con sus entidades resueltas, para copiar.
+pub fn plano(m: &str) -> String {
+    let mut out = String::with_capacity(m.len());
+    let mut resto = m;
+    while let Some(c) = resto.chars().next() {
+        match c {
+            '<' => match resto.find('>') {
+                Some(f) => resto = &resto[f + 1..],
+                None => {
+                    out.push('<');
+                    resto = &resto[1..];
+                }
+            },
+            '&' => {
+                let largo = entidad(resto);
+                match (largo > 2).then(|| desescapar(&resto[1..largo - 1])).flatten() {
+                    Some(d) => {
+                        out.push(d);
+                        resto = &resto[largo..];
+                    }
+                    None => {
+                        out.push('&');
+                        resto = &resto[1..];
+                    }
+                }
+            }
+            _ => {
+                out.push(c);
+                resto = &resto[c.len_utf8()..];
+            }
+        }
+    }
+    out
+}
+
+/// El carácter de una entidad (sin el `&` ni el `;`).
+fn desescapar(nombre: &str) -> Option<char> {
+    match nombre {
+        "amp" => Some('&'),
+        "lt" => Some('<'),
+        "gt" => Some('>'),
+        "quot" => Some('"'),
+        "apos" => Some('\''),
+        _ => {
+            let n = nombre.strip_prefix('#')?;
+            let v = match n.strip_prefix(['x', 'X']) {
+                Some(h) => u32::from_str_radix(h, 16).ok()?,
+                None => n.parse().ok()?,
+            };
+            char::from_u32(v)
+        }
+    }
+}
+
+/// Los enlaces se sacan antes de revisar la salida de [`seguro`]. El `href` va escapado, así
+/// que no contiene `>`.
 #[cfg(test)]
 fn sin_enlaces(m: &str) -> String {
     let mut out = String::with_capacity(m.len());
@@ -165,15 +219,51 @@ fn entidad(s: &str) -> usize {
 }
 
 fn escapar(s: &str) -> String {
-    gtk::glib::markup_escape_text(s).to_string()
+    glib::markup_escape_text(s).to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Lo que pide Pango: solo `b`, `i` y `u`, bien anidadas; las entidades, completas; ni `<`
+    /// ni `>` sueltos.
     fn valido(m: &str) -> bool {
-        gtk::pango::parse_markup(&sin_enlaces(m), '\0').is_ok()
+        let m = sin_enlaces(m);
+        let mut abiertas: Vec<&str> = Vec::new();
+        let mut resto = m.as_str();
+        while let Some(c) = resto.chars().next() {
+            match c {
+                '<' => {
+                    let Some(f) = resto.find('>') else { return false };
+                    let tag = &resto[1..f];
+                    match tag.strip_prefix('/') {
+                        Some(t) => {
+                            if abiertas.pop() != Some(t) {
+                                return false;
+                            }
+                        }
+                        None if SIMPLES.contains(&tag) => abiertas.push(tag),
+                        None => return false,
+                    }
+                    resto = &resto[f + 1..];
+                }
+                '>' => return false,
+                '&' => match entidad(resto) {
+                    0 => return false,
+                    l => resto = &resto[l..],
+                },
+                _ => resto = &resto[c.len_utf8()..],
+            }
+        }
+        abiertas.is_empty()
+    }
+
+    #[test]
+    fn texto_plano_sin_etiquetas() {
+        assert_eq!(plano("<b>hola</b> &amp; <i>chau</i>"), "hola & chau");
+        assert_eq!(plano("a &lt;b&gt; &#65;&#x42; &raro"), "a <b> AB &raro");
+        assert_eq!(plano("sin cierre <"), "sin cierre <");
     }
 
     #[test]

@@ -11,7 +11,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::glib;
 use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue};
 
 use crate::sistema;

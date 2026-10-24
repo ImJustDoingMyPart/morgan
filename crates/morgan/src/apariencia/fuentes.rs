@@ -4,8 +4,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 
-use gtk::gio;
-use gtk::prelude::*;
+use gio::prelude::*;
 
 use super::archivos::{self, reescribir};
 
@@ -16,7 +15,7 @@ pub enum Ambito {
 }
 
 fn config(rel: &str) -> PathBuf {
-    gtk::glib::user_config_dir().join(rel)
+    glib::user_config_dir().join(rel)
 }
 
 /// Una sola llamada para las dos listas (hay cientos de familias instaladas). `:lang=es`

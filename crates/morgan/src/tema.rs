@@ -5,9 +5,8 @@ use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
 
-use gtk::gio::{self, FileMonitorEvent, FileMonitorFlags};
-use gtk::prelude::*;
-use gtk::{gdk, glib};
+use gio::prelude::*;
+use gio::{FileMonitorEvent, FileMonitorFlags};
 
 use morgan_motor::forma::Borde;
 
@@ -20,14 +19,11 @@ pub struct Tema {
 
 struct Inner {
     link: PathBuf,
-    estructura: RefCell<String>,
-    provider: gtk::CssProvider,
     pendiente: Cell<bool>,
     estado: RefCell<Estado>,
-    /// Lo que no es GTK (el OSD) recibe los colores cargados, la opacidad de las tarjetas y lo
+    /// Las superficies reciben los colores cargados, la opacidad de las tarjetas y lo
     /// de afuera del anillo.
     cargado: RefCell<(String, f64, Borde)>,
-    shell: RefCell<Shell>,
     oyentes: RefCell<Vec<Oyente>>,
 }
 
@@ -44,24 +40,12 @@ struct Estado {
 
 impl Tema {
     /// `borde`: lo de afuera del anillo de los paneles, que sigue a la sombra de las ventanas.
-    pub fn new(display: &gdk::Display, link: PathBuf, shell: &Shell, borde: Borde) -> Self {
-        let provider = gtk::CssProvider::new();
-        provider.connect_parsing_error(|_, section, error| {
-            eprintln!("morgan: tema: {section}: {error}");
-        });
-        gtk::style_context_add_provider_for_display(
-            display,
-            &provider,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
+    pub fn new(link: PathBuf, shell: &Shell, borde: Borde) -> Self {
         let inner = Rc::new(Inner {
-            estructura: RefCell::new(estructura(shell)),
             link,
-            provider,
             pendiente: Cell::new(false),
             estado: RefCell::default(),
             cargado: RefCell::new((String::new(), shell.opacidad, borde)),
-            shell: RefCell::new(shell.clone()),
             oyentes: RefCell::default(),
         });
         let link_monitor = monitor(&inner.link, Rc::downgrade(&inner));
@@ -81,7 +65,6 @@ impl Tema {
     }
 
     pub fn set_shell(&self, shell: &Shell) {
-        self.inner.shell.replace(shell.clone());
         self.inner.cargado.borrow_mut().1 = shell.opacidad;
         self.rehacer();
     }
@@ -92,8 +75,6 @@ impl Tema {
     }
 
     fn rehacer(&self) {
-        let shell = self.inner.shell.borrow().clone();
-        self.inner.estructura.replace(estructura(&shell));
         self.inner.estado.borrow_mut().colores = None;
         self.inner.refrescar();
     }
@@ -126,8 +107,6 @@ impl Inner {
         match std::fs::read_to_string(&self.link) {
             Ok(colores) => {
                 if estado.colores.as_ref() != Some(&colores) {
-                    self.provider
-                        .load_from_string(&format!("{colores}\n{}", self.estructura.borrow()));
                     // Otro tema (no el primero al arrancar): el color de las carpetas del tema de íconos lo
                     // sigue. Después de soltar el estado.
                     let otro_tema = estado.colores.is_some();
@@ -145,8 +124,6 @@ impl Inner {
                 eprintln!("morgan: tema: {}: {e}", self.link.display());
                 if estado.colores.is_none() {
                     let colores = morgan_temas::colores_por_defecto();
-                    self.provider
-                        .load_from_string(&format!("{colores}\n{}", self.estructura.borrow()));
                     self.cargar(&colores);
                 }
             }
@@ -191,47 +168,4 @@ fn recarga(event: FileMonitorEvent) -> bool {
             | FileMonitorEvent::PreUnmount
             | FileMonitorEvent::Unmounted
     )
-}
-
-fn estructura(shell: &Shell) -> String {
-    let o = shell.opacidad;
-    format!(
-        "@define-color morgan_fondo alpha(@surface_container_low, {o});\n\
-         @define-color morgan_barra alpha(@surface, {o});\n{}",
-        crate::animaciones::escalar_css(include_str!("estilo.css"))
-    )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn opacidad_en_la_hoja() {
-        let hoja = estructura(
-            &Shell {
-                opacidad: 0.85,
-                ..Shell::default()
-            },
-        );
-        assert!(
-            hoja.starts_with("@define-color morgan_fondo alpha(@surface_container_low, 0.85);\n")
-        );
-        assert!(hoja.contains("@define-color morgan_barra alpha(@surface, 0.85);\n"));
-        assert!(
-            estructura(
-                &Shell {
-                    opacidad: 1.0,
-                    ..Shell::default()
-                },
-            )
-            .contains(", 1);")
-        );
-    }
-
-    #[test]
-    fn la_hoja_no_trae_hex() {
-        // Los colores salen de los roles de matugen, nunca de un valor fijo en la estructura.
-        assert!(!include_str!("estilo.css").contains('#'));
-    }
 }

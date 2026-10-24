@@ -20,7 +20,6 @@ use std::num::NonZeroU32;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::glib;
 use morgan_ipc::Request;
 use morgan_motor::color::Paleta;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;

@@ -37,7 +37,7 @@ const COMPETIDORES: &[&str] = &[
 ];
 
 pub fn correr() -> ExitCode {
-    let config = gtk::glib::user_config_dir();
+    let config = glib::user_config_dir();
     let hypr = config.join("hypr/hyprland.lua");
     if !hypr.is_file() {
         if config.join("hypr/hyprland.conf").is_file() {

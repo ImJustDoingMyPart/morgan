@@ -11,8 +11,6 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use gtk::prelude::*;
-use gtk::{gdk, glib};
 
 use crate::config;
 use crate::hyprland::Hyprland;
@@ -384,14 +382,23 @@ impl Notificaciones {
         let dir = self.inner.dir.as_ref()?.join("imagenes");
         std::fs::create_dir_all(&dir).ok()?;
         let ruta = dir.join(format!("{id}.png"));
-        let formato = if p.alfa {
-            gdk::MemoryFormat::R8g8b8a8
+        let (ancho, alto, fila) = (p.ancho as usize, p.alto as usize, p.fila as usize);
+        let canales = if p.alfa { 4 } else { 3 };
+        // Sin el relleno del final de cada fila.
+        let mut compacto = Vec::with_capacity(ancho * alto * canales);
+        for y in 0..alto {
+            let Some(f) = p.datos.get(y * fila..y * fila + ancho * canales) else {
+                eprintln!("morgan: notificaciones: imagen incompleta");
+                return None;
+            };
+            compacto.extend_from_slice(f);
+        }
+        let color = if p.alfa {
+            image::ExtendedColorType::Rgba8
         } else {
-            gdk::MemoryFormat::R8g8b8
+            image::ExtendedColorType::Rgb8
         };
-        let bytes = glib::Bytes::from(&p.datos[..]);
-        let textura = gdk::MemoryTexture::new(p.ancho, p.alto, formato, &bytes, p.fila as usize);
-        match textura.save_to_png(&ruta) {
+        match image::save_buffer(&ruta, &compacto, p.ancho as u32, p.alto as u32, color) {
             Ok(()) => Some(ruta),
             Err(e) => {
                 eprintln!("morgan: notificaciones: no se pudo guardar la imagen: {e}");
@@ -402,7 +409,7 @@ impl Notificaciones {
 }
 
 fn escritorio(n: &mut Notificacion) {
-    use gtk::gio::prelude::{AppInfoExt, IconExt};
+    use gio::prelude::{AppInfoExt, IconExt};
     let Some(info) = n.entradas().iter().find_map(|e| {
         let id = format!("{e}.desktop");
         gio_unix::DesktopAppInfo::new(&id)
@@ -473,9 +480,7 @@ fn escribir(dir: &Path, g: &Guardado) -> std::io::Result<()> {
 
 /// Título y cuerpo sin markup, para copiar.
 pub fn texto_plano(n: &Notificacion) -> String {
-    let cuerpo = gtk::pango::parse_markup(&n.cuerpo, '\0')
-        .map(|(_, t, _)| t.to_string())
-        .unwrap_or_else(|_| n.cuerpo.clone());
+    let cuerpo = markup::plano(&n.cuerpo);
     [n.titulo(), cuerpo.as_str()]
         .into_iter()
         .filter(|t| !t.is_empty())

@@ -12,7 +12,6 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use futures_lite::StreamExt;
-use gtk::glib;
 use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};

@@ -6,7 +6,6 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use futures_lite::StreamExt;
-use gtk::glib;
 use zbus::{Connection, MatchRule, MessageStream};
 
 thread_local! {

@@ -53,7 +53,7 @@ impl Imagen {
             return None;
         }
         if let Some(ruta) = s.strip_prefix("file://") {
-            let ruta = gtk::glib::uri_unescape_string(ruta, None::<&str>)
+            let ruta = glib::uri_unescape_string(ruta, None::<&str>)
                 .map(|r| r.to_string())
                 .unwrap_or_else(|| ruta.to_owned());
             return Some(Imagen::Archivo(ruta.into()));

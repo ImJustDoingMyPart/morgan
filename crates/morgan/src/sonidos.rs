@@ -7,8 +7,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use futures_lite::StreamExt;
-use gtk::prelude::*;
-use gtk::{gio, glib};
+use gio::prelude::*;
 use libpulse_binding as pulse;
 use pulse::context::subscribe::{Facility, InterestMaskSet, Operation};
 use zbus::Proxy;

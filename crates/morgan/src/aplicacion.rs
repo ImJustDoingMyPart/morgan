@@ -3,7 +3,6 @@
 //! sus ventanas y el comando que la lanza.
 
 use gio::prelude::*;
-use gtk::gio;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct App {

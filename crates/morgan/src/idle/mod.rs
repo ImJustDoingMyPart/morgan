@@ -13,7 +13,6 @@ use std::os::fd::OwnedFd;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::glib;
 use zbus::Proxy;
 use zbus::zvariant::OwnedObjectPath;
 

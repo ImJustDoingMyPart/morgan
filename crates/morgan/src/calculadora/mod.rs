@@ -9,8 +9,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::gio::prelude::*;
-use gtk::{gio, glib};
+use gio::prelude::*;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::centro::Centro;

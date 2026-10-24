@@ -10,7 +10,6 @@
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
-use gtk::glib;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::centro::hilo::Orden;

@@ -11,7 +11,6 @@ pub mod modelo;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use gtk::glib;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::agenda::Agenda;

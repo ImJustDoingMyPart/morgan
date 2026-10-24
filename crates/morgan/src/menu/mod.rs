@@ -6,6 +6,7 @@
 //! escribe en `config.toml`, se relee y se aplica en vivo.
 
 pub(crate) mod arbol;
+mod carpeta;
 pub mod atajos;
 pub mod compositor;
 pub(crate) mod cursores;
@@ -21,8 +22,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::glib;
-use gtk::prelude::*;
+use gio::prelude::*;
 use morgan_ipc::{ModoLauncher, NivelMenu};
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
@@ -335,11 +335,7 @@ impl Menu {
                     self.mandar(Orden::AjustesHecho { lugar, ok: true });
                 }
             }
-            EventoAjustes::Tecla {
-                codigo,
-                keysym,
-                mods,
-            } => self.tecla_grabada(codigo, keysym, mods),
+            EventoAjustes::Tecla { keysym, base, mods } => self.tecla_grabada(keysym, base, mods),
             EventoAjustes::Cerrado => self.cerrado(),
         }
     }
@@ -768,12 +764,10 @@ impl Menu {
         }
     }
 
-    fn tecla_grabada(&self, codigo: u32, keysym: u32, mods: [bool; 4]) {
-        use gtk::gdk::Key;
-        use gtk::glib::translate::FromGlib;
+    fn tecla_grabada(&self, keysym: u32, base: u32, mods: [bool; 4]) {
+        use smithay_client_toolkit::seat::keyboard::Keysym as Key;
         let i = &self.inner;
-        // SAFETY: todo u32 es un keyval (uno desconocido no tiene nombre).
-        let tecla = unsafe { Key::from_glib(keysym) };
+        let tecla = Key::new(keysym);
         let sin_mods = !mods.contains(&true);
         let (pendiente, cargada, lugar) = match &*i.grabando.borrow() {
             None => return,
@@ -808,12 +802,7 @@ impl Menu {
             _ => {}
         }
         // Hyprland compara la tecla sin los modificadores puestos (Shift + 1 es `1`, no `!`).
-        let base = gtk::gdk::Display::default()
-            .and_then(|d| d.translate_key(codigo, gtk::gdk::ModifierType::empty(), 0))
-            .map_or(tecla, |(k, ..)| k);
-        let Some(nombre) = base.name() else {
-            return;
-        };
+        let nombre = xkbcommon::xkb::keysym_get_name(Key::new(base));
         let nueva = binds::combinacion(mods, &nombre);
         let comparable = binds::normalizar(&nueva);
         let (id, choque) = {
@@ -947,10 +936,7 @@ impl Menu {
                 sonidos::sonar(&demo, Some(&carpeta));
                 Ok(())
             }
-            Que::BorrarRecientes => gtk::RecentManager::default()
-                .purge_items()
-                .map(drop)
-                .map_err(|e| format!("recientes: {e}")),
+            Que::BorrarRecientes => lectura::borrar_recientes(),
             Que::Autoarranque(archivo, activar) => lectura::poner_autoarranque(&archivo, activar)
                 .map_err(|e| format!("autoarranque de {archivo}: {e}")),
             Que::Fondos
@@ -969,14 +955,8 @@ impl Menu {
         let yo = self.clone();
         let actual = actual.to_owned();
         glib::MainContext::default().spawn_local(async move {
-            let dialogo = gtk::FileDialog::new();
-            dialogo.set_title("Carpeta de fondos");
-            dialogo.set_accept_label(Some("Elegir"));
-            if actual.is_dir() {
-                dialogo.set_initial_folder(Some(&gtk::gio::File::for_path(&actual)));
-            }
-            let elegida = dialogo.select_folder_future(gtk::Window::NONE).await;
-            if let Some(ruta) = elegida.ok().and_then(|f| f.path()) {
+            let elegida = carpeta::elegir("Carpeta de fondos", "Elegir", &actual).await;
+            if let Some(ruta) = elegida {
                 let c = arbol::Cambio::CarpetaFondos(ruta.to_string_lossy().into_owned());
                 if let Err(e) = yo.cambiar_config(&c) {
                     eprintln!("morgan: menú: {e}");

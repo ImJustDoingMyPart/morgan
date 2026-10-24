@@ -6,7 +6,6 @@
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
-use gtk::glib;
 use serde_json::Value;
 
 use crate::calendario::modelo::{Clima, Pronostico};

@@ -11,9 +11,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use gtk::gio;
-use gtk::gio::prelude::*;
-use gtk::glib;
+use gio::prelude::*;
 use serde::Deserialize;
 
 use morgan_ipc::hyprland::{dir_from, pedir_ya};

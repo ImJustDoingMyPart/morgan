@@ -40,7 +40,7 @@ fn sombra(id: &str) -> &'static (&'static str, &'static str, &'static str, &'sta
 pub fn ruta() -> PathBuf {
     std::env::var_os("MORGAN_HYPR_CFG")
         .map(PathBuf::from)
-        .unwrap_or_else(|| gtk::glib::user_config_dir().join("hypr/morgan.lua"))
+        .unwrap_or_else(|| glib::user_config_dir().join("hypr/morgan.lua"))
 }
 
 fn colores_tema() -> PathBuf {
@@ -138,7 +138,7 @@ pub async fn aplicar(c: &Config, ruta_config: &Path) -> Result<(), String> {
     let cambios = Cambios::leer(&ruta_cambios(ruta_config))?;
     let monitores = Reglas::leer(&ruta_monitores(ruta_config))?;
     let destino = ruta();
-    let hyprshot = gtk::glib::find_program_in_path("hyprshot").is_some();
+    let hyprshot = glib::find_program_in_path("hyprshot").is_some();
     let nuevo = lua(c, &cambios, &monitores, &colores_tema(), hyprshot);
     let antes = std::fs::read_to_string(&destino).ok();
     if antes.as_deref() == Some(nuevo.as_str()) {

@@ -9,7 +9,6 @@ use std::process::{Command, Stdio};
 use std::rc::Rc;
 use std::sync::{Arc, Condvar, Mutex};
 
-use gtk::glib;
 
 use crate::osd::{Aviso, Cuerpo};
 

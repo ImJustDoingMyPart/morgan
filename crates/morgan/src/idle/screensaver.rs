@@ -116,7 +116,7 @@ pub async fn levantar(aviso: async_channel::Sender<usize>) -> zbus::Result<Conne
         .map(|b| b.build())
         .expect("regla fija");
     let mut senales = MessageStream::for_match_rule(regla, &c, Some(64)).await?;
-    gtk::glib::MainContext::default().spawn_local(async move {
+    glib::MainContext::default().spawn_local(async move {
         while let Some(Ok(m)) = senales.next().await {
             let Ok((nombre, _, nuevo)) = m.body().deserialize::<(String, String, String)>() else {
                 continue;

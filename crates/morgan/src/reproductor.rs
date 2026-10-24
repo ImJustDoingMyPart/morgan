@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use futures_lite::StreamExt;
-use gtk::glib;
 use morgan_ipc::AccionReproductor;
 use zbus::Connection;
 use zbus::zvariant::{OwnedValue, Value};

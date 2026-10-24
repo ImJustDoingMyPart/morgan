@@ -11,7 +11,6 @@ use std::os::unix::fs::FileExt;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::{gio, glib};
 use morgan_motor::vello::peniko::ImageData;
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{wl_buffer, wl_registry, wl_shm, wl_shm_pool};

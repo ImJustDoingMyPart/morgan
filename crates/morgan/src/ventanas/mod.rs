@@ -24,8 +24,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use gtk::prelude::*;
-use gtk::{gio, glib};
+use gio::prelude::*;
 use morgan_motor::vello::peniko::ImageData;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 

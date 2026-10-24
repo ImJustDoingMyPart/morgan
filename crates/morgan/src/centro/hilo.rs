@@ -208,6 +208,9 @@ struct Hilo {
     forma_puesta: Option<Shape>,
     teclado: Option<wl_keyboard::WlKeyboard>,
     mods: Modifiers,
+    /// Para pasar una tecla a la que es sin modificadores: el mapa y la distribución en uso.
+    keymap: Option<xkbcommon::xkb::Keymap>,
+    layout: u32,
     gpu: Gpu,
     escena: Scene,
     ui: Ui,
@@ -290,6 +293,8 @@ fn correr(
         forma_puesta: None,
         teclado: None,
         mods: Modifiers::default(),
+        keymap: None,
+        layout: 0,
         escena: Scene::new(),
         ui: Ui::new(paleta, opacidad, borde),
         panel: None,
@@ -1525,6 +1530,20 @@ impl Hilo {
         }
     }
 
+    /// El keysym de la tecla `codigo` (de xkb) sin modificadores, en la distribución en uso; sin
+    /// mapa, el mismo `keysym`.
+    fn base_de(&self, codigo: u32, keysym: Keysym) -> u32 {
+        self.keymap
+            .as_ref()
+            .and_then(|k| {
+                k.key_get_syms_by_level(xkbcommon::xkb::Keycode::new(codigo), self.layout, 0)
+                    .first()
+                    .copied()
+            })
+            .unwrap_or(keysym)
+            .raw()
+    }
+
     fn tecla(&mut self, ev: KeyEvent) {
         // El menú es lo último que se abrió: el teclado es suyo.
         if let Some(m) = &mut self.menu {
@@ -1558,7 +1577,7 @@ impl Hilo {
             let pedidos = self.ajustes_ui.tecla(
                 ev.keysym,
                 ev.utf8.as_deref(),
-                ev.raw_code + 8,
+                self.base_de(ev.raw_code + 8, ev.keysym),
                 [m.logo, m.ctrl, m.alt, m.shift],
             );
             self.pedidos_ajustes(pedidos);
@@ -1991,9 +2010,26 @@ impl KeyboardHandler for Hilo {
         _: u32,
         m: Modifiers,
         _: RawModifiers,
-        _: u32,
+        layout: u32,
     ) {
         self.mods = m;
+        self.layout = layout;
+    }
+
+    fn update_keymap(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_keyboard::WlKeyboard,
+        keymap: smithay_client_toolkit::seat::keyboard::Keymap<'_>,
+    ) {
+        use xkbcommon::xkb;
+        self.keymap = xkb::Keymap::new_from_string(
+            &xkb::Context::new(xkb::CONTEXT_NO_FLAGS),
+            keymap.as_string(),
+            xkb::KEYMAP_FORMAT_TEXT_V1,
+            xkb::KEYMAP_COMPILE_NO_FLAGS,
+        );
     }
 }
 

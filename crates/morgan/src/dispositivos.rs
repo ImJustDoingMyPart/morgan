@@ -10,7 +10,6 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use futures_lite::StreamExt;
-use gtk::glib;
 use zbus::zvariant::OwnedValue;
 use zbus::{MatchRule, MessageStream};
 

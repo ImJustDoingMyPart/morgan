@@ -13,8 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use gtk::gio;
-use gtk::gio::prelude::*;
+use gio::prelude::*;
 use morgan_motor::color::Color;
 use morgan_motor::vello::peniko::{Blob, ImageAlphaType, ImageData, ImageFormat};
 

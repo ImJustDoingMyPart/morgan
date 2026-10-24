@@ -373,8 +373,9 @@ pub enum EventoAjustes {
     /// Grabando un atajo: la tecla, con su código (de xkb), su keysym y los modificadores
     /// (Super, Ctrl, Alt, Shift).
     Tecla {
-        codigo: u32,
         keysym: u32,
+        /// El keysym de la misma tecla sin modificadores (Shift + 1 es `1`, no `!`).
+        base: u32,
         mods: [bool; 4],
     },
     /// Lo cerró el menú mismo (Escape, un click afuera).

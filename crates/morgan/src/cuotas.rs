@@ -174,14 +174,14 @@ fn guardada(ruta: &Path) -> Option<(i64, Value)> {
 }
 
 fn carpeta_guardadas() -> PathBuf {
-    gtk::glib::user_cache_dir().join("morgan/cuotas")
+    glib::user_cache_dir().join("morgan/cuotas")
 }
 
 /// Lee solo la cola de cada archivo: el evento se reescribe en cada turno.
 fn ultima_de_codex() -> Option<(i64, Value)> {
     let mut archivos = Vec::new();
     juntar_jsonl(
-        &gtk::glib::home_dir().join(".codex/sessions"),
+        &glib::home_dir().join(".codex/sessions"),
         &mut archivos,
     );
     archivos.sort_by_key(|(t, _)| std::cmp::Reverse(*t));
@@ -254,7 +254,7 @@ pub fn ultima_linea_con_cuota(texto: &str) -> Option<(i64, Value)> {
         if !cuota.is_object() {
             return None;
         }
-        let cuando = gtk::glib::DateTime::from_iso8601(v.get("timestamp")?.as_str()?, None)
+        let cuando = glib::DateTime::from_iso8601(v.get("timestamp")?.as_str()?, None)
             .ok()?
             .to_unix();
         Some((cuando, cuota.clone()))

@@ -12,7 +12,6 @@ use std::process::{Command, Stdio};
 use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
-use gtk::{gio, glib};
 
 const RELEER: Duration = Duration::from_secs(15 * 60);
 /// Desde la medianoche de hoy: contando desde ahora, un evento de día entero desaparecería el

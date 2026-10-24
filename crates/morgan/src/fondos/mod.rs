@@ -12,7 +12,6 @@ use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use gtk::{gio, glib};
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::centro::Centro;

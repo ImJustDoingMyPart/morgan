@@ -3,12 +3,29 @@
 
 use std::path::{Path, PathBuf};
 
-use gtk::prelude::*;
-use gtk::{gio, glib};
+use gio::prelude::*;
 
 use super::arbol::{self, Seccion};
 use super::{atajos, compositor, cursores, sistema};
 use crate::comando;
+
+fn archivo_recientes() -> PathBuf {
+    glib::user_data_dir().join("recently-used.xbel")
+}
+
+/// Cuántos archivos recientes anota el escritorio (lo que lee el menú «Archivos recientes» de
+/// las apps).
+fn recientes() -> usize {
+    let mut f = glib::BookmarkFile::new();
+    f.load_from_file(archivo_recientes())
+        .map_or(0, |()| f.size().max(0) as usize)
+}
+
+pub fn borrar_recientes() -> Result<(), String> {
+    glib::BookmarkFile::new()
+        .to_file(archivo_recientes())
+        .map_err(|e| format!("recientes: {e}"))
+}
 
 pub async fn leer(args: &[&str]) -> String {
     comando::salida(args).await.unwrap_or_else(|e| {
@@ -85,15 +102,7 @@ pub const ALTO_MUESTRA: u32 = 16;
 const LADO_LEIDO: u32 = 32;
 
 fn escala() -> u32 {
-    let Some(d) = gtk::gdk::Display::default() else {
-        return 1;
-    };
-    let m = d.monitors();
-    (0..m.n_items())
-        .filter_map(|i| m.item(i)?.downcast::<gtk::gdk::Monitor>().ok())
-        .map(|m| m.scale_factor().max(1) as u32)
-        .max()
-        .unwrap_or(1)
+    crate::pixeles::escala().max(1) as u32
 }
 
 pub async fn compositor(cambios: &Path, reglas: &[crate::config::ReglaApp]) -> Vec<Seccion> {
@@ -347,7 +356,7 @@ pub async fn sistema() -> Vec<Seccion> {
             sistema::encendida(&archivo("/proc/uptime")),
         ),
     ]);
-    let recientes = gtk::RecentManager::default().items().len();
+    let recientes = recientes();
     let privacidad = arbol::privacidad(clip.lines().filter(|l| !l.is_empty()).count(), recientes);
     let mut secciones = vec![equipo];
     if sistema::hay_snapper() {

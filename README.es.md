@@ -2,7 +2,7 @@
 
 [English](README.md) · **Español**
 
-Un shell de escritorio para [Hyprland](https://hyprland.org), escrito en Rust con GTK 4:
+Un shell de escritorio para [Hyprland](https://hyprland.org), escrito en Rust y dibujado por su propio motor (vello sobre wgpu):
 barra, centro de control, notificaciones, launcher, OSD, pantalla de bloqueo e idle, en un
 solo proceso y con un mismo aspecto.
 
@@ -104,7 +104,7 @@ más allá del borde de la pantalla, y si no entra se desplaza por dentro.
   `install.sh`).
 - **Hyprland 0.56 o más nuevo, con la config en Lua** (`~/.config/hypr/hyprland.lua`).
   morgan no funciona con un `hyprland.conf`.
-- GTK 4.22 o más nuevo y `gtk4-layer-shell`.
+- glib 2.84 o más nuevo.
 
 ## Sobre qué está hecho
 

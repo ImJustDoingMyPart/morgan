@@ -4,7 +4,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use gtk::glib;
 use zbus::zvariant::OwnedValue;
 
 use crate::sistema;

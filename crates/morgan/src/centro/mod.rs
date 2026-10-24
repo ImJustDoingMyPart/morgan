@@ -20,7 +20,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::glib;
 use morgan_motor::color::Paleta;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 

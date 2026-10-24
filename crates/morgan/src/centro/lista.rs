@@ -8,7 +8,6 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use gtk::{gio, glib};
 use morgan_motor::vello::peniko::ImageData;
 
 use super::dibujo::avisos::tam_previa_en;

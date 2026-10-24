@@ -68,12 +68,10 @@ fn ficha() -> Vec<String> {
         "" => "Rust".to_owned(),
         v => format!("Rust {v}"),
     };
-    // La biblioteca contesta sin inicializarse.
-    let gtk = format!("GTK {}.{}.{}", gtk::major_version(), gtk::minor_version(), gtk::micro_version());
     vec![
         morgan,
         "a desktop shell for Hyprland".to_owned(),
-        format!("{rust} · {gtk} · gtk4-layer-shell"),
+        format!("{rust} · vello · wgpu"),
         "zbus · PipeWire · matugen".to_owned(),
     ]
 }

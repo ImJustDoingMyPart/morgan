@@ -60,7 +60,7 @@ pub async fn aplicar(c: Cambio) -> Result<(), String> {
     match c {
         Cambio::Fuente(a, f) => {
             let familia = f.clone();
-            gtk::gio::spawn_blocking(move || fuentes::validar(a, &familia))
+            gio::spawn_blocking(move || fuentes::validar(a, &familia))
                 .await
                 .map_err(|_| "apariencia: el hilo se cayó".to_owned())??;
             fuentes::aplicar(a, &f);

@@ -4,7 +4,6 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use gtk::glib;
 use libpulse_binding as pulse;
 use pulse::callbacks::ListResult;
 use pulse::context::subscribe::InterestMaskSet;

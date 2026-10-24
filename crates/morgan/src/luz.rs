@@ -15,7 +15,6 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::glib;
 
 use crate::comando;
 use crate::config;

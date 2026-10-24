@@ -7,7 +7,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use futures_lite::StreamExt;
-use gtk::glib;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{Connection, MatchRule, MessageStream};
 

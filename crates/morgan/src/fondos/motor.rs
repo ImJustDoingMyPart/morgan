@@ -8,8 +8,6 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
-use gtk::prelude::*;
-use gtk::{gdk, gio, glib};
 
 use super::modelo;
 use super::transicion::{self, Receta};
@@ -260,25 +258,10 @@ async fn arrancar_awww() {
     }
 }
 
-fn tamano_pantalla() -> Option<(i32, i32)> {
-    let lista = gdk::Display::default()?.monitors();
-    (0..lista.n_items())
-        .filter_map(|i| lista.item(i)?.downcast::<gdk::Monitor>().ok())
-        .map(|m| {
-            let g = m.geometry();
-            let s = m.scale();
-            (
-                (f64::from(g.width()) * s).round() as i32,
-                (f64::from(g.height()) * s).round() as i32,
-            )
-        })
-        .max_by_key(|(w, h)| w * h)
-}
-
 /// Ya en PNG y al tamaño de la pantalla: el bloqueo aparece al instante en vez de decodificar
 /// un 4K en el momento de la tecla. A un temporal que después se renombra.
 async fn copiar_para_bloqueo(img: &Path) {
-    let Some((w, h)) = tamano_pantalla() else {
+    let Some((w, h)) = crate::pixeles::salida_grande() else {
         return;
     };
     let destino = copia_bloqueo();

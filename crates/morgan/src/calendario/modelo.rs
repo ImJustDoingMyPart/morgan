@@ -1,4 +1,3 @@
-use gtk::glib;
 
 use crate::agenda::Evento;
 

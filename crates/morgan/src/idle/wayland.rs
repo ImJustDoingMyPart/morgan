@@ -16,7 +16,6 @@ use std::cell::RefCell;
 use std::os::fd::{AsFd, AsRawFd};
 use std::rc::Rc;
 
-use gtk::glib;
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{wl_registry, wl_seat};
 use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle};

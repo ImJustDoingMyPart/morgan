@@ -2,8 +2,7 @@
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use gtk::prelude::*;
-use gtk::{gio, glib};
+use gio::prelude::*;
 
 pub async fn salida(args: &[&str]) -> Result<String, String> {
     salidas(&[args])
@@ -101,7 +100,7 @@ static UWSM: OnceLock<bool> = OnceLock::new();
 /// uwsm es Python y tarda ~100 ms: `main` lo pregunta al arrancar, en otro hilo.
 pub fn con_uwsm() -> bool {
     *UWSM.get_or_init(|| {
-        gtk::glib::find_program_in_path("uwsm").is_some()
+        glib::find_program_in_path("uwsm").is_some()
             && std::process::Command::new("uwsm")
                 .args(["check", "is-active"])
                 .stdin(std::process::Stdio::null())
@@ -172,8 +171,8 @@ pub fn lanzar_con_entrada(args: &[&str], entrada: &[u8]) {
         }
     };
     let nombre = args[0].to_owned();
-    let datos = gtk::glib::Bytes::from(entrada);
-    gtk::glib::MainContext::default().spawn_local(async move {
+    let datos = glib::Bytes::from(entrada);
+    glib::MainContext::default().spawn_local(async move {
         if let Err(e) = p.communicate_future(Some(&datos)).await {
             eprintln!("morgan: {nombre}: {e}");
         }

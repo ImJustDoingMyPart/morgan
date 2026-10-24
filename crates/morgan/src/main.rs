@@ -56,8 +56,6 @@ use std::cell::OnceCell;
 use std::process::ExitCode;
 use std::rc::Rc;
 
-use gtk::glib;
-use gtk::prelude::*;
 use morgan_ipc::{
     AccionSuperficie, Contenido, NivelMenu, PedidoFondo, Request, Response,
 };
@@ -107,7 +105,7 @@ fn main() -> ExitCode {
     std::thread::spawn(comando::con_uwsm);
     let theme_path = config_path.with_file_name("theme.css");
 
-    // El socket se toma antes de levantar GTK: si ya hay un morgan, este sale sin abrir nada.
+    // El socket se toma antes de levantar nada: si ya hay un morgan, este sale sin abrir nada.
     let path = match morgan_ipc::socket_path() {
         Ok(p) => p,
         Err(e) => {
@@ -124,12 +122,9 @@ fn main() -> ExitCode {
     };
     let calls = ipc::start(listener);
 
-    // Sin application_id: la instancia única la garantiza el socket, no el bus de sesión.
-    let app = gtk::Application::builder().build();
-    app.connect_activate(move |app| {
-        // Sin ventanas visibles morgan sigue vivo: es un servicio, no una app.
-        let hold = app.hold();
-        let display = gtk::gdk::Display::default().expect("GTK sin display");
+    // La instancia única la garantiza el socket, no el bus de sesión.
+    pixeles::leer_salidas();
+    let arrancar = move || {
         animaciones::poner(&config.apariencia.velocidad);
         {
             let (c, ruta) = (config.clone(), config_path.clone());
@@ -140,12 +135,28 @@ fn main() -> ExitCode {
             });
         }
         let tema = Tema::new(
-            &display,
             theme_path.clone(),
             &config.shell,
             morgan_motor::forma::Borde::de(&config.apariencia.sombra),
         );
         let hyprland = Hyprland::new();
+        // La escala y el tamaño de las salidas (`pixeles`) siguen a las que se conectan.
+        {
+            let h = hyprland.clone();
+            hyprland.al_evento(move |linea| {
+                if ["monitoradded", "monitorremoved", "configreloaded"]
+                    .iter()
+                    .any(|e| linea.starts_with(e))
+                {
+                    let h = h.clone();
+                    glib::MainContext::default().spawn_local(async move {
+                        if let Some(json) = h.consultar("j/monitors").await {
+                            let _ = pixeles::poner_salidas(&json);
+                        }
+                    });
+                }
+            });
+        }
         let notificaciones = Notificaciones::new(&config, hyprland.clone());
         let osd = Osd::new(&tema);
         {
@@ -297,7 +308,6 @@ fn main() -> ExitCode {
             .al_volver(move || m.abrir(NivelMenu::Fondos));
         let calls = calls.clone();
         glib::MainContext::default().spawn_local(async move {
-            let _hold = hold;
             let _tema = tema;
             while let Ok(call) = calls.recv().await {
                 // Cada pedido en su tarea: un reproductor que tarda en contestar no traba el volumen. El
@@ -309,10 +319,12 @@ fn main() -> ExitCode {
                 });
             }
         });
-    });
-    let status = app.run_with_args::<&str>(&[]);
+    };
+    arrancar();
+    // Sin ventanas visibles morgan sigue vivo: es un servicio, no una app.
+    glib::MainLoop::new(None, false).run();
     let _ = std::fs::remove_file(&path);
-    status.into()
+    ExitCode::SUCCESS
 }
 
 struct Servicios {

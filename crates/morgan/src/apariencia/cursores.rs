@@ -5,18 +5,17 @@
 
 use std::path::PathBuf;
 
-use gtk::gio;
-use gtk::prelude::*;
+use gio::prelude::*;
 
 use super::archivos::{self, reescribir};
 
 fn uwsm_env() -> PathBuf {
-    gtk::glib::user_config_dir().join("uwsm/env")
+    glib::user_config_dir().join("uwsm/env")
 }
 
 /// La del usuario pisa a la del sistema, como en la spec de íconos.
 pub fn bases() -> Vec<PathBuf> {
-    let mut v: Vec<PathBuf> = gtk::glib::system_data_dirs()
+    let mut v: Vec<PathBuf> = glib::system_data_dirs()
         .into_iter()
         .rev()
         .map(|d| d.join("icons"))
@@ -24,9 +23,9 @@ pub fn bases() -> Vec<PathBuf> {
     if !v.iter().any(|d| d == std::path::Path::new("/usr/share/icons")) {
         v.insert(0, PathBuf::from("/usr/share/icons"));
     }
-    let home = gtk::glib::home_dir();
+    let home = glib::home_dir();
     v.push(home.join(".icons"));
-    v.push(gtk::glib::user_data_dir().join("icons"));
+    v.push(glib::user_data_dir().join("icons"));
     v
 }
 
@@ -85,7 +84,7 @@ pub async fn aplicar(tema: &str, tamano: u32) -> Result<(), String> {
         eprintln!("morgan: apariencia: gsettings cursor: {e}");
     }
     for ini in ["gtk-3.0/settings.ini", "gtk-4.0/settings.ini"] {
-        let ruta = gtk::glib::user_config_dir().join(ini);
+        let ruta = glib::user_config_dir().join(ini);
         reescribir(&ruta, |t| {
             archivos::ini(t, "gtk-cursor-theme-name", tema)
                 .and_then(|t| archivos::ini(&t, "gtk-cursor-theme-size", &n))

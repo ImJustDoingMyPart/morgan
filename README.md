@@ -2,7 +2,7 @@
 
 **English** · [Español](README.es.md)
 
-A desktop shell for [Hyprland](https://hyprland.org), written in Rust with GTK 4: bar,
+A desktop shell for [Hyprland](https://hyprland.org), written in Rust and drawn by its own engine (vello on wgpu): bar,
 control center, notifications, launcher, OSD, lock screen and idle, in one process that
 shares one look.
 
@@ -100,7 +100,7 @@ holds, never past the edge of the screen, and scrolls inside when it has to.
 - **Arch Linux** or a derivative (other distros: build from source with `install.sh`).
 - **Hyprland 0.56 or newer, with its config in Lua** (`~/.config/hypr/hyprland.lua`).
   morgan does not work with a `hyprland.conf`.
-- GTK 4.22 or newer and `gtk4-layer-shell`.
+- glib 2.84 or newer.
 
 ## What morgan is built around
 
