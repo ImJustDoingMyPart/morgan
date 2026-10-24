@@ -44,8 +44,14 @@ pub struct Arrastre {
 /// Los botones de Linux.
 pub const IZQUIERDO: u32 = 0x110;
 
+impl Arrastre {
+    pub fn activo(&self) -> bool {
+        self.activo
+    }
+}
+
 impl Ui {
-    fn bajo(&self, x: f64, y: f64) -> Option<Objetivo> {
+    pub(super) fn bajo(&self, x: f64, y: f64) -> Option<Objetivo> {
         let v = self.ventana();
         if !v.contains(Point::new(x, y)) {
             return None;
@@ -86,6 +92,7 @@ impl Ui {
 
     pub fn mover_puntero(&mut self, x: f64, y: f64, t: u32) -> Vec<Pedido> {
         let mut pedidos = Vec::new();
+        self.puntero = Some((x, y));
         if let Some(a) = self.arrastre {
             let (cx, cy) = self.al_contenido(x, y);
             self.arrastrar(a, cx, cy, t, &mut pedidos);
@@ -104,6 +111,7 @@ impl Ui {
 
     pub fn salir_puntero(&mut self) {
         self.encima = None;
+        self.puntero = None;
     }
 
     pub fn apretar(&mut self, x: f64, y: f64, boton: u32, t: u32) -> Vec<Pedido> {
@@ -253,7 +261,8 @@ impl Ui {
                     self.alternar_lista(l, ahora);
                 }
             }
-            Objetivo::Slider(_) => {}
+            // El menú de la bandeja responde por su cuenta (`menu.rs`).
+            Objetivo::Slider(_) | Objetivo::Fila(_) => {}
             Objetivo::Cuota(i) => {
                 let abrir = self.cuota != Some(i);
                 let d = crate::animaciones::dur(super::DESPLIEGUE);
@@ -266,17 +275,7 @@ impl Ui {
                 }
             }
             Objetivo::Repro(b) => pedidos.push(Pedido::Gtk(Evento::Repro(b))),
-            Objetivo::Limpiar => {
-                let ids: Vec<u32> = self
-                    .datos
-                    .grupos
-                    .iter()
-                    .flat_map(|g| g.avisos.iter().map(|a| a.id))
-                    .collect();
-                if !ids.is_empty() && self.limpiando.is_none() {
-                    self.limpiando = Some((ahora, ids));
-                }
-            }
+            Objetivo::Limpiar => self.limpiar(),
             Objetivo::Aviso(id) => {
                 let con_acciones = self.aviso(id).is_some_and(|a| !a.acciones.is_empty());
                 if con_acciones {
@@ -305,6 +304,19 @@ impl Ui {
                     pedidos.push(Pedido::Gtk(Evento::Boton(id, c)));
                 }
             }
+        }
+    }
+
+    /// Las notificaciones salen una tras otra; las que llegan mientras tanto se quedan.
+    pub fn limpiar(&mut self) {
+        let ids: Vec<u32> = self
+            .datos
+            .grupos
+            .iter()
+            .flat_map(|g| g.avisos.iter().map(|a| a.id))
+            .collect();
+        if !ids.is_empty() && self.limpiando.is_none() {
+            self.limpiando = Some((Instant::now(), ids));
         }
     }
 

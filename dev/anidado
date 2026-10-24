@@ -3,8 +3,12 @@
 #
 #   dev/anidado arrancar          levanta el anidado con bus de sesión propio
 #   dev/anidado ejecutar CMD...   corre CMD adentro (hereda su WAYLAND_DISPLAY y su bus)
-#   dev/anidado morgan            (re)arranca adentro el morgan de target/debug, con
-#                                 comandos de mentira para lo que toca la sesión real
+#   dev/anidado morgan            (re)arranca adentro el morgan de target/debug (u otro con
+#                                 MORGAN_BIN), con comandos de mentira para lo que toca la
+#                                 sesión real
+#   dev/anidado puntero ARGS...   mueve o hace click con un puntero de mentira adentro
+#                                 (`crates/morgan/examples/puntero.rs`: mover, click,
+#                                 arrastrar, rueda)
 #   dev/anidado parar NOMBRE      termina los procesos NOMBRE del anidado (no los de afuera)
 #   dev/anidado captura NOMBRE    grim de la salida virtual del anidado
 #   dev/anidado hyprctl ARGS...   hyprctl contra el anidado
@@ -141,7 +145,7 @@ morgan)
     # MORGAN_SIN_LOGIND: el bus del sistema del anidado es el real; sin esto, un tiempo de
     # idle bloquearía la sesión de verdad. Bloquear lanza el morgan-lock de target/debug.
     # GSETTINGS_BACKEND=memory: el tema de sonidos que se elija no llega al dconf real.
-    hc eval "hl.exec_cmd([[env PATH='$falsos:$raiz/target/debug:$PATH' MORGAN_SIN_LOGIND=1 MORGAN_APARIENCIA_SECO=1 GDK_DEBUG=no-portals ${MORGAN_TRAZA:+MORGAN_TRAZA=1} ${MORGAN_IDIOMA:+MORGAN_IDIOMA=$MORGAN_IDIOMA} GSETTINGS_BACKEND=memory MORGAN_HYPR_CFG='$estado/hypr-morgan.lua' XDG_STATE_HOME='$estado/state' XDG_CACHE_HOME='$estado/cache' XDG_CONFIG_HOME='$conf' $raiz/target/debug/morgan >>'$estado/morgan.log' 2>&1]])" >/dev/null
+    hc eval "hl.exec_cmd([[env PATH='$falsos:$raiz/target/debug:$PATH' MORGAN_SIN_LOGIND=1 MORGAN_APARIENCIA_SECO=1 GDK_DEBUG=no-portals ${MORGAN_TRAZA:+MORGAN_TRAZA=1} ${MORGAN_IDIOMA:+MORGAN_IDIOMA=$MORGAN_IDIOMA} GSETTINGS_BACKEND=memory MORGAN_HYPR_CFG='$estado/hypr-morgan.lua' XDG_STATE_HOME='$estado/state' XDG_CACHE_HOME='$estado/cache' XDG_CONFIG_HOME='$conf' ${MORGAN_BIN:-$raiz/target/debug/morgan} >>'$estado/morgan.log' 2>&1]])" >/dev/null
     for _ in $(seq 50); do
         sleep 0.1
         WAYLAND_DISPLAY=$display "$raiz/target/debug/morganctl" ping >/dev/null 2>&1 && exit 0
@@ -150,6 +154,10 @@ morgan)
     ;;
 hyprctl)
     shift; hc "$@"
+    ;;
+puntero)
+    shift
+    WAYLAND_DISPLAY=$(cat "$estado/display") "$raiz/target/debug/examples/puntero" "$@"
     ;;
 cerrar)
     f=$(firma)

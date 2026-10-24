@@ -259,7 +259,6 @@ fn main() -> ExitCode {
             }
         });
         let barra = barra::Barra::new(
-            app,
             hilo_barra,
             eventos_barra,
             barra::Servicios {
@@ -267,6 +266,7 @@ fn main() -> ExitCode {
                 notificaciones: servicios.notificaciones.clone(),
                 tema: tema.clone(),
                 calendario: servicios.calendario.clone(),
+                centro: servicios.centro.clone(),
                 bandeja: bandeja::Bandeja::new(),
                 privacidad,
                 iconos_bandeja,

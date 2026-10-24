@@ -52,39 +52,3 @@ fn svg_sano(archivo: &Path) -> bool {
     svg.load_from_bytes(&glib::Bytes::from_owned(datos));
     !fallo.get()
 }
-
-fn correccion(logica: (i32, i32, i32, i32), tinta: (i32, i32, i32, i32)) -> (i32, i32) {
-    let centro = |x: i32, w: i32| 2 * x + w;
-    let dx = (centro(logica.0, logica.2) - centro(tinta.0, tinta.2)) / 2;
-    let dy = (centro(logica.1, logica.3) - centro(tinta.1, tinta.3)) / 2;
-    (dx, dy)
-}
-
-/// GTK centra un glifo por el ancho que reserva la fuente, no por su dibujo: los de la Nerd
-/// Font tienen la tinta corrida dentro de ese ancho, y cuánto depende de la fuente que
-/// resuelva fontconfig. Se mide la tinta y se compensa con márgenes.
-pub fn centrar_tinta(l: &gtk::Label) {
-    let (tinta, logica) = l.layout().pixel_extents();
-    let r = |r: gtk::pango::Rectangle| (r.x(), r.y(), r.width(), r.height());
-    let (dx, dy) = correccion(r(logica), r(tinta));
-    l.set_margin_start((2 * dx).max(0));
-    l.set_margin_end((-2 * dx).max(0));
-    l.set_margin_top((2 * dy).max(0));
-    l.set_margin_bottom((-2 * dy).max(0));
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn la_tinta_va_al_centro() {
-        // Caja de 20×24 en el origen; tinta de 12×12 pegada arriba a la izquierda: hay que
-        // correrla 4 a la derecha y 6 abajo.
-        assert_eq!(correccion((0, 0, 20, 24), (0, 0, 12, 12)), (4, 6));
-        // Ya centrada: nada.
-        assert_eq!(correccion((0, 0, 20, 20), (4, 4, 12, 12)), (0, 0));
-        // Corrida a la derecha: hacia la izquierda.
-        assert_eq!(correccion((0, 0, 20, 20), (8, 4, 12, 12)), (-4, 0));
-    }
-}

@@ -213,8 +213,6 @@ pub struct Aviso {
     pub progreso: Option<i32>,
     /// Clave, etiqueta y glifo de cada botón.
     pub acciones: Vec<(String, String, &'static str)>,
-    /// Sube cuando cambia algo de lo de arriba (una imagen que llegó tarde).
-    pub version: u64,
 }
 
 pub struct Grupo {

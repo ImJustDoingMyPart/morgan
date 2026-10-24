@@ -33,6 +33,13 @@ pub enum Trazo {
         b: Color,
         forma: Degrade,
     },
+    /// Un borde de `ancho` adentro de `r` (`border: 1px solid`).
+    Borde {
+        r: Rect,
+        radio: f64,
+        ancho: f64,
+        color: Color,
+    },
     /// `box-shadow` sin desplazamiento.
     Sombra {
         r: Rect,
@@ -150,6 +157,21 @@ pub fn pintar(s: &mut Scene, trazos: &[Trazo], base: Affine, escala: f64) {
                     &g,
                     None,
                     &RoundedRect::from_rect(*r, *radio),
+                );
+            }
+            Trazo::Borde {
+                r,
+                radio,
+                ancho,
+                color,
+            } => {
+                let m = ancho / 2.0;
+                s.stroke(
+                    &morgan_motor::vello::kurbo::Stroke::new(*ancho),
+                    actual,
+                    pincel(color),
+                    None,
+                    &RoundedRect::from_rect(r.inset(-m), (radio - m).max(0.0)),
                 );
             }
             Trazo::Sombra {

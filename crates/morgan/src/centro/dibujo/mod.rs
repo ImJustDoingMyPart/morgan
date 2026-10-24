@@ -13,6 +13,7 @@
 
 mod armar;
 pub mod avisos;
+pub mod menu;
 pub mod campo;
 mod rotulos;
 pub mod toque;
@@ -69,6 +70,8 @@ pub enum Objetivo {
     Contraer(u64),
     CerrarGrupo(u64),
     AccionAviso(u32, usize),
+    /// Una fila del menú de la bandeja, por su id de dbusmenu.
+    Fila(i32),
 }
 
 /// Cómo responde cada clase de objetivo, como en la hoja de GTK: lo que tarda en encenderse con
@@ -77,7 +80,9 @@ fn tiempos(o: Objetivo) -> (Duration, f64, Duration) {
     let ms = Duration::from_millis;
     match o {
         Objetivo::Tarjeta(_) => (ms(150), 0.97, ms(100)),
-        Objetivo::Opcion(..) | Objetivo::AccionAviso(..) => (ms(100), 0.97, ms(100)),
+        Objetivo::Opcion(..) | Objetivo::AccionAviso(..) | Objetivo::Fila(_) => {
+            (ms(100), 0.97, ms(100))
+        }
         Objetivo::Aviso(_) | Objetivo::Grupo(_) => (ms(100), 1.0, ms(100)),
         Objetivo::Campo(_) => (ms(100), 1.0, ms(100)),
         Objetivo::Slider(_) => (ms(200), 1.0, ms(120)),
@@ -257,6 +262,9 @@ pub struct Ui {
     /// El foco se ve (se llegó con el teclado), como el `focus-visible` de GTK.
     pub foco_visible: bool,
     pub encima: Option<Objetivo>,
+    /// Dónde está el puntero (en la superficie): cuando la hoja cambia debajo de él, lo que
+    /// queda encima es otra cosa.
+    pub puntero: Option<(f64, f64)>,
     pub apretado: Option<Objetivo>,
     /// El nivel de cada slider mientras la mano lo arrastra: lo que llega no lo mueve.
     pub arrastrando: Option<(NivelId, f64)>,
@@ -299,6 +307,7 @@ impl Ui {
             foco: None,
             foco_visible: false,
             encima: None,
+            puntero: None,
             apretado: None,
             arrastrando: None,
             deslices: HashMap::new(),
@@ -367,6 +376,11 @@ impl Ui {
         }
         self.hoja = h;
         self.scroll = self.scroll.clamp(0.0, self.max_scroll());
+        if let Some((x, y)) = self.puntero
+            && !self.arrastre.is_some_and(|a| a.activo())
+        {
+            self.encima = self.bajo(x, y);
+        }
         self.rotulos.barrer();
     }
 

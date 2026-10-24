@@ -18,14 +18,16 @@ use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use super::dibujo::Icono;
 use super::hilo::Orden;
-use super::menu_bandeja::MenuBandeja;
+use crate::bandeja::menu::{Nodo, secciones};
 use crate::bandeja::{Bandeja, Item};
+use crate::centro::Centro;
+use crate::centro::vista::{Menu as VistaMenu, NodoMenu};
 use crate::tema::Tema;
 
 const TAMANO: i32 = 14;
 
 pub struct Contexto {
-    app: gtk::Application,
+    centro: Centro,
     bandeja: Bandeja,
     tema: gtk::IconTheme,
     iconos: BTreeMap<String, String>,
@@ -33,7 +35,8 @@ pub struct Contexto {
     /// El color de los íconos simbólicos: el del texto.
     color: Cell<gdk::RGBA>,
     pintor: RefCell<Option<gsk::Renderer>>,
-    menu: RefCell<Option<(String, MenuBandeja)>>,
+    /// La clave del ícono con su menú abierto.
+    menu: RefCell<Option<String>>,
 }
 
 fn color_de(css: &str) -> gdk::RGBA {
@@ -43,14 +46,14 @@ fn color_de(css: &str) -> gdk::RGBA {
 
 impl Contexto {
     pub fn new(
-        app: &gtk::Application,
+        centro: &Centro,
         bandeja: Bandeja,
         iconos: BTreeMap<String, String>,
         hilo: Sender<Orden>,
         tema: &Tema,
     ) -> Rc<Self> {
         let ctx = Rc::new(Contexto {
-            app: app.clone(),
+            centro: centro.clone(),
             bandeja,
             tema: tema_bandeja(),
             iconos,
@@ -120,9 +123,9 @@ impl Contexto {
 
     pub fn click(self: &Rc<Self>, clave: &str, boton: u32, salida: &str, derecha: i32) {
         // Con un menú abierto, cualquier click en un ícono lo cierra; en el suyo, nada más.
-        let abierto = self.menu.borrow_mut().take();
-        if let Some((c, m)) = abierto {
-            m.cerrar();
+        let abierto = self.menu.borrow().clone();
+        if let Some(c) = abierto {
+            self.centro.cerrar_menu();
             if c == clave {
                 return;
             }
@@ -172,13 +175,6 @@ impl Menu {
         if !ctx.bandeja.items().iter().any(|i| i.clave == clave) {
             return;
         }
-        // Un doble click pudo abrir otro mientras se leía este.
-        let anterior = ctx.menu.borrow_mut().take();
-        if let Some((_, m)) = anterior {
-            m.cerrar();
-        }
-        let monitor = monitor(&salida);
-        let _ = ctx.hilo.send(Orden::Menu(Some(clave.clone())));
         let debil = Rc::downgrade(&ctx);
         let al_cerrar = move || {
             if let Some(ctx) = debil.upgrade() {
@@ -188,26 +184,35 @@ impl Menu {
         };
         let bandeja = ctx.bandeja.clone();
         let c = clave.clone();
-        let Some(m) = MenuBandeja::abrir(
-            &ctx.app,
-            monitor.as_ref(),
+        let m = VistaMenu {
+            salida,
             derecha,
-            &raiz,
-            move |id| bandeja.elegir(&c, id),
-            al_cerrar,
-        ) else {
-            let _ = ctx.hilo.send(Orden::Menu(None));
-            return;
+            secciones: nodos(&raiz.hijos),
         };
-        ctx.menu.replace(Some((clave, m)));
+        // Un doble click pudo abrir otro mientras se leía este: `abrir_menu` lo cierra antes.
+        ctx.centro
+            .abrir_menu(m, move |id| bandeja.elegir(&c, id), al_cerrar);
+        let _ = ctx.hilo.send(Orden::Menu(Some(clave.clone())));
+        ctx.menu.replace(Some(clave));
     }
 }
 
-fn monitor(conector: &str) -> Option<gdk::Monitor> {
-    let lista = gdk::Display::default()?.monitors();
-    (0..lista.n_items())
-        .filter_map(|i| lista.item(i)?.downcast::<gdk::Monitor>().ok())
-        .find(|m| m.connector().as_deref() == Some(conector))
+/// Las secciones de un menú (los separadores parten), con sus submenús.
+fn nodos(hijos: &[Nodo]) -> Vec<Vec<NodoMenu>> {
+    secciones(hijos)
+        .into_iter()
+        .map(|s| {
+            s.into_iter()
+                .map(|n| NodoMenu {
+                    id: n.id,
+                    etiqueta: n.etiqueta.clone(),
+                    habilitado: n.habilitado,
+                    marca: n.marca,
+                    hijos: nodos(&n.hijos),
+                })
+                .collect()
+        })
+        .collect()
 }
 
 fn tema_bandeja() -> gtk::IconTheme {

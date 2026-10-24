@@ -112,6 +112,13 @@ struct Inner {
     ocultas: RefCell<Vec<String>>,
     reloj: RefCell<Option<glib::SourceId>>,
     escuchar: RefCell<Option<glib::JoinHandle<()>>>,
+    /// El menú de la bandeja abierto: qué hacer al elegir y al cerrarse.
+    menu: RefCell<Option<MenuAbierto>>,
+}
+
+struct MenuAbierto {
+    elegir: Box<dyn Fn(i32)>,
+    al_cerrar: Box<dyn FnOnce()>,
 }
 
 impl Drop for Inner {
@@ -176,6 +183,7 @@ impl Centro {
             ocultas: RefCell::default(),
             reloj: RefCell::default(),
             escuchar: RefCell::default(),
+            menu: RefCell::default(),
         });
         let c = Centro { inner };
         let weak = Rc::downgrade(&c.inner);
@@ -199,8 +207,37 @@ impl Centro {
         self.inner.abierto.get()
     }
 
+    /// Con el centro abierto, salen una tras otra, como con el botón.
     pub fn limpiar_notificaciones(&self) {
-        self.inner.notificaciones.limpiar();
+        if self.abierto() {
+            self.mandar(Orden::Limpiar);
+        } else {
+            self.inner.notificaciones.limpiar();
+        }
+    }
+
+    /// El menú de una app de la bandeja, dibujado por el hilo del centro. Uno abierto antes
+    /// se cierra.
+    pub fn abrir_menu(
+        &self,
+        m: vista::Menu,
+        elegir: impl Fn(i32) + 'static,
+        al_cerrar: impl FnOnce() + 'static,
+    ) {
+        self.cerrar_menu();
+        self.inner.menu.replace(Some(MenuAbierto {
+            elegir: Box::new(elegir),
+            al_cerrar: Box::new(al_cerrar),
+        }));
+        self.mandar(Orden::Menu(Some(m)));
+    }
+
+    pub fn cerrar_menu(&self) {
+        let Some(m) = self.inner.menu.take() else {
+            return;
+        };
+        self.mandar(Orden::Menu(None));
+        (m.al_cerrar)();
     }
 
     pub fn al_abrir(&self, f: impl Fn(bool) + 'static) {
@@ -343,7 +380,16 @@ impl Centro {
                 }
             }
             Evento::Cerrado => self.cerrado(),
-            Evento::Elegido(_) | Evento::MenuCerrado => {}
+            Evento::Elegido(id) => {
+                if let Some(m) = i.menu.borrow().as_ref() {
+                    (m.elegir)(id);
+                }
+            }
+            Evento::MenuCerrado => {
+                if let Some(m) = i.menu.take() {
+                    (m.al_cerrar)();
+                }
+            }
         }
     }
 

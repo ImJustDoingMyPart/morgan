@@ -43,10 +43,13 @@ use wayland_client::globals::registry_queue_init;
 use wayland_client::protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface};
 use wayland_client::{Connection, QueueHandle};
 
-use super::dibujo::toque::Pedido;
+use super::dibujo::menu::{MenuUi, Salida};
+use super::dibujo::toque::{IZQUIERDO, Pedido};
 use super::dibujo::{Objetivo, Ui};
 use super::ecualizador;
-use super::vista::{Contenido, Evento, Grupo, Iconos, ListaId, Nivel, Reproductor, Tarjeta};
+use super::vista::{
+    Contenido, Evento, Grupo, Iconos, ListaId, Menu, Nivel, Reproductor, Tarjeta,
+};
 use crate::lamina::Lamina;
 
 pub enum Orden {
@@ -65,6 +68,10 @@ pub enum Orden {
     Avisos(Vec<Grupo>),
     /// El foco en una opción (la sesión: «Volver» al confirmar, Bloquear al volver).
     Enfocar(ListaId, usize),
+    /// Limpiar las notificaciones con la salida escalonada, como el botón.
+    Limpiar,
+    /// El menú de una app de la bandeja, o cerrarlo.
+    Menu(Option<Menu>),
 }
 
 /// Si no hay Wayland o la GPU no abre, el hilo termina: morgan sigue sin centro.
@@ -93,6 +100,14 @@ struct Panel {
     capa: LayerSurface,
     /// El primer cuadro: desde ahí baja.
     inicio: Option<Instant>,
+}
+
+/// El menú de la bandeja abierto: su capa, en la salida del ícono.
+struct MenuSup {
+    lamina: Lamina,
+    capa: LayerSurface,
+    inicio: Option<Instant>,
+    ui: MenuUi,
 }
 
 /// cava corriendo, con el hilo que lee sus renglones.
@@ -128,6 +143,7 @@ struct Hilo {
     escena: Scene,
     ui: Ui,
     panel: Option<Panel>,
+    menu: Option<MenuSup>,
     /// Abrir con la sesión desplegada espera a la primera hoja para enfocar.
     enfocar_al_armar: Option<Enfoque>,
     cava: Option<Cava>,
@@ -184,6 +200,7 @@ fn correr(
         escena: Scene::new(),
         ui: Ui::new(paleta, opacidad, borde),
         panel: None,
+        menu: None,
         enfocar_al_armar: None,
         cava: None,
         reloj: None,
@@ -208,6 +225,9 @@ impl Hilo {
         if let Some(p) = &mut self.panel {
             p.lamina.sucio = true;
         }
+        if let Some(m) = &mut self.menu {
+            m.lamina.sucio = true;
+        }
     }
 
     fn orden(&mut self, o: Orden) {
@@ -215,6 +235,9 @@ impl Hilo {
         match o {
             Orden::Tema(p, o, b) => {
                 (self.ui.paleta, self.ui.opacidad, self.ui.borde) = (p, o, b);
+                if let Some(m) = &mut self.menu {
+                    (m.ui.paleta, m.ui.opacidad, m.ui.borde) = (p, o, b);
+                }
             }
             Orden::Abrir { sesion } => self.abrir(sesion),
             Orden::Cerrar => self.cerrar(false),
@@ -247,6 +270,55 @@ impl Hilo {
                 self.ui.olvidar_cerrados();
             }
             Orden::Enfocar(l, i) => self.ui.enfocar_opcion(l, i),
+            Orden::Limpiar => self.ui.limpiar(),
+            Orden::Menu(m) => {
+                self.menu = None;
+                if let Some(m) = m {
+                    self.abrir_menu(m);
+                }
+            }
+        }
+        self.ensuciar();
+    }
+
+    fn abrir_menu(&mut self, m: Menu) {
+        let salida = self
+            .salidas
+            .outputs()
+            .find(|o| self.salidas.info(o).and_then(|i| i.name).as_deref() == Some(&m.salida));
+        let wl = self.compositor.create_surface(&self.qh);
+        let capa = self.capas.create_layer_surface(
+            &self.qh,
+            wl,
+            Layer::Top,
+            Some("morgan-tray"),
+            salida.as_ref(),
+        );
+        capa.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
+        capa.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        capa.commit();
+        let ui = MenuUi::new(m, self.ui.paleta, self.ui.opacidad, self.ui.borde);
+        self.menu = Some(MenuSup {
+            lamina: Lamina::new((0, 0)),
+            capa,
+            inicio: None,
+            ui,
+        });
+    }
+
+    /// Lo que pidió el menú: se elige y se cierra, o solo se cierra.
+    fn salida_menu(&mut self, s: Option<Salida>) {
+        match s {
+            Some(Salida::Elegido(id)) => {
+                self.menu = None;
+                self.avisar(Evento::Elegido(id));
+                self.avisar(Evento::MenuCerrado);
+            }
+            Some(Salida::Cerrar) => {
+                self.menu = None;
+                self.avisar(Evento::MenuCerrado);
+            }
+            None => {}
         }
         self.ensuciar();
     }
@@ -421,6 +493,7 @@ impl Hilo {
         if !pedidos.is_empty() {
             self.pedidos(pedidos);
         }
+        self.pintar_menu(ahora);
         let Some(p) = &mut self.panel else {
             let _ = self.conn.flush();
             return;
@@ -449,6 +522,60 @@ impl Hilo {
             self.programar_parpadeo(ahora);
         }
         let _ = self.conn.flush();
+    }
+
+    fn pintar_menu(&mut self, ahora: Instant) {
+        let Some(m) = &mut self.menu else { return };
+        let anda = m.ui.anda(ahora)
+            || m.inicio
+                .is_none_or(|t| ahora.saturating_duration_since(t) < crate::bajada::duracion());
+        if !m.lamina.lista() || !(m.lamina.sucio || anda) {
+            return;
+        }
+        m.ui.tam = m.lamina.tam;
+        let escala = m.lamina.escala;
+        m.ui.armar(escala as f32, ahora);
+        let inicio = *m.inicio.get_or_insert(ahora);
+        let micros = ahora.saturating_duration_since(inicio).as_micros() as i64;
+        let bajada = crate::bajada::desplazamiento(micros, m.ui.panel().y1 as f32);
+        m.ui.pintar(&mut self.escena, f64::from(escala), f64::from(bajada));
+        let wl = m.capa.wl_surface().clone();
+        m.lamina.presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+    }
+
+    fn puntero_menu(&mut self, e: &PointerEvent) {
+        let Some(m) = &mut self.menu else { return };
+        let (x, y) = e.position;
+        let s = match e.kind {
+            PointerEventKind::Enter { serial } => {
+                self.serial_puntero = serial;
+                self.forma_puesta = None;
+                m.ui.mover(x, y);
+                None
+            }
+            PointerEventKind::Motion { .. } => {
+                m.ui.mover(x, y);
+                None
+            }
+            PointerEventKind::Leave { .. } => {
+                m.ui.salir();
+                None
+            }
+            PointerEventKind::Press { .. } => {
+                m.ui.apretar(x, y);
+                None
+            }
+            PointerEventKind::Release { button, .. } => m.ui.soltar(x, y, button == IZQUIERDO),
+            PointerEventKind::Axis { .. } => None,
+        };
+        m.lamina.sucio = true;
+        if self.forma_puesta != Some(Shape::Default)
+            && let Some(f) = &self.forma
+        {
+            f.set_shape(self.serial_puntero, Shape::Default);
+            self.forma_puesta = Some(Shape::Default);
+        }
+        self.salida_menu(s);
     }
 
     fn puntero(&mut self, e: &PointerEvent) {
@@ -493,6 +620,13 @@ impl Hilo {
     }
 
     fn tecla(&mut self, ev: KeyEvent) {
+        // El menú es lo último que se abrió: el teclado es suyo.
+        if let Some(m) = &mut self.menu {
+            let s = m.ui.tecla(ev.keysym, self.mods.shift);
+            m.lamina.sucio = true;
+            self.salida_menu(s);
+            return;
+        }
         if self.panel.is_none() {
             return;
         }
@@ -563,6 +697,13 @@ fn lanzar_cava() -> Result<(std::process::Child, channel::Channel<Vec<f64>>), St
 impl LayerShellHandler for Hilo {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, capa: &LayerSurface) {
         if self
+            .menu
+            .as_ref()
+            .is_some_and(|m| m.capa.wl_surface() == capa.wl_surface())
+        {
+            self.salida_menu(Some(Salida::Cerrar));
+        }
+        if self
             .panel
             .as_ref()
             .is_some_and(|p| p.capa.wl_surface() == capa.wl_surface())
@@ -580,6 +721,17 @@ impl LayerShellHandler for Hilo {
         _: u32,
     ) {
         let wl = capa.wl_surface();
+        if let Some(m) = self.menu.as_mut().filter(|m| m.capa.wl_surface() == wl) {
+            if c.new_size.0 > 0 && c.new_size.1 > 0 {
+                m.lamina.tam = c.new_size;
+            }
+            if m.lamina.lienzo.is_none() {
+                // SAFETY: el lienzo se suelta antes que la capa (orden de los campos de MenuSup).
+                m.lamina.lienzo = unsafe { Lienzo::nuevo(&mut self.gpu, &self.conn, wl) };
+            }
+            m.lamina.sucio = true;
+            return;
+        }
         let Some(p) = self.panel.as_mut().filter(|p| p.capa.wl_surface() == wl) else {
             return;
         };
@@ -602,13 +754,9 @@ impl CompositorHandler for Hilo {
         surface: &wl_surface::WlSurface,
         factor: i32,
     ) {
-        if let Some(p) = self
-            .panel
-            .as_mut()
-            .filter(|p| p.capa.wl_surface() == surface)
-        {
-            p.lamina.escala = factor.max(1);
-            p.lamina.sucio = true;
+        if let Some(l) = self.lamina(surface) {
+            l.escala = factor.max(1);
+            l.sucio = true;
         }
     }
 
@@ -628,12 +776,8 @@ impl CompositorHandler for Hilo {
         surface: &wl_surface::WlSurface,
         _: u32,
     ) {
-        if let Some(p) = self
-            .panel
-            .as_mut()
-            .filter(|p| p.capa.wl_surface() == surface)
-        {
-            p.lamina.esperando = false;
+        if let Some(l) = self.lamina(surface) {
+            l.esperando = false;
         }
     }
 
@@ -653,6 +797,18 @@ impl CompositorHandler for Hilo {
         _: &wl_surface::WlSurface,
         _: &wl_output::WlOutput,
     ) {
+    }
+}
+
+impl Hilo {
+    fn lamina(&mut self, wl: &wl_surface::WlSurface) -> Option<&mut Lamina> {
+        if let Some(p) = self.panel.as_mut().filter(|p| p.capa.wl_surface() == wl) {
+            return Some(&mut p.lamina);
+        }
+        self.menu
+            .as_mut()
+            .filter(|m| m.capa.wl_surface() == wl)
+            .map(|m| &mut m.lamina)
     }
 }
 
@@ -812,6 +968,12 @@ impl PointerHandler for Hilo {
     ) {
         for e in eventos {
             if self
+                .menu
+                .as_ref()
+                .is_some_and(|m| m.capa.wl_surface() == &e.surface)
+            {
+                self.puntero_menu(e);
+            } else if self
                 .panel
                 .as_ref()
                 .is_some_and(|p| p.capa.wl_surface() == &e.surface)

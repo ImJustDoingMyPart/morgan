@@ -1,5 +1,7 @@
-//! Todas las listas son del mismo `Grupo`: abrir una cierra las otras. Una opción marcada lo
-//! está porque el sistema lo dice (`Item::marcada`); el click solo pide.
+//! Las listas desplegables con GTK, que siguen usando el menú de sistema y los toasts (el
+//! centro ya no: `dibujo/armar.rs`). Todas las listas son del mismo `Grupo`: abrir una cierra
+//! las otras. Una opción marcada lo está porque el sistema lo dice (`Item::marcada`); el click
+//! solo pide.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -7,16 +9,11 @@ use std::rc::Rc;
 use gtk::glib;
 use gtk::prelude::*;
 
-use crate::deslizable::{Accion, Deslizable};
-
 pub struct Item {
     pub glifo: String,
     pub texto: String,
     pub marcada: Option<bool>,
     pub accion: Rc<dyn Fn()>,
-    /// Deslizar a la derecha y a la izquierda, como una notificación.
-    pub derecha: Option<Accion>,
-    pub izquierda: Option<Accion>,
 }
 
 impl Item {
@@ -31,19 +28,7 @@ impl Item {
             texto: texto.into(),
             marcada,
             accion: Rc::new(f),
-            derecha: None,
-            izquierda: None,
         }
-    }
-
-    pub fn deslizable(mut self, a: Accion) -> Self {
-        self.derecha = Some(a);
-        self
-    }
-
-    pub fn deslizable_izquierda(mut self, a: Accion) -> Self {
-        self.izquierda = Some(a);
-        self
     }
 }
 
@@ -87,12 +72,6 @@ impl Grupo {
             r.set_reveal_child(false);
         }
     }
-
-    pub fn quitar(&self, d: &Desplegable) {
-        self.listas
-            .borrow_mut()
-            .retain(|r| r.upgrade().is_some_and(|r| r != d.revealer));
-    }
 }
 
 #[derive(Clone)]
@@ -109,15 +88,6 @@ impl Desplegable {
         self.revealer.set_reveal_child(abrir);
     }
 
-    pub fn desplegar(&self) {
-        self.grupo.cerrar();
-        self.revealer.set_reveal_child(true);
-    }
-
-    pub fn opciones(&self) -> &gtk::Box {
-        &self.opciones
-    }
-
     pub fn llenar(&self, items: Vec<Item>) -> Vec<gtk::Button> {
         while let Some(h) = self.opciones.first_child() {
             self.opciones.remove(&h);
@@ -125,30 +95,12 @@ impl Desplegable {
         // Sin opciones (una sola salida, y es la puesta), no hay nada que desplegar.
         self.revealer.set_visible(!items.is_empty());
         let mut botones = Vec::new();
-        for mut it in items {
-            let (derecha, izquierda) = (it.derecha.take(), it.izquierda.take());
+        for it in items {
             let b = opcion(it);
-            if derecha.is_some() || izquierda.is_some() {
-                self.opciones
-                    .append(&Deslizable::new(&b, derecha, izquierda));
-            } else {
-                self.opciones.append(&b);
-            }
+            self.opciones.append(&b);
             botones.push(b);
         }
         botones
-    }
-
-    /// El renglón de la lista que lleva al botón: él mismo o lo que lo hace deslizable.
-    pub fn fila(&self, boton: &gtk::Button) -> gtk::Widget {
-        let mut w: gtk::Widget = boton.clone().upcast();
-        while let Some(p) = w.parent() {
-            if p == *self.opciones.upcast_ref::<gtk::Widget>() {
-                break;
-            }
-            w = p;
-        }
-        w
     }
 }
 

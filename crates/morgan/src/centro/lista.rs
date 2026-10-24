@@ -37,8 +37,6 @@ pub struct Lista {
     pendientes: RefCell<HashSet<PathBuf>>,
     /// El color de los íconos simbólicos: el del texto.
     color: Cell<[f32; 4]>,
-    /// Sube cuando llega una imagen tarde: las tarjetas se rearman.
-    version: Cell<u64>,
     /// Para volver a mandar la lista cuando llega una vista previa.
     al_llegar: RefCell<Option<Rc<dyn Fn()>>>,
 }
@@ -52,7 +50,6 @@ impl Lista {
             previas: RefCell::default(),
             pendientes: RefCell::default(),
             color: Cell::new(color),
-            version: Cell::new(0),
             al_llegar: RefCell::default(),
         })
     }
@@ -65,7 +62,6 @@ impl Lista {
     pub fn poner_color(&self, c: [f32; 4]) {
         if self.color.replace(c) != c {
             self.imagenes.borrow_mut().clear();
-            self.version.set(self.version.get() + 1);
         }
     }
 
@@ -141,7 +137,6 @@ impl Lista {
             previa,
             progreso: n.progreso,
             acciones,
-            version: self.version.get(),
         }
     }
 
@@ -205,7 +200,6 @@ impl Lista {
             let Some(yo) = yo.upgrade() else { return };
             yo.pendientes.borrow_mut().remove(&ruta);
             yo.previas.borrow_mut().insert(ruta, img);
-            yo.version.set(yo.version.get() + 1);
             let f = yo.al_llegar.borrow().clone();
             if let Some(f) = f {
                 f();

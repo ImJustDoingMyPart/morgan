@@ -12,7 +12,6 @@
 mod bandeja;
 mod dibujo;
 pub mod hilo;
-mod menu_bandeja;
 mod modelo;
 
 use std::cell::RefCell;
@@ -44,6 +43,7 @@ pub struct Servicios {
     pub tele: String,
     pub tema: Tema,
     pub calendario: Calendario,
+    pub centro: crate::centro::Centro,
     pub pedir: Rc<dyn Fn(Request)>,
 }
 
@@ -82,13 +82,12 @@ struct Inner {
 
 impl Barra {
     pub fn new(
-        app: &gtk::Application,
         hilo: Sender<Orden>,
         eventos: async_channel::Receiver<Evento>,
         s: Servicios,
     ) -> Self {
         let cajon = bandeja::Contexto::new(
-            app,
+            &s.centro,
             s.bandeja.clone(),
             s.iconos_bandeja.clone(),
             hilo.clone(),

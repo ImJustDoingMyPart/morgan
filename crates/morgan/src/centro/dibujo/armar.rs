@@ -35,10 +35,9 @@ const BARRA_ALTO: f64 = 6.0;
 const CARATULA: f64 = 72.0;
 const BOTON_REPRO: f64 = 32.0;
 const ICONO_REPRO: f64 = 16.0;
-/// Lo apagado del reproductor (mezclar o repetir sin poner).
+/// Lo apagado del reproductor (mezclar o repetir sin poner), y un botón deshabilitado (el
+/// `-gtk-icon-filter: opacity(0.5)` del tema; el color sigue siendo el de la hoja).
 const APAGADO: f32 = 0.5;
-/// El gris de un botón deshabilitado del tema de GTK, a media opacidad.
-const DESHABILITADO: Color = [0.569, 0.569, 0.565, 0.5];
 
 fn op(c: &Color, a: f32) -> Color {
     con_alfa(c, c[3] * a)
@@ -469,9 +468,11 @@ impl Ui {
         let on = Objetivo::Nombre(n.id);
         let abierta = n.lista.is_some_and(|l| self.abierta == Some(l));
         let r_nombre = Rect::new(cx, cy, cx + self.ancho(&nombre), cy + lh);
+        // La etiqueta tiene su color (`.cc-nivel .rotulo label`): con el puntero o la lista
+        // abierta solo sube la opacidad.
         let color_nombre = if n.lista.is_some() {
             let l = if abierta { 1.0 } else { self.luz(on, ahora) };
-            mezclar(&op(&p.on_surface, 0.5), &p.primary, l)
+            op(&p.on_surface, 0.5 + 0.5 * l)
         } else {
             op(&p.on_surface, 0.5)
         };
@@ -675,7 +676,7 @@ impl Ui {
                 } else {
                     self.luz(o, ahora)
                 };
-                mezclar(&op(&p.on_surface, 0.5), &p.primary, l)
+                op(&p.on_surface, 0.5 + 0.5 * l)
             }
             None => op(&p.on_surface, 0.5),
         };
@@ -830,7 +831,7 @@ impl Ui {
             let rb = Rect::new(bx, y, bx + BOTON_REPRO, y + BOTON_REPRO);
             let o = Objetivo::Repro(b);
             let color = if !habilitado {
-                DESHABILITADO
+                op(&p.on_surface, APAGADO)
             } else {
                 let c = mezclar(&p.on_surface, &p.primary, self.luz(o, ahora));
                 op(&c, if encendido { 1.0 } else { APAGADO })

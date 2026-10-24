@@ -426,11 +426,15 @@ impl Ui {
                     alfa: 1.0,
                 });
                 if let Some(chico) = &a.chico {
-                    let rc = Rect::new(ri.x1 - 6.0 - CHICO, ri.y1 - 6.0 - CHICO, ri.x1 - 6.0, ri.y1 - 6.0);
+                    // En la esquina de abajo de la superposición, que incluye los 10 de margen
+                    // de la imagen: asoma a la derecha del ícono grande.
+                    let x1 = ri.x1 + AL_TEXTO - 6.0;
+                    let rc = Rect::new(x1 - CHICO, ri.y1 - 6.0 - CHICO, x1, ri.y1 - 6.0);
+                    // `-gtk-icon-shadow: 0 1px 4px black`, con la forma de un círculo.
                     h.trazos.push(Trazo::Sombra {
-                        r: rc.inset(2.0),
+                        r: rc + morgan_motor::vello::kurbo::Vec2::new(0.0, 1.0),
                         radio: CHICO / 2.0,
-                        color: [0.0, 0.0, 0.0, 0.5],
+                        color: [0.0, 0.0, 0.0, 0.6],
                         spread: 0.0,
                         blur: 4.0,
                     });

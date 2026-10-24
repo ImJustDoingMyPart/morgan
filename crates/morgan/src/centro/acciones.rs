@@ -13,7 +13,6 @@ pub enum Parte {
     /// Lo que no cambia: las tarjetas.
     Fija,
     Lista(ListaId),
-    Niveles,
     /// El campo de una lista (sus botones y Enter).
     Campo(ListaId),
 }
@@ -98,15 +97,16 @@ mod tests {
         let a = Acciones::default();
         let n = Rc::new(Cell::new(0));
         let n2 = n.clone();
-        let viejo = a.tocar(Parte::Niveles, move || n2.set(n2.get() + 1));
+        let p = Parte::Lista(ListaId::Salida);
+        let viejo = a.tocar(p, move || n2.set(n2.get() + 1));
         a.hacer(viejo);
         assert_eq!(n.get(), 1);
-        a.soltar(Parte::Niveles);
+        a.soltar(p);
         a.hacer(viejo);
         assert_eq!(n.get(), 1);
         let n3 = n.clone();
         let fijo = a.tocar(Parte::Fija, move || n3.set(10));
-        a.soltar(Parte::Niveles);
+        a.soltar(p);
         a.hacer(fijo);
         assert_eq!(n.get(), 10);
         // Un número de otra clase no hace nada.
