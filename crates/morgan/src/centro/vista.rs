@@ -214,7 +214,7 @@ pub struct Aviso {
     pub llegada: i64,
     /// En la columna de la imagen (36 px en el centro; en un toast, 24 o 40).
     pub imagen: Option<ImageData>,
-    /// La imagen es un ícono del tema: en un toast va en el cuadrito del OSD.
+    /// La imagen es un ícono del tema: en un toast va a 24, en la columna de 36.
     pub icono: bool,
     /// El de la app, chico, en la esquina de la imagen.
     pub chico: Option<ImageData>,

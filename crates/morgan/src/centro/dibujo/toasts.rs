@@ -6,9 +6,9 @@
 //!
 //! Las medidas, de la hoja de GTK (`.floating-notifications` hasta 0.1.1): la columna de 304,
 //! cada tarjeta a 16 de la izquierda, 12 de la derecha y 6 arriba y abajo (12 entre dos); 4 de
-//! relleno; un ícono del tema a 24 en el cuadrito de 36 y 10 hasta el texto, una foto a 40 con
-//! 4 alrededor; el título a 14 y el cuerpo a 12 en hasta 5 renglones; los botones en fila si
-//! entran (`modelo::acciones_en_fila`), si no uno debajo del otro.
+//! relleno; un ícono del tema a 24 en una columna de 36 (sin fondo) y 10 hasta el texto, una
+//! foto a 40 con 4 alrededor; el título a 14 y el cuerpo a 12 en hasta 5 renglones; los botones
+//! en fila si entran (`modelo::acciones_en_fila`), si no uno debajo del otro.
 
 use std::collections::HashMap;
 use std::time::Instant;
@@ -236,12 +236,8 @@ impl ToastsUi {
         if let Some(img) = &a.imagen {
             let oy = y + ((fila - col_h) / 2.0).floor();
             if a.icono {
+                // Sin el fondo del cuadrito (Roberto, 2026-10-24): solo su lugar.
                 let cuadro = Rect::new(x, oy, x + CUADRO, oy + CUADRO);
-                h.trazos.push(Trazo::Caja {
-                    r: cuadro,
-                    radio: RADIO,
-                    color: op(&p.on_surface, 0.08),
-                });
                 h.trazos.push(Trazo::Imagen {
                     img: img.clone(),
                     r: encajar(img, cuadro, ICONO),

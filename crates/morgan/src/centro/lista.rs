@@ -38,7 +38,7 @@ pub const CENTRO: Medidas = Medidas {
     previa: 316.0,
 };
 
-/// En un toast, un ícono va a 24 en el cuadrito del OSD y una foto a 40 (`.image` de la hoja
+/// En un toast, un ícono va a 24 en una columna de 36 y una foto a 40 (`.image` de la hoja
 /// de GTK hasta 0.1.1).
 pub const TOAST: Medidas = Medidas {
     imagen: 40,
