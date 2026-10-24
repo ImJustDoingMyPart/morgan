@@ -278,7 +278,7 @@ impl FondosUi {
                     radio: RADIO_CELDA,
                     a: p.primary,
                     b: p.tertiary,
-                    forma: Degrade::Diagonal,
+                    forma: Degrade::Diagonal45,
                 });
             } else if b.actual.as_ref() == Some(ruta) {
                 t.push(Trazo::Caja {

@@ -412,6 +412,28 @@ pub struct VistaFondos {
     pub volver: bool,
 }
 
+/// Lo que el lienzo de ventanas necesita para abrirse: lo que hay (ya leído y ordenado) y lo
+/// que se sabe de cada ventana. Después llegan las fotos nuevas y el fondo.
+pub struct VistaVentanas {
+    /// La salida enfocada (su conector).
+    pub salida: Option<String>,
+    pub lienzo: crate::ventanas::modelo::Lienzo,
+    pub sel: usize,
+    /// Por cada ventana del lienzo: el ícono de su app y su última foto.
+    pub iconos: Vec<ImageData>,
+    pub fotos: Vec<Option<ImageData>>,
+    pub fondo: Option<ImageData>,
+}
+
+/// Lo que pide el lienzo de ventanas al hilo de GTK.
+#[derive(Debug)]
+pub enum EventoVentanas {
+    /// Enfocar esta ventana; `submap` si Hyprland sigue en el submap del lienzo.
+    Enfocar { direccion: String, submap: bool },
+    /// Lo cerró el lienzo mismo (Escape, un click afuera).
+    Cerrada,
+}
+
 /// Lo que pide la banda de fondos al hilo de GTK.
 #[derive(Debug)]
 pub enum EventoFondos {
@@ -462,6 +484,7 @@ pub enum Evento {
     Ajustes(EventoAjustes),
     Calculadora(EventoCalculadora),
     Fondos(EventoFondos),
+    Ventanas(EventoVentanas),
 }
 
 /// Lo que se hizo en un toast. Salvo copiar, el toast se va.

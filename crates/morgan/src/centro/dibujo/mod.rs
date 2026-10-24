@@ -16,6 +16,7 @@ pub mod ajustes;
 pub mod avisos;
 pub mod calculadora;
 pub mod fondos;
+pub mod ventanas;
 pub mod campo;
 pub mod launcher;
 pub mod menu;
@@ -91,6 +92,8 @@ pub enum Objetivo {
     Cuenta(usize),
     /// De la banda de fondos: una imagen, por su lugar en lo que se ve.
     Celda(usize),
+    /// Del lienzo de ventanas: una ventana, por su lugar en la lista.
+    Ventana(usize),
 }
 
 /// Cómo responde cada clase de objetivo, como en la hoja de GTK: lo que tarda en encenderse con
@@ -108,6 +111,7 @@ fn tiempos(o: Objetivo) -> (Duration, f64, Duration) {
         Objetivo::Pantalla(_) => (ms(150), 1.0, ms(100)),
         Objetivo::Tecla(..) => (ms(150), 0.94, ms(100)),
         Objetivo::Celda(_) => (ms(150), 1.0, Duration::ZERO),
+        Objetivo::Ventana(_) => (ms(120), 1.0, Duration::ZERO),
         Objetivo::Visor | Objetivo::Cuenta(_) => (ms(150), 1.0, Duration::ZERO),
         Objetivo::Aviso(_) | Objetivo::Grupo(_) => (ms(100), 1.0, ms(100)),
         Objetivo::Campo(_) => (ms(100), 1.0, ms(100)),

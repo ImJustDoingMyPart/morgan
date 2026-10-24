@@ -11,7 +11,8 @@ use std::os::unix::fs::FileExt;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::{gdk, gio, glib};
+use gtk::{gio, glib};
+use morgan_motor::vello::peniko::ImageData;
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{wl_buffer, wl_registry, wl_shm, wl_shm_pool};
 use wayland_client::{Connection, Dispatch, EventQueue, QueueHandle, WEnum};
@@ -48,23 +49,16 @@ use protocolo::hyprland_toplevel_export_manager_v1::HyprlandToplevelExportManage
 /// Una captura de verdad tarda 5–10 ms.
 const TOPE: Duration = Duration::from_millis(400);
 
+/// RGBA premultiplicado.
 pub struct Foto {
     pub ancho: i32,
     pub alto: i32,
-    pub formato: gdk::MemoryFormat,
-    pub bytes: glib::Bytes,
+    pub bytes: Vec<u8>,
 }
 
 impl Foto {
-    pub fn textura(&self) -> gdk::Texture {
-        gdk::MemoryTexture::new(
-            self.ancho,
-            self.alto,
-            self.formato,
-            &self.bytes,
-            self.ancho as usize * 4,
-        )
-        .into()
+    pub fn imagen(self) -> ImageData {
+        crate::icono::de_pixeles(self.bytes, self.ancho as u32, self.alto as u32)
     }
 }
 
@@ -263,7 +257,7 @@ impl Capturador {
             } => {
                 if let Some(p) = self.pedidos.borrow_mut().get_mut(&id)
                     && p.formato.is_none()
-                    && memoria(f).is_some()
+                    && memoria(f)
                 {
                     p.formato = Some((f, width, height, stride));
                 }
@@ -323,7 +317,8 @@ impl Capturador {
             let _ = tx.try_send(None);
             return;
         };
-        let formato = memoria(f).expect("filtrado al anunciarse");
+        let opaco = !matches!(f, wl_shm::Format::Argb8888);
+        debug_assert!(memoria(f));
         glib::MainContext::default().spawn_local(async move {
             let achicada = gio::spawn_blocking(move || {
                 let mut datos = vec![0u8; (stride * h) as usize];
@@ -340,11 +335,13 @@ impl Capturador {
             .await
             .ok()
             .flatten();
-            let foto = achicada.map(|(ancho, alto, bytes)| Foto {
-                ancho: ancho as i32,
-                alto: alto as i32,
-                formato,
-                bytes: glib::Bytes::from_owned(bytes),
+            let foto = achicada.map(|(ancho, alto, mut bytes)| {
+                a_rgba(&mut bytes, opaco);
+                Foto {
+                    ancho: ancho as i32,
+                    alto: alto as i32,
+                    bytes,
+                }
             });
             let _ = tx.try_send(foto);
         });
@@ -359,11 +356,18 @@ impl Drop for Capturador {
     }
 }
 
-fn memoria(f: wl_shm::Format) -> Option<gdk::MemoryFormat> {
-    match f {
-        wl_shm::Format::Argb8888 => Some(gdk::MemoryFormat::B8g8r8a8Premultiplied),
-        wl_shm::Format::Xrgb8888 => Some(gdk::MemoryFormat::B8g8r8x8),
-        _ => None,
+/// Los formatos que se saben leer.
+fn memoria(f: wl_shm::Format) -> bool {
+    matches!(f, wl_shm::Format::Argb8888 | wl_shm::Format::Xrgb8888)
+}
+
+/// De BGRA (lo que da el compositor) a RGBA; con `opaco`, el alfa que sobra pasa a 255.
+fn a_rgba(px: &mut [u8], opaco: bool) {
+    for p in px.as_chunks_mut::<4>().0 {
+        p.swap(0, 2);
+        if opaco {
+            p[3] = 255;
+        }
     }
 }
 
@@ -441,6 +445,15 @@ mod tests {
         assert_eq!((w, h), (2, 1));
         assert_eq!(&b[0..4], &[0, 0, 0, 0]);
         assert_eq!(&b[4..8], &[255, 255, 255, 255]);
+    }
+
+    #[test]
+    fn bgra_pasa_a_rgba() {
+        let mut px = [1u8, 2, 3, 40, 9, 8, 7, 0];
+        a_rgba(&mut px, false);
+        assert_eq!(px, [3, 2, 1, 40, 7, 8, 9, 0]);
+        a_rgba(&mut px, true);
+        assert_eq!(px, [1, 2, 3, 255, 9, 8, 7, 255]);
     }
 
     #[test]

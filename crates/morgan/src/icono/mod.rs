@@ -469,6 +469,24 @@ pub fn de_rgba(i: &image::RgbaImage, lado: u32) -> ImageData {
     imagen(cuadrado(i, lado.max(1)), lado.max(1), lado.max(1))
 }
 
+/// Píxeles RGBA ya premultiplicados, `w` por `h`, tal cual.
+pub fn de_pixeles(px: Vec<u8>, w: u32, h: u32) -> ImageData {
+    imagen(px, w, h)
+}
+
+/// Una imagen con su proporción y su tamaño, premultiplicada.
+pub fn de_imagen(i: &image::RgbaImage) -> ImageData {
+    imagen(premultiplicar(i.clone().into_raw()), i.width(), i.height())
+}
+
+/// Si el tema tiene el ícono (uno de los nombres, si es del tema; los archivos siempre).
+pub fn tiene_gicon(i: &gio::Icon) -> bool {
+    match i.downcast_ref::<gio::ThemedIcon>() {
+        Some(t) => t.names().iter().any(|n| buscar(n, 48, 1).is_some()),
+        None => true,
+    }
+}
+
 /// Si un archivo es de un ícono simbólico (se pinta de un color).
 pub fn es_simbolico(ruta: &Path) -> bool {
     ruta.file_stem()

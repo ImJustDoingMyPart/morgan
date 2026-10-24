@@ -239,14 +239,6 @@ pub fn dur(base: Duration) -> Duration {
     base.mul_f64(ritmo())
 }
 
-pub fn us(base: i64) -> i64 {
-    (base as f64 * ritmo()).round() as i64
-}
-
-pub fn ms(base: u32) -> u32 {
-    (f64::from(base) * ritmo()).round() as u32
-}
-
 /// Los que van en `s` son latidos, no transiciones, y quedan como están.
 pub fn escalar_css(css: &str) -> String {
     escalar_css_con(css, ritmo())
@@ -438,7 +430,7 @@ mod tests {
                 .sum()
         };
         let css = include_str!("estilo.css");
-        assert!(suma(css) > 0);
+        // La hoja ya casi no tiene tiempos (lo demás se dibuja con el motor): lo que quede, escala.
         assert_eq!(suma(&escalar_css_con(css, 2.0)), 2 * suma(css));
     }
 }

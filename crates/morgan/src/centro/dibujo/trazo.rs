@@ -15,6 +15,8 @@ use morgan_motor::vello::peniko::{BlendMode, Fill, ImageData};
 pub enum Degrade {
     /// `linear-gradient(135deg, …)`: los cuadritos encendidos.
     Diagonal,
+    /// `linear-gradient(45deg, …)`: lo elegido de la banda de fondos y del lienzo.
+    Diagonal45,
     /// `linear-gradient(to right, …)` sobre `de`: los sliders y las barras, que muestran su
     /// tramo de un degradé más largo.
     Horizontal { de: Rect },
@@ -57,6 +59,15 @@ pub enum Trazo {
         color: Color,
         d: (f64, f64),
         blur: f64,
+    },
+    /// Un marco de `ancho` adentro de `r` con el degradé a 45° (un `border` enmascarado): de
+    /// adentro se ve lo que haya debajo.
+    Marco {
+        r: Rect,
+        radio: f64,
+        ancho: f64,
+        a: Color,
+        b: Color,
     },
     /// Un anillo bicolor de `ancho` adentro de `r` (`forma::anillo`).
     Anillo {
@@ -180,6 +191,7 @@ pub fn pintar(s: &mut Scene, trazos: &[Trazo], base: Affine, escala: f64) {
             } => {
                 let g = match forma {
                     Degrade::Diagonal => degrade_135(*r, *a, *b),
+                    Degrade::Diagonal45 => forma::degrade_45(*r, *a, *b),
                     Degrade::Horizontal { de } => degrade_horizontal(*de, *a, *b),
                     Degrade::Vertical { de } => forma::degrade_vertical(*de, *a, *b),
                 };
@@ -231,6 +243,27 @@ pub fn pintar(s: &mut Scene, trazos: &[Trazo], base: Affine, escala: f64) {
                 s.push_layer(Fill::EvenOdd, BlendMode::default(), 1.0, actual, &afuera);
                 sombra(s, actual, *r, *radio, *color, *d, 0.0, *blur);
                 s.pop_layer();
+            }
+            Trazo::Marco {
+                r,
+                radio,
+                ancho,
+                a,
+                b,
+            } => {
+                let mut marco = morgan_motor::vello::kurbo::BezPath::new();
+                marco.extend(RoundedRect::from_rect(*r, *radio).path_elements(0.1));
+                marco.extend(
+                    RoundedRect::from_rect(r.inset(-ancho), (radio - ancho).max(0.0))
+                        .path_elements(0.1),
+                );
+                s.fill(
+                    Fill::EvenOdd,
+                    actual,
+                    &forma::degrade_45(*r, *a, *b),
+                    None,
+                    &marco,
+                );
             }
             Trazo::Anillo {
                 r,

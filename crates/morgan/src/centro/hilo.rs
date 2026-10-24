@@ -46,6 +46,7 @@ use wayland_client::{Connection, QueueHandle};
 use super::dibujo::ajustes::{self, AjustesUi};
 use super::dibujo::calculadora::CalculadoraUi;
 use super::dibujo::fondos::{FondosUi, Mini};
+use super::dibujo::ventanas::VentanasUi;
 use super::dibujo::launcher::{self, LauncherUi};
 use super::dibujo::menu::{MenuUi, Salida};
 use super::dibujo::toasts::{self, ToastsUi};
@@ -53,7 +54,7 @@ use super::dibujo::toque::{IZQUIERDO, Pedido};
 use super::dibujo::{Objetivo, Ui};
 use super::ecualizador;
 use super::vista::{
-    Aviso, Contenido, Evento, EventoAjustes, EventoCalculadora, EventoFondos, VistaCalculadora, VistaFondos, EventoLauncher, Grupo, Iconos, IndiceAjustes, ListaId,
+    Aviso, Contenido, Evento, EventoAjustes, EventoCalculadora, EventoFondos, EventoVentanas, VistaCalculadora, VistaFondos, VistaVentanas, EventoLauncher, Grupo, Iconos, IndiceAjustes, ListaId,
     ListaLauncher, Lugar, Menu, Nivel, PaginaAjustes, Reproductor, Tarjeta,
 };
 use crate::lamina::Lamina;
@@ -115,6 +116,17 @@ pub enum Orden {
     /// La banda de fondos: abrirla (con las imágenes de la carpeta) y cerrarla.
     FondosAbrir(Box<VistaFondos>),
     FondosCerrar,
+    /// El lienzo de ventanas: el estado se arma al abrir; la capa se pone al mostrarse (un
+    /// toque no la dibuja).
+    VentanasAbrir(Box<VistaVentanas>),
+    VentanasMostrar,
+    /// Un paso más en orden de uso reciente (y mostrarlo).
+    VentanasReciente,
+    /// Enfocar la elegida (se soltó `Mod` antes de mostrarse).
+    VentanasConfirmar,
+    VentanasFoto(String, morgan_motor::vello::peniko::ImageData),
+    VentanasFondo(morgan_motor::vello::peniko::ImageData),
+    VentanasCerrar,
 }
 
 /// Si no hay Wayland o la GPU no abre, el hilo termina: morgan sigue sin centro.
@@ -211,6 +223,9 @@ struct Hilo {
     calculadora_ui: CalculadoraUi,
     fondos: Option<LauncherSup>,
     fondos_ui: FondosUi,
+    ventanas: Option<LauncherSup>,
+    ventanas_ui: VentanasUi,
+    ventanas_salida: Option<String>,
     /// Por donde llegan las miniaturas que lee el hilo de la banda.
     minis: Sender<Mini>,
     /// Abrir con la sesión desplegada espera a la primera hoja para enfocar.
@@ -289,6 +304,9 @@ fn correr(
         calculadora_ui: CalculadoraUi::new(paleta, opacidad, borde),
         fondos: None,
         fondos_ui: FondosUi::new(paleta, opacidad, borde),
+        ventanas: None,
+        ventanas_ui: VentanasUi::new(paleta, opacidad, borde),
+        ventanas_salida: None,
         minis,
         enfocar_al_armar: None,
         cava: None,
@@ -332,6 +350,9 @@ impl Hilo {
         if let Some(f) = &mut self.fondos {
             f.lamina.sucio = true;
         }
+        if let Some(v) = &mut self.ventanas {
+            v.lamina.sucio = true;
+        }
     }
 
     fn orden(&mut self, o: Orden) {
@@ -352,6 +373,8 @@ impl Hilo {
                 (c.paleta, c.opacidad, c.borde) = (p, o, b);
                 let f = &mut self.fondos_ui;
                 (f.paleta, f.opacidad, f.borde) = (p, o, b);
+                let v = &mut self.ventanas_ui;
+                (v.paleta, v.opacidad, v.borde) = (p, o, b);
             }
             Orden::Abrir { sesion } => self.abrir(sesion),
             Orden::Cerrar => self.cerrar(false),
@@ -426,6 +449,23 @@ impl Hilo {
             Orden::Calculadora(v) => self.calculadora_ui.poner(v),
             Orden::FondosAbrir(v) => self.abrir_fondos(*v),
             Orden::FondosCerrar => self.cerrar_fondos(),
+            Orden::VentanasAbrir(v) => {
+                self.ventanas = None;
+                self.ventanas_salida = v.salida.clone();
+                self.ventanas_ui.abrir(*v);
+            }
+            Orden::VentanasMostrar => self.mostrar_ventanas(),
+            Orden::VentanasReciente => {
+                self.ventanas_ui.reciente();
+                self.mostrar_ventanas();
+            }
+            Orden::VentanasConfirmar => {
+                let v = self.ventanas_ui.confirmar(false);
+                self.eventos_ventanas(v);
+            }
+            Orden::VentanasFoto(d, img) => self.ventanas_ui.foto(&d, img),
+            Orden::VentanasFondo(img) => self.ventanas_ui.fondo(img),
+            Orden::VentanasCerrar => self.cerrar_ventanas(),
             Orden::AjustesPrecalentar(p) => {
                 if self.ajustes.is_none() {
                     self.ajustes_ui.precalentar(p);
@@ -550,6 +590,52 @@ impl Hilo {
             capa,
             inicio: None,
         });
+    }
+
+    /// La capa recién se pone al mostrarse: hasta entonces el teclado sigue en la ventana
+    /// enfocada.
+    fn mostrar_ventanas(&mut self) {
+        if self.ventanas.is_some() || !self.ventanas_ui.abierta() {
+            return;
+        }
+        let salida = self.ventanas_salida.as_deref().and_then(|n| {
+            self.salidas
+                .outputs()
+                .find(|o| self.salidas.info(o).and_then(|i| i.name).as_deref() == Some(n))
+        });
+        let wl = self.compositor.create_surface(&self.qh);
+        let capa = self.capas.create_layer_surface(
+            &self.qh,
+            wl,
+            Layer::Overlay,
+            Some("morgan-windows"),
+            salida.as_ref(),
+        );
+        capa.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
+        capa.set_exclusive_zone(-1);
+        capa.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        capa.commit();
+        self.ventanas = Some(LauncherSup {
+            lamina: Lamina::new((0, 0)),
+            capa,
+            inicio: None,
+        });
+    }
+
+    fn cerrar_ventanas(&mut self) {
+        self.ventanas = None;
+        self.ventanas_ui.cerrar();
+    }
+
+    fn eventos_ventanas(&mut self, v: Vec<EventoVentanas>) {
+        for e in v {
+            // Enfocar o cerrar: la capa se va, y con ella el estado.
+            self.avisar(Evento::Ventanas(e));
+            self.cerrar_ventanas();
+        }
+        if let Some(v) = &mut self.ventanas {
+            v.lamina.sucio = true;
+        }
     }
 
     fn cerrar_fondos(&mut self) {
@@ -900,6 +986,7 @@ impl Hilo {
         self.pintar_ajustes(ahora);
         self.pintar_calculadora(ahora);
         self.pintar_fondos(ahora);
+        self.pintar_ventanas(ahora);
         let Some(p) = &mut self.panel else {
             let _ = self.conn.flush();
             return;
@@ -1022,6 +1109,56 @@ impl Hilo {
         let wl = f.capa.wl_surface().clone();
         f.lamina
             .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+    }
+
+    /// Sin bajada propia: sube 10 px mientras Hyprland funde la capa.
+    fn pintar_ventanas(&mut self, ahora: Instant) {
+        let Some(v) = &mut self.ventanas else { return };
+        let ui = &mut self.ventanas_ui;
+        if !v.lamina.lista() || !(v.lamina.sucio || ui.anda(ahora)) {
+            return;
+        }
+        ui.tam = v.lamina.tam;
+        let escala = v.lamina.escala;
+        ui.armar(escala as f32, ahora);
+        ui.pintar(&mut self.escena, f64::from(escala));
+        let wl = v.capa.wl_surface().clone();
+        v.lamina
+            .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+    }
+
+    fn puntero_ventanas(&mut self, e: &PointerEvent) {
+        let (x, y) = e.position;
+        let ui = &mut self.ventanas_ui;
+        let v = match e.kind {
+            PointerEventKind::Enter { serial } => {
+                self.serial_puntero = serial;
+                self.forma_puesta = None;
+                ui.mover(x, y);
+                Vec::new()
+            }
+            PointerEventKind::Motion { .. } => {
+                ui.mover(x, y);
+                Vec::new()
+            }
+            PointerEventKind::Leave { .. } => {
+                ui.salir();
+                Vec::new()
+            }
+            PointerEventKind::Press { .. } => {
+                ui.apretar(x, y);
+                Vec::new()
+            }
+            PointerEventKind::Release { .. } => ui.soltar(x, y),
+            PointerEventKind::Axis { .. } => Vec::new(),
+        };
+        self.eventos_ventanas(v);
+        if self.forma_puesta != Some(Shape::Default)
+            && let Some(f) = &self.forma
+        {
+            f.set_shape(self.serial_puntero, Shape::Default);
+            self.forma_puesta = Some(Shape::Default);
+        }
     }
 
     fn puntero_fondos(&mut self, e: &PointerEvent) {
@@ -1396,6 +1533,11 @@ impl Hilo {
             self.salida_menu(s);
             return;
         }
+        if self.ventanas.is_some() {
+            let v = self.ventanas_ui.tecla(ev.keysym);
+            self.eventos_ventanas(v);
+            return;
+        }
         if self.fondos.is_some() {
             let v = self
                 .fondos_ui
@@ -1502,6 +1644,13 @@ fn lanzar_cava() -> Result<(std::process::Child, channel::Channel<Vec<f64>>), St
 impl LayerShellHandler for Hilo {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, capa: &LayerSurface) {
         if self
+            .ventanas
+            .as_ref()
+            .is_some_and(|v| v.capa.wl_surface() == capa.wl_surface())
+        {
+            self.eventos_ventanas(vec![EventoVentanas::Cerrada]);
+        }
+        if self
             .fondos
             .as_ref()
             .is_some_and(|f| f.capa.wl_surface() == capa.wl_surface())
@@ -1571,6 +1720,7 @@ impl LayerShellHandler for Hilo {
             .or(self.launcher.as_mut().filter(|l| l.capa.wl_surface() == wl))
             .or(self.calculadora.as_mut().filter(|l| l.capa.wl_surface() == wl))
             .or(self.fondos.as_mut().filter(|l| l.capa.wl_surface() == wl))
+            .or(self.ventanas.as_mut().filter(|l| l.capa.wl_surface() == wl))
         {
             if c.new_size.0 > 0 && c.new_size.1 > 0 {
                 l.lamina.tam = c.new_size;
@@ -1691,6 +1841,9 @@ impl Hilo {
         }
         if let Some(f) = self.fondos.as_mut().filter(|f| f.capa.wl_surface() == wl) {
             return Some(&mut f.lamina);
+        }
+        if let Some(v) = self.ventanas.as_mut().filter(|v| v.capa.wl_surface() == wl) {
+            return Some(&mut v.lamina);
         }
         self.menu
             .as_mut()
@@ -1821,8 +1974,13 @@ impl KeyboardHandler for Hilo {
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: u32,
-        _: KeyEvent,
+        ev: KeyEvent,
     ) {
+        // Soltar `Mod` confirma el lienzo de ventanas.
+        if self.ventanas.is_some() {
+            let v = self.ventanas_ui.soltada(ev.keysym);
+            self.eventos_ventanas(v);
+        }
     }
 
     fn update_modifiers(
@@ -1878,6 +2036,12 @@ impl PointerHandler for Hilo {
                 .is_some_and(|c| c.capa.wl_surface() == &e.surface)
             {
                 self.puntero_calculadora(e);
+            } else if self
+                .ventanas
+                .as_ref()
+                .is_some_and(|v| v.capa.wl_surface() == &e.surface)
+            {
+                self.puntero_ventanas(e);
             } else if self
                 .fondos
                 .as_ref()

@@ -44,6 +44,17 @@ pub fn degrade_135(r: Rect, a: Color, b: Color) -> Gradient {
         .with_stops([pincel(&a), pincel(&b)].as_slice())
 }
 
+/// `linear-gradient(45deg, a, b)` de CSS sobre `r`: de abajo a la izquierda a arriba a la
+/// derecha.
+pub fn degrade_45(r: Rect, a: Color, b: Color) -> Gradient {
+    let s = std::f64::consts::FRAC_1_SQRT_2;
+    let largo = (r.width() + r.height()) * s;
+    let c = r.center();
+    let d = s * largo / 2.0;
+    Gradient::new_linear(Point::new(c.x - d, c.y + d), Point::new(c.x + d, c.y - d))
+        .with_stops([pincel(&a), pincel(&b)].as_slice())
+}
+
 /// `linear-gradient(to right, a, b)` de CSS sobre `r`.
 pub fn degrade_horizontal(r: Rect, a: Color, b: Color) -> Gradient {
     Gradient::new_linear(Point::new(r.x0, r.y0), Point::new(r.x1, r.y0))

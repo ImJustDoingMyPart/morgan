@@ -188,7 +188,7 @@ fn main() -> ExitCode {
             centro: centro.clone(),
             launcher: Launcher::new(&centro, &agenda),
             fondos: fondos.clone(),
-            ventanas: ventanas::Ventanas::new(app, hyprland.clone()),
+            ventanas: ventanas::Ventanas::new(hyprland.clone(), &centro),
             menu: Menu::new(
                 menu::Servicios {
                     config: config.clone(),
