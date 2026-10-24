@@ -362,7 +362,8 @@ impl Ui {
             | Objetivo::Pantalla(_)
             | Objetivo::Tecla(..)
             | Objetivo::Visor
-            | Objetivo::Cuenta(_) => {}
+            | Objetivo::Cuenta(_)
+            | Objetivo::Celda(_) => {}
             Objetivo::Cuota(i) => {
                 let abrir = self.cuota != Some(i);
                 let d = crate::animaciones::dur(super::DESPLIEGUE);

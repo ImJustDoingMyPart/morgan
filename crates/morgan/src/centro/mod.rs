@@ -117,11 +117,13 @@ struct Inner {
     /// Lo mismo, del menú de sistema.
     al_ajustes: RefCell<Option<AlAjustes>>,
     al_calculadora: RefCell<Option<AlCalculadora>>,
+    al_fondos: RefCell<Option<AlFondos>>,
 }
 
 type AlLauncher = Rc<dyn Fn(vista::EventoLauncher)>;
 type AlAjustes = Rc<dyn Fn(vista::EventoAjustes)>;
 type AlCalculadora = Rc<dyn Fn(vista::EventoCalculadora)>;
+type AlFondos = Rc<dyn Fn(vista::EventoFondos)>;
 
 struct MenuAbierto {
     elegir: Box<dyn Fn(i32)>,
@@ -206,6 +208,7 @@ impl Centro {
             al_launcher: RefCell::default(),
             al_ajustes: RefCell::default(),
             al_calculadora: RefCell::default(),
+            al_fondos: RefCell::default(),
         });
         let c = Centro { inner };
         let weak = Rc::downgrade(&c.inner);
@@ -273,6 +276,10 @@ impl Centro {
 
     pub fn al_calculadora(&self, f: impl Fn(vista::EventoCalculadora) + 'static) {
         self.inner.al_calculadora.replace(Some(Rc::new(f)));
+    }
+
+    pub fn al_fondos(&self, f: impl Fn(vista::EventoFondos) + 'static) {
+        self.inner.al_fondos.replace(Some(Rc::new(f)));
     }
 
     pub fn al_ajustes(&self, f: impl Fn(vista::EventoAjustes) + 'static) {
@@ -432,6 +439,12 @@ impl Centro {
             // Lo mismo que en la lista, y el toast se va (copiar lo deja).
             Evento::Calculadora(e) => {
                 let f = i.al_calculadora.borrow().clone();
+                if let Some(f) = f {
+                    f(e);
+                }
+            }
+            Evento::Fondos(e) => {
+                let f = i.al_fondos.borrow().clone();
                 if let Some(f) = f {
                     f(e);
                 }

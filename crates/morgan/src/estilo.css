@@ -10,7 +10,6 @@ window.morgan {
  * declara la app e ignora la regla `blur` de la capa (con la región vacía, nada). GTK declara
  * la región donde hay un `backdrop-filter: blur` de 20px o más; el radio no importa más allá
  * de eso: el desenfoque es el de `decoration:blur` de Hyprland. */
-.fondos .banda,
 .ventanas {
     backdrop-filter: blur(20px);
 }
@@ -30,63 +29,6 @@ tooltip label {
     font-family: "JetBrainsMono Nerd Font", monospace;
     font-size: 11px;
     color: @on_surface;
-}
-
-/* ─── Banda de fondos ───
- * El anillo es el fondo de la celda asomando por su padding, a 45°. */
-window.fondos {
-    background: transparent;
-}
-
-.fondos .banda {
-    background-color: @morgan_barra;
-    padding-top: 14px;
-}
-
-.fondos .cabecera {
-    padding: 0 24px;
-}
-
-.fondos .cabecera label {
-    font-family: "JetBrainsMono Nerd Font", monospace;
-    font-size: 14px;
-}
-
-.fondos .prompt {
-    color: @primary;
-}
-
-.fondos .filtro {
-    color: @on_surface;
-}
-
-.fondos .filtro.vacio {
-    color: @on_surface_variant;
-}
-
-.fondos scrolledwindow,
-.fondos viewport {
-    background: none;
-}
-
-.fondos .celda {
-    padding: 3px;
-    border-radius: 6px;
-    background: none;
-    transition: box-shadow 150ms ease-out;
-}
-
-.fondos .celda picture {
-    border-radius: 4px;
-}
-
-.fondos .celda.actual {
-    background-color: @outline_variant;
-}
-
-.fondos .celda.sel {
-    background-image: linear-gradient(45deg, @primary, @tertiary);
-    box-shadow: 0 0 8px 1px alpha(@primary, 0.45);
 }
 
 /* ─── Lienzo de ventanas ───

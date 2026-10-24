@@ -160,7 +160,6 @@ fn main() -> ExitCode {
         let idle = idle::Idle::new(&config.idle, hyprland.clone());
         let luz = luz::Luz::new(&config.luz, osd.clone());
         let brillo = brillo::Brillo::new();
-        let fondos = fondos::Fondos::new(app, hyprland.clone(), &config.fondos);
         let centro = Centro::new(centro::Servicios {
             notificaciones: notificaciones.clone(),
             hyprland: hyprland.clone(),
@@ -171,6 +170,7 @@ fn main() -> ExitCode {
             tema: tema.clone(),
         });
         centro.aplicar_config(&config.sonido);
+        let fondos = fondos::Fondos::new(hyprland.clone(), &config.fondos, &centro);
         let (hilo_barra, eventos_barra) = barra::lanzar(&tema, &config.barra.fijos);
         let iconos_bandeja = config.barra.iconos_bandeja.clone();
         let tele = config.barra.tele.clone();

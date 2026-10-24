@@ -45,6 +45,7 @@ use wayland_client::{Connection, QueueHandle};
 
 use super::dibujo::ajustes::{self, AjustesUi};
 use super::dibujo::calculadora::CalculadoraUi;
+use super::dibujo::fondos::{FondosUi, Mini};
 use super::dibujo::launcher::{self, LauncherUi};
 use super::dibujo::menu::{MenuUi, Salida};
 use super::dibujo::toasts::{self, ToastsUi};
@@ -52,7 +53,7 @@ use super::dibujo::toque::{IZQUIERDO, Pedido};
 use super::dibujo::{Objetivo, Ui};
 use super::ecualizador;
 use super::vista::{
-    Aviso, Contenido, Evento, EventoAjustes, EventoCalculadora, VistaCalculadora, EventoLauncher, Grupo, Iconos, IndiceAjustes, ListaId,
+    Aviso, Contenido, Evento, EventoAjustes, EventoCalculadora, EventoFondos, VistaCalculadora, VistaFondos, EventoLauncher, Grupo, Iconos, IndiceAjustes, ListaId,
     ListaLauncher, Lugar, Menu, Nivel, PaginaAjustes, Reproductor, Tarjeta,
 };
 use crate::lamina::Lamina;
@@ -111,6 +112,9 @@ pub enum Orden {
     CalculadoraAbrir,
     CalculadoraCerrar,
     Calculadora(VistaCalculadora),
+    /// La banda de fondos: abrirla (con las imágenes de la carpeta) y cerrarla.
+    FondosAbrir(Box<VistaFondos>),
+    FondosCerrar,
 }
 
 /// Si no hay Wayland o la GPU no abre, el hilo termina: morgan sigue sin centro.
@@ -205,6 +209,10 @@ struct Hilo {
     ajustes_ui: AjustesUi,
     calculadora: Option<LauncherSup>,
     calculadora_ui: CalculadoraUi,
+    fondos: Option<LauncherSup>,
+    fondos_ui: FondosUi,
+    /// Por donde llegan las miniaturas que lee el hilo de la banda.
+    minis: Sender<Mini>,
     /// Abrir con la sesión desplegada espera a la primera hoja para enfocar.
     enfocar_al_armar: Option<Enfoque>,
     cava: Option<Cava>,
@@ -241,6 +249,15 @@ fn correr(
             }
         })
         .map_err(|e| e.to_string())?;
+    let (minis, rx_minis) = channel::channel::<Mini>();
+    bucle
+        .handle()
+        .insert_source(rx_minis, |ev, _, h: &mut Hilo| {
+            if let channel::Event::Msg(m) = ev {
+                h.mini(m);
+            }
+        })
+        .map_err(|e| e.to_string())?;
     let mut h = Hilo {
         gpu: Gpu::con_display("morgan", &conn),
         conn,
@@ -270,6 +287,9 @@ fn correr(
         ajustes_ui: AjustesUi::new(paleta, opacidad, borde),
         calculadora: None,
         calculadora_ui: CalculadoraUi::new(paleta, opacidad, borde),
+        fondos: None,
+        fondos_ui: FondosUi::new(paleta, opacidad, borde),
+        minis,
         enfocar_al_armar: None,
         cava: None,
         reloj: None,
@@ -309,6 +329,9 @@ impl Hilo {
         if let Some(c) = &mut self.calculadora {
             c.lamina.sucio = true;
         }
+        if let Some(f) = &mut self.fondos {
+            f.lamina.sucio = true;
+        }
     }
 
     fn orden(&mut self, o: Orden) {
@@ -327,6 +350,8 @@ impl Hilo {
                 (a.paleta, a.opacidad, a.borde) = (p, o, b);
                 let c = &mut self.calculadora_ui;
                 (c.paleta, c.opacidad, c.borde) = (p, o, b);
+                let f = &mut self.fondos_ui;
+                (f.paleta, f.opacidad, f.borde) = (p, o, b);
             }
             Orden::Abrir { sesion } => self.abrir(sesion),
             Orden::Cerrar => self.cerrar(false),
@@ -399,6 +424,8 @@ impl Hilo {
             Orden::CalculadoraAbrir => self.abrir_calculadora(),
             Orden::CalculadoraCerrar => self.calculadora = None,
             Orden::Calculadora(v) => self.calculadora_ui.poner(v),
+            Orden::FondosAbrir(v) => self.abrir_fondos(*v),
+            Orden::FondosCerrar => self.cerrar_fondos(),
             Orden::AjustesPrecalentar(p) => {
                 if self.ajustes.is_none() {
                     self.ajustes_ui.precalentar(p);
@@ -486,6 +513,68 @@ impl Hilo {
             capa,
             inicio: None,
         });
+    }
+
+    fn abrir_fondos(&mut self, v: VistaFondos) {
+        if self.fondos.is_some() {
+            return;
+        }
+        let salida = v.salida.as_deref().and_then(|n| {
+            self.salidas
+                .outputs()
+                .find(|o| self.salidas.info(o).and_then(|i| i.name).as_deref() == Some(n))
+        });
+        // Sin la salida enfocada a mano, la primera: el alto es una estimación.
+        let alto_salida = salida
+            .clone()
+            .or_else(|| self.salidas.outputs().next())
+            .and_then(|o| self.salidas.info(&o))
+            .and_then(|i| i.logical_size)
+            .map_or(1080, |(_, h)| h);
+        self.fondos_ui.abrir(v, alto_salida, self.minis.clone());
+        let wl = self.compositor.create_surface(&self.qh);
+        let capa = self.capas.create_layer_surface(
+            &self.qh,
+            wl,
+            Layer::Overlay,
+            Some("morgan-wallpapers"),
+            salida.as_ref(),
+        );
+        capa.set_anchor(Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
+        capa.set_size(0, FondosUi::alto(alto_salida));
+        capa.set_exclusive_zone(-1);
+        capa.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        capa.commit();
+        self.fondos = Some(LauncherSup {
+            lamina: Lamina::new((0, 0)),
+            capa,
+            inicio: None,
+        });
+    }
+
+    fn cerrar_fondos(&mut self) {
+        self.fondos = None;
+        self.fondos_ui.cerrar();
+    }
+
+    fn mini(&mut self, m: Mini) {
+        self.fondos_ui.mini(m);
+        if let Some(f) = &mut self.fondos {
+            f.lamina.sucio = true;
+        }
+    }
+
+    fn eventos_fondos(&mut self, v: Vec<EventoFondos>) {
+        for e in v {
+            let cierra = matches!(e, EventoFondos::Cerrada { .. });
+            self.avisar(Evento::Fondos(e));
+            if cierra {
+                self.cerrar_fondos();
+            }
+        }
+        if let Some(f) = &mut self.fondos {
+            f.lamina.sucio = true;
+        }
     }
 
     fn eventos_calculadora(&mut self, v: Vec<EventoCalculadora>) {
@@ -810,6 +899,7 @@ impl Hilo {
         self.pintar_launcher(ahora);
         self.pintar_ajustes(ahora);
         self.pintar_calculadora(ahora);
+        self.pintar_fondos(ahora);
         let Some(p) = &mut self.panel else {
             let _ = self.conn.flush();
             return;
@@ -916,6 +1006,69 @@ impl Hilo {
         let wl = c.capa.wl_surface().clone();
         c.lamina
             .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+    }
+
+    /// Sin bajada: Hyprland la sube desde el borde (`slide bottom`).
+    fn pintar_fondos(&mut self, ahora: Instant) {
+        let Some(f) = &mut self.fondos else { return };
+        let ui = &mut self.fondos_ui;
+        if !f.lamina.lista() || !(f.lamina.sucio || ui.anda(ahora)) {
+            return;
+        }
+        ui.tam = f.lamina.tam;
+        let escala = f.lamina.escala;
+        ui.armar(escala as f32, ahora);
+        ui.pintar(&mut self.escena, f64::from(escala));
+        let wl = f.capa.wl_surface().clone();
+        f.lamina
+            .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+    }
+
+    fn puntero_fondos(&mut self, e: &PointerEvent) {
+        let (x, y) = e.position;
+        let ui = &mut self.fondos_ui;
+        let v = match e.kind {
+            PointerEventKind::Enter { serial } => {
+                self.serial_puntero = serial;
+                self.forma_puesta = None;
+                Vec::new()
+            }
+            PointerEventKind::Motion { .. } | PointerEventKind::Leave { .. } => Vec::new(),
+            PointerEventKind::Press { .. } => {
+                ui.apretar(x, y);
+                Vec::new()
+            }
+            PointerEventKind::Release { .. } => ui.soltar(x, y),
+            PointerEventKind::Axis {
+                horizontal,
+                vertical,
+                ..
+            } => {
+                // El eje que más se movió, como la banda con GTK.
+                let eje = |a: smithay_client_toolkit::seat::pointer::AxisScroll| {
+                    if a.value120 != 0 {
+                        (f64::from(a.value120) / 120.0, true)
+                    } else if a.discrete != 0 {
+                        (f64::from(a.discrete), true)
+                    } else {
+                        (a.absolute, false)
+                    }
+                };
+                let (v, h) = (eje(vertical), eje(horizontal));
+                let (paso, discreto) = if v.0.abs() >= h.0.abs() { v } else { h };
+                if paso != 0.0 {
+                    ui.rueda(paso, discreto);
+                }
+                Vec::new()
+            }
+        };
+        self.eventos_fondos(v);
+        if self.forma_puesta != Some(Shape::Default)
+            && let Some(f) = &self.forma
+        {
+            f.set_shape(self.serial_puntero, Shape::Default);
+            self.forma_puesta = Some(Shape::Default);
+        }
     }
 
     fn puntero_calculadora(&mut self, e: &PointerEvent) {
@@ -1243,6 +1396,13 @@ impl Hilo {
             self.salida_menu(s);
             return;
         }
+        if self.fondos.is_some() {
+            let v = self
+                .fondos_ui
+                .tecla(ev.keysym, ev.utf8.as_deref(), self.mods.ctrl);
+            self.eventos_fondos(v);
+            return;
+        }
         if self.calculadora.is_some() {
             let m = self.mods;
             let v = self
@@ -1342,6 +1502,13 @@ fn lanzar_cava() -> Result<(std::process::Child, channel::Channel<Vec<f64>>), St
 impl LayerShellHandler for Hilo {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, capa: &LayerSurface) {
         if self
+            .fondos
+            .as_ref()
+            .is_some_and(|f| f.capa.wl_surface() == capa.wl_surface())
+        {
+            self.eventos_fondos(vec![EventoFondos::Cerrada { volver: false }]);
+        }
+        if self
             .calculadora
             .as_ref()
             .is_some_and(|c| c.capa.wl_surface() == capa.wl_surface())
@@ -1403,6 +1570,7 @@ impl LayerShellHandler for Hilo {
             .filter(|l| l.capa.wl_surface() == wl)
             .or(self.launcher.as_mut().filter(|l| l.capa.wl_surface() == wl))
             .or(self.calculadora.as_mut().filter(|l| l.capa.wl_surface() == wl))
+            .or(self.fondos.as_mut().filter(|l| l.capa.wl_surface() == wl))
         {
             if c.new_size.0 > 0 && c.new_size.1 > 0 {
                 l.lamina.tam = c.new_size;
@@ -1520,6 +1688,9 @@ impl Hilo {
         }
         if let Some(c) = self.calculadora.as_mut().filter(|c| c.capa.wl_surface() == wl) {
             return Some(&mut c.lamina);
+        }
+        if let Some(f) = self.fondos.as_mut().filter(|f| f.capa.wl_surface() == wl) {
+            return Some(&mut f.lamina);
         }
         self.menu
             .as_mut()
@@ -1707,6 +1878,12 @@ impl PointerHandler for Hilo {
                 .is_some_and(|c| c.capa.wl_surface() == &e.surface)
             {
                 self.puntero_calculadora(e);
+            } else if self
+                .fondos
+                .as_ref()
+                .is_some_and(|f| f.capa.wl_surface() == &e.surface)
+            {
+                self.puntero_fondos(e);
             } else if self
                 .panel
                 .as_ref()

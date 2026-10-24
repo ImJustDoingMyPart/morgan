@@ -395,6 +395,32 @@ pub struct VistaCalculadora {
     pub cinta: Vec<(String, String)>,
 }
 
+/// Lo que la banda de fondos necesita para abrirse: la carpeta y sus imágenes. Las miniaturas,
+/// la elegida, lo escrito y el desplazamiento los lleva el hilo del centro.
+pub struct VistaFondos {
+    /// La salida enfocada (su conector); sin ella, la que elija el compositor.
+    pub salida: Option<String>,
+    /// El nombre de la carpeta, ya con mayúscula.
+    pub carpeta: String,
+    pub rutas: Vec<std::path::PathBuf>,
+    /// El fondo de ahora: arranca elegido y marcado.
+    pub actual: Option<std::path::PathBuf>,
+    /// Las que todavía no tienen miniatura.
+    pub faltan: Vec<std::path::PathBuf>,
+    pub cache: std::path::PathBuf,
+    /// Escape vuelve al menú (se entró desde ahí) en vez de cerrar.
+    pub volver: bool,
+}
+
+/// Lo que pide la banda de fondos al hilo de GTK.
+#[derive(Debug)]
+pub enum EventoFondos {
+    /// Enter o un click en una imagen.
+    Aplicar(std::path::PathBuf),
+    /// La cerró ella misma (Escape, o la capa se fue); con `volver`, al menú.
+    Cerrada { volver: bool },
+}
+
 /// Lo que pide la calculadora al hilo de GTK.
 #[derive(Debug)]
 pub enum EventoCalculadora {
@@ -435,6 +461,7 @@ pub enum Evento {
     Launcher(EventoLauncher),
     Ajustes(EventoAjustes),
     Calculadora(EventoCalculadora),
+    Fondos(EventoFondos),
 }
 
 /// Lo que se hizo en un toast. Salvo copiar, el toast se va.
