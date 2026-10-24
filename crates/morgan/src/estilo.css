@@ -11,6 +11,7 @@ window.morgan {
  * la región donde hay un `backdrop-filter: blur` de 20px o más; el radio no importa más allá
  * de eso: el desenfoque es el de `decoration:blur` de Hyprland. */
 .control-center,
+.menu,
 .fondos .banda,
 .ventanas {
     backdrop-filter: blur(20px);
@@ -163,6 +164,26 @@ window.blank-window {
 .cc-opcion .tilde {
     color: @tertiary;
     opacity: 1;
+}
+
+/* ─── Menú de sistema: la caja de los paneles (el launcher es del motor propio) ─── */
+.menu,
+.menu * {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 10pt;
+}
+
+.menu {
+    margin: 8px;
+    padding: 14px;
+    border-radius: 4px;
+    color: @on_surface;
+    border: 2px solid;
+    border-color: @primary @tertiary @tertiary @primary;
+    background: @morgan_fondo;
+    box-shadow:
+        1px 1px 5px 1px alpha(@tertiary, 0.3),
+        -1px -1px 5px 1px alpha(@primary, 0.3);
 }
 
 /* ─── El buscador y la lista del menú de sistema (el launcher es del motor propio) ─── */
