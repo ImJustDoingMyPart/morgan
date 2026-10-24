@@ -4,7 +4,7 @@ use vello::Scene;
 use vello::kurbo::{Affine, BezPath, Point, Rect, RoundedRect, Shape, Vec2};
 use vello::peniko::{BlendMode, Compose, Fill, Gradient, ImageBrush, ImageData, Mix};
 
-use crate::color::{Color, Paleta, con_alfa, pincel};
+use crate::color::{Color, Paleta, con_alfa, mezclar, pincel};
 
 /// `box-shadow` de GTK sobre la caja `r` de radio `radio`: agrandada en `spread` (el radio
 /// también), desplazada y desenfocada con sigma = blur / 2. Sin blur, un relleno liso.
@@ -156,4 +156,77 @@ pub fn panel(s: &mut Scene, tr: Affine, p: &Paleta, opacidad: f32, r: Rect, bord
         s.fill(Fill::EvenOdd, tr, pincel(&c), None, &anillo);
         s.pop_layer();
     }
+}
+
+/// El anillo de una tarjeta suelta (el OSD, un toast).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Anillo {
+    /// `primary` arriba a la izquierda, `tertiary` abajo a la derecha y la mezcla en el medio.
+    Bicolor,
+    /// De un color, con su propio brillo (un toast crítico, en `error`).
+    Liso(Color),
+}
+
+/// La tarjeta del OSD y de los toasts (`.osd` y `.floating-notifications .notification` de la
+/// hoja de GTK), en `r` (la caja del fondo, en lógicos): el anillo asoma 2 px por fuera, con lo
+/// de afuera según `borde` (el glow tenue, con spread 3, o la sombra negra con su línea), y
+/// adentro el fondo translúcido.
+#[allow(clippy::too_many_arguments)]
+pub fn tarjeta(
+    s: &mut Scene,
+    tr: Affine,
+    p: &Paleta,
+    opacidad: f32,
+    borde: Borde,
+    r: Rect,
+    anillo: Anillo,
+) {
+    const RADIO: f64 = 4.0;
+    let rr = RoundedRect::from_rect(r, RADIO);
+    // Las sombras van solo por fuera: el fondo es translúcido y no tienen que verse a través.
+    let mut afuera = BezPath::new();
+    afuera.extend(r.inflate(16.0, 16.0).path_elements(0.1));
+    afuera.extend(rr.path_elements(0.1));
+    s.push_layer(Fill::EvenOdd, BlendMode::default(), 1.0, tr, &afuera);
+    let negro = |a| [0.0, 0.0, 0.0, a];
+    // `box-shadow` de GTK, de la de abajo a la de arriba.
+    let capas: Vec<(Color, (f64, f64), f64, f64)> = match (anillo, borde) {
+        (Anillo::Bicolor, b) => {
+            let mut v = match b {
+                Borde::Brillo => vec![
+                    (con_alfa(&p.tertiary, 0.3), (1.0, 1.0), 3.0, 5.0),
+                    (con_alfa(&p.primary, 0.3), (-1.0, -1.0), 3.0, 5.0),
+                ],
+                // La sombra suave y una línea negra de 1 px por fuera del anillo.
+                Borde::Sombra => vec![
+                    (negro(0.5), (0.0, 0.0), 3.0, 4.0),
+                    (negro(1.0), (0.0, 0.0), 3.0, 0.0),
+                ],
+            };
+            v.extend([
+                (mezclar(&p.primary, &p.tertiary, 0.5), (0.0, 0.0), 2.0, 0.0),
+                (p.tertiary, (1.0, 1.0), 1.0, 0.0),
+                (p.primary, (-1.0, -1.0), 1.0, 0.0),
+            ]);
+            v
+        }
+        (Anillo::Liso(c), Borde::Brillo) => vec![
+            (con_alfa(&c, 0.5), (0.0, 0.0), 2.0, 4.0),
+            (c, (0.0, 0.0), 2.0, 0.0),
+        ],
+        (Anillo::Liso(c), Borde::Sombra) => vec![
+            (negro(0.5), (0.0, 0.0), 3.0, 4.0),
+            (negro(1.0), (0.0, 0.0), 3.0, 0.0),
+            (c, (0.0, 0.0), 2.0, 0.0),
+        ],
+    };
+    for (c, d, spread, blur) in capas {
+        sombra(s, tr, r, RADIO, c, d, spread, blur);
+    }
+    s.pop_layer();
+    let fondo = con_alfa(
+        &p.surface_container_low,
+        p.surface_container_low[3] * opacidad,
+    );
+    s.fill(Fill::NonZero, tr, pincel(&fondo), None, &rr);
 }

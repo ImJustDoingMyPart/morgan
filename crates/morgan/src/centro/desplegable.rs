@@ -1,5 +1,5 @@
-//! Las listas desplegables con GTK, que siguen usando el menú de sistema y los toasts (el
-//! centro ya no: `dibujo/armar.rs`). Todas las listas son del mismo `Grupo`: abrir una cierra
+//! Las listas desplegables con GTK, que sigue usando el menú de sistema (el centro y los
+//! toasts ya no: `dibujo/`). Todas las listas son del mismo `Grupo`: abrir una cierra
 //! las otras. Una opción marcada lo está porque el sistema lo dice (`Item::marcada`); el click
 //! solo pide.
 

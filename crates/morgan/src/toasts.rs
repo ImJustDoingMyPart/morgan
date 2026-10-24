@@ -1,27 +1,23 @@
-//! Una sola ventana, anclada arriba, abajo y a la derecha: el alto lo pone la salida, así que
-//! lo que no entra se scrollea adentro sin medir nada. Solo las tarjetas reciben el mouse: la
-//! región de input se rehace en cada cuadro pintado (sin cuadros, sin trabajo).
+//! Las notificaciones que flotan: cuáles, en qué orden y cuánto duran. Las dibuja el hilo del
+//! centro (`centro/dibujo/toasts.rs`) en su propia capa, que existe mientras hay alguna; acá se
+//! le manda la lista cada vez que cambia y se lleva la cuenta de cada una (el puntero encima la
+//! frena).
 //!
-//! Con un juego en foco la ventana no cambia: abrir o cerrar una capa sobre el juego le suelta
+//! Con un juego en foco la columna no cambia: abrir o cerrar una capa sobre el juego le suelta
 //! el puntero. Lo que ya flotaba queda quieto, sin cuenta, y lo que había que sacar se saca al
 //! salir del juego.
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
 use gtk::glib;
-use gtk::prelude::*;
-use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
+use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
-use crate::bajada::Bajada;
-use crate::columna::Columna;
+use crate::centro::hilo::Orden;
+use crate::centro::lista::{self, Lista};
 use crate::hyprland::Hyprland;
 use crate::notificaciones::modelo;
 use crate::notificaciones::{Cambio, Notificaciones};
-use crate::tarjeta::Tarjeta;
-
-const ANCHO: i32 = 304;
 
 #[derive(Clone)]
 pub struct Toasts {
@@ -29,69 +25,42 @@ pub struct Toasts {
 }
 
 struct Inner {
-    window: gtk::ApplicationWindow,
-    bajada: Bajada,
-    lista: Columna,
+    hilo: Sender<Orden>,
+    lista: Rc<Lista>,
     notificaciones: Notificaciones,
-    vivas: RefCell<HashMap<u32, Viva>>,
+    /// Las que flotan, la más nueva primero, con su cuenta.
+    vivas: RefCell<Vec<(u32, Option<glib::SourceId>)>>,
+    /// La que tiene el puntero encima: no cuenta.
+    encima: Cell<Option<u32>>,
     callados: Cell<bool>,
     hyprland: Hyprland,
     diferidas: RefCell<Vec<u32>>,
 }
 
-struct Viva {
-    tarjeta: Tarjeta,
-    cuenta: Option<glib::SourceId>,
-}
-
 impl Toasts {
     pub fn new(
-        app: &gtk::Application,
+        hilo: Sender<Orden>,
         notificaciones: &Notificaciones,
         hyprland: &Hyprland,
+        color: [f32; 4],
     ) -> Self {
-        let window = gtk::ApplicationWindow::new(app);
-        window.add_css_class("morgan");
-        window.add_css_class("floating-notifications");
-        window.init_layer_shell();
-        window.set_namespace(Some("morgan-notifications"));
-        window.set_layer(Layer::Overlay);
-        window.set_keyboard_mode(KeyboardMode::None);
-        for borde in [Edge::Top, Edge::Bottom, Edge::Right] {
-            window.set_anchor(borde, true);
-        }
-        window.set_default_size(ANCHO, -1);
-
-        let lista = Columna::new();
-        lista.set_valign(gtk::Align::Start);
-        let scroll = gtk::ScrolledWindow::new();
-        scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
-        scroll.set_propagate_natural_height(true);
-        scroll.set_valign(gtk::Align::Start);
-        scroll.set_has_frame(false);
-        scroll.set_child(Some(&lista));
-        let bajada = Bajada::new(&scroll);
-        window.set_child(Some(&bajada));
-
         let inner = Rc::new(Inner {
-            window: window.clone(),
-            bajada,
-            lista,
+            hilo,
+            lista: Lista::new(notificaciones, color, lista::TOAST),
             notificaciones: notificaciones.clone(),
             vivas: RefCell::default(),
+            encima: Cell::new(None),
             callados: Cell::new(false),
             hyprland: hyprland.clone(),
             diferidas: RefCell::default(),
         });
-
-        // La región de input sigue a las tarjetas: se rehace después de cada cuadro.
-        window.connect_realize(|w| {
-            let w = w.clone();
-            if let Some(reloj) = w.frame_clock() {
-                reloj.connect_after_paint(move |_| region(&w));
+        // Una vista previa llega después de decodificarse.
+        let weak = Rc::downgrade(&inner);
+        inner.lista.al_llegar(move || {
+            if let Some(inner) = weak.upgrade() {
+                inner.mandar();
             }
         });
-
         let weak = Rc::downgrade(&inner);
         notificaciones.al_cambiar(move |c| {
             if let Some(inner) = weak.upgrade() {
@@ -110,21 +79,60 @@ impl Toasts {
     pub fn callar(&self, v: bool) {
         self.inner.callados.set(v);
         if v {
-            let ids: Vec<u32> = self.inner.vivas.borrow().keys().copied().collect();
-            for id in ids {
+            for id in self.inner.ids() {
                 self.inner.dejar(id);
             }
+        }
+    }
+
+    /// Otro tema: los íconos simbólicos cambian de color.
+    pub fn poner_color(&self, c: [f32; 4]) {
+        self.inner.lista.poner_color(c);
+        self.inner.mandar();
+    }
+
+    /// Se tocó: el toast se va (la acción ya la hizo quien llama).
+    pub fn quitar(&self, id: u32) {
+        self.inner.quitar(id);
+    }
+
+    /// El puntero pasó a estar sobre `id` (o sobre ninguno): esa se frena y la de antes vuelve
+    /// a contar.
+    pub fn encima(&self, id: Option<u32>) {
+        let i = &self.inner;
+        let antes = i.encima.replace(id);
+        if antes == id {
+            return;
+        }
+        if let Some(id) = id {
+            i.parar(id);
+        }
+        if let Some(a) = antes {
+            i.contar(a);
         }
     }
 }
 
 impl Inner {
+    fn ids(&self) -> Vec<u32> {
+        self.vivas.borrow().iter().map(|(id, _)| *id).collect()
+    }
+
+    fn mandar(&self) {
+        let ids = self.ids();
+        let avisos = if ids.is_empty() {
+            Vec::new()
+        } else {
+            self.lista.sueltas(&ids)
+        };
+        // Si el hilo terminó (sin Wayland o sin GPU) ya lo dijo al terminar.
+        let _ = self.hilo.send(Orden::Toasts(avisos));
+    }
+
     fn juego(self: &Rc<Self>, juego: bool) {
         if juego {
-            for v in self.vivas.borrow_mut().values_mut() {
-                if let Some(c) = v.cuenta.take() {
-                    c.remove();
-                }
+            for id in self.ids() {
+                self.parar(id);
             }
             return;
         }
@@ -132,8 +140,7 @@ impl Inner {
         for id in diferidas {
             self.quitar(id);
         }
-        let ids: Vec<u32> = self.vivas.borrow().keys().copied().collect();
-        for id in ids {
+        for id in self.ids() {
             self.contar(id);
         }
     }
@@ -153,8 +160,7 @@ impl Inner {
             Cambio::Cerrada(id) => self.quitar(id),
             Cambio::NoMolestar(true) => {
                 // Prender No molestar se lleva lo que flotaba, salvo las críticas.
-                let ids: Vec<u32> = self.vivas.borrow().keys().copied().collect();
-                for id in ids {
+                for id in self.ids() {
                     let critica = self
                         .notificaciones
                         .get(id)
@@ -169,52 +175,24 @@ impl Inner {
     }
 
     fn mostrar(self: &Rc<Self>, id: u32) {
-        let Some(n) = self.notificaciones.get(id) else {
+        if self.notificaciones.get(id).is_none() {
             return;
-        };
-        let weak = Rc::downgrade(self);
-        let al_tocar: Rc<dyn Fn()> = Rc::new(move || {
-            if let Some(inner) = weak.upgrade() {
-                inner.quitar(id);
-            }
-        });
-        let t = Tarjeta::new(&n, &self.notificaciones, al_tocar);
-
-        let hover = gtk::EventControllerMotion::new();
-        let weak = Rc::downgrade(self);
-        hover.connect_enter(move |_, _, _| {
-            if let Some(inner) = weak.upgrade()
-                && let Some(v) = inner.vivas.borrow_mut().get_mut(&id)
-                && let Some(c) = v.cuenta.take()
-            {
-                c.remove();
-            }
-        });
-        let weak = Rc::downgrade(self);
-        hover.connect_leave(move |_| {
-            if let Some(inner) = weak.upgrade() {
-                inner.contar(id);
-            }
-        });
-        t.fondo.add_controller(hover);
-
-        self.lista.prepend(&t.raiz);
-        self.vivas.borrow_mut().insert(
-            id,
-            Viva {
-                tarjeta: t,
-                cuenta: None,
-            },
-        );
-        self.contar(id);
-        if !self.window.is_visible() {
-            self.bajada.arrancar();
         }
-        self.window.set_visible(true);
+        self.vivas.borrow_mut().insert(0, (id, None));
+        self.contar(id);
+        self.mandar();
+    }
+
+    fn parar(&self, id: u32) {
+        if let Some((_, c)) = self.vivas.borrow_mut().iter_mut().find(|(i, _)| *i == id)
+            && let Some(c) = c.take()
+        {
+            c.remove();
+        }
     }
 
     fn contar(self: &Rc<Self>, id: u32) {
-        if self.hyprland.juego_en_foco() {
+        if self.hyprland.juego_en_foco() || self.encima.get() == Some(id) {
             return;
         }
         let Some(dur) = self
@@ -228,64 +206,49 @@ impl Inner {
         let weak: Weak<Inner> = Rc::downgrade(self);
         let fuente = glib::timeout_add_local_once(dur, move || {
             if let Some(inner) = weak.upgrade() {
-                if let Some(v) = inner.vivas.borrow_mut().get_mut(&id) {
-                    v.cuenta = None;
+                if let Some((_, c)) = inner.vivas.borrow_mut().iter_mut().find(|(i, _)| *i == id) {
+                    *c = None;
                 }
                 inner.dejar(id);
             }
         });
-        if let Some(v) = self.vivas.borrow_mut().get_mut(&id)
-            && let Some(vieja) = v.cuenta.replace(fuente)
-        {
-            vieja.remove();
+        let mut vivas = self.vivas.borrow_mut();
+        match vivas.iter_mut().find(|(i, _)| *i == id) {
+            Some((_, c)) => {
+                if let Some(vieja) = c.replace(fuente) {
+                    vieja.remove();
+                }
+            }
+            None => fuente.remove(),
         }
     }
 
-    fn dejar(self: &Rc<Self>, id: u32) {
+    fn dejar(&self, id: u32) {
         self.quitar(id);
         self.notificaciones.vencio(id);
     }
 
     fn quitar(&self, id: u32) {
-        if self.hyprland.juego_en_foco() && self.vivas.borrow().contains_key(&id) {
+        if self.hyprland.juego_en_foco() && self.ids().contains(&id) {
             self.diferidas.borrow_mut().push(id);
             return;
         }
-        let Some(v) = self.vivas.borrow_mut().remove(&id) else {
+        let quitada = {
+            let mut vivas = self.vivas.borrow_mut();
+            vivas
+                .iter()
+                .position(|(i, _)| *i == id)
+                .map(|p| vivas.remove(p))
+        };
+        let Some((_, cuenta)) = quitada else {
             return;
         };
-        if let Some(c) = v.cuenta {
+        if let Some(c) = cuenta {
             c.remove();
         }
-        self.lista.remove(&v.tarjeta.raiz);
-        if self.vivas.borrow().is_empty() {
-            self.window.set_visible(false);
+        if self.encima.get() == Some(id) {
+            self.encima.set(None);
         }
+        self.mandar();
     }
-}
-
-fn region(w: &gtk::ApplicationWindow) {
-    let Some(surface) = w.surface() else {
-        return;
-    };
-    let region = gtk::cairo::Region::create();
-    let mut hijo = w
-        .child()
-        .and_then(|b| b.first_child())
-        .and_then(|s| s.downcast::<gtk::ScrolledWindow>().ok())
-        .and_then(|s| s.child())
-        .and_then(|v| v.first_child())
-        .and_then(|l| l.first_child());
-    while let Some(fila) = hijo {
-        if let Some(b) = fila.compute_bounds(w) {
-            let _ = region.union_rectangle(&gtk::cairo::RectangleInt::new(
-                b.x() as i32,
-                b.y() as i32,
-                b.width().ceil() as i32,
-                b.height().ceil() as i32,
-            ));
-        }
-        hijo = fila.next_sibling();
-    }
-    surface.set_input_region(Some(&region));
 }

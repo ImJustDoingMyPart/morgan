@@ -8,12 +8,12 @@
 //!   (4 px más abajo todavía, de 6 de alto);
 //! - cada texto en una caja de píxeles enteros, como las etiquetas de GTK.
 
-use morgan_motor::color::{Color, Paleta, con_alfa, mezclar, pincel};
-use morgan_motor::forma::{Borde, sombra};
+use morgan_motor::color::{Color, Paleta, con_alfa, pincel};
+use morgan_motor::forma::{Anillo, Borde, sombra, tarjeta};
 use morgan_motor::parley::Layout;
 use morgan_motor::texto::{self, Textos};
 use morgan_motor::vello::Scene;
-use morgan_motor::vello::kurbo::{Affine, BezPath, Point, Rect, RoundedRect, Shape};
+use morgan_motor::vello::kurbo::{Affine, Point, Rect, RoundedRect};
 use morgan_motor::vello::peniko::{BlendMode, Fill, Gradient};
 
 use super::{Aviso, Cuerpo, es_glifo, porcentaje};
@@ -137,6 +137,7 @@ pub fn pintar(
         opacidad,
         borde,
         Rect::new(MARGEN, MARGEN, w - MARGEN, h - MARGEN),
+        Anillo::Bicolor,
     );
 
     // El cuadrito del ícono, centrado en el alto del texto.
@@ -225,43 +226,6 @@ pub fn pintar(
 /// en su orden (GTK apila la última arriba): brillo primary, brillo tertiary (o la sombra
 /// negra, según `borde`), el anillo de la mezcla, y los dos medios bordes corridos que lo
 /// tiñen hacia cada esquina.
-fn tarjeta(s: &mut Scene, tr: Affine, p: &Paleta, opacidad: f32, borde: Borde, r: Rect) {
-    let rr = RoundedRect::from_rect(r, RADIO);
-    // Las sombras van solo por fuera: el fondo es translúcido y no tienen que verse a través.
-    let mut afuera = BezPath::new();
-    afuera.extend(r.inflate(MARGEN, MARGEN).path_elements(0.1));
-    afuera.extend(rr.path_elements(0.1));
-    s.push_layer(Fill::EvenOdd, BlendMode::default(), 1.0, tr, &afuera);
-    let medio = mezclar(&p.primary, &p.tertiary, 0.5);
-    // Con la sombra negra, en vez de los dos brillos: la sombra suave y una línea negra de
-    // 1 px por fuera del anillo (el de los toasts). La sombra cabe en el margen del brillo.
-    let afuera_del_anillo = match borde {
-        // El glow tenue de todo el shell, por fuera del anillo (que asoma 2 px).
-        Borde::Brillo => [
-            (con_alfa(&p.tertiary, 0.3), (1.0, 1.0), 3.0, 5.0),
-            (con_alfa(&p.primary, 0.3), (-1.0, -1.0), 3.0, 5.0),
-        ],
-        Borde::Sombra => [
-            ([0.0, 0.0, 0.0, 0.5], (0.0, 0.0), 3.0, 4.0),
-            ([0.0, 0.0, 0.0, 1.0], (0.0, 0.0), 3.0, 0.0),
-        ],
-    };
-    let anillo = [
-        (medio, (0.0, 0.0), 2.0, 0.0),
-        (p.tertiary, (1.0, 1.0), 1.0, 0.0),
-        (p.primary, (-1.0, -1.0), 1.0, 0.0),
-    ];
-    for (c, d, spread, blur) in afuera_del_anillo.into_iter().chain(anillo) {
-        sombra(s, tr, r, RADIO, c, d, spread, blur);
-    }
-    s.pop_layer();
-    let fondo = con_alfa(
-        &p.surface_container_low,
-        p.surface_container_low[3] * opacidad,
-    );
-    s.fill(Fill::NonZero, tr, pincel(&fondo), None, &rr);
-}
-
 /// `linear-gradient(135deg, a, b)` de CSS sobre `r`: hacia abajo a la derecha, con la línea
 /// del degradé tan larga como para que las esquinas caigan justo en `a` y en `b`.
 fn degrade_135(r: Rect, a: Color, b: Color) -> Gradient {

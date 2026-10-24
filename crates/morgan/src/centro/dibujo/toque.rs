@@ -44,9 +44,100 @@ pub struct Arrastre {
 /// Los botones de Linux.
 pub const IZQUIERDO: u32 = 0x110;
 
+/// Lo que pasa con un arrastre cuando se mueve la mano.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Paso {
+    /// Todavía no arrancó.
+    Nada,
+    /// Va corrido `dx` (0 hacia un lado sin acción); `recien`: arrancó ahora y le gana al
+    /// click. Con `lado`, pasó el umbral: se hace sin esperar a soltar.
+    Corre {
+        dx: f64,
+        recien: bool,
+        lado: Option<Lado>,
+    },
+}
+
 impl Arrastre {
+    /// Apretado en `desde` (en el contenido) sobre una fila de `ancho` con acción a la derecha,
+    /// a la izquierda o a los dos lados.
+    pub fn nuevo(
+        objetivo: Objetivo,
+        desde: Point,
+        ancho: f64,
+        (derecha, izquierda): (bool, bool),
+        t: u32,
+    ) -> Self {
+        Arrastre {
+            objetivo,
+            desde,
+            ancho,
+            derecha,
+            izquierda,
+            activo: false,
+            hecho: false,
+            ultimo: (0.0, t),
+            velocidad: 0.0,
+        }
+    }
+
     pub fn activo(&self) -> bool {
         self.activo
+    }
+
+    pub fn objetivo(&self) -> Objetivo {
+        self.objetivo
+    }
+
+    fn vale(&self, l: Lado) -> bool {
+        match l {
+            Lado::Derecha => self.derecha,
+            Lado::Izquierda => self.izquierda,
+        }
+    }
+
+    /// La mano en `(cx, cy)` del contenido, a los `t` ms.
+    pub fn seguir(&mut self, cx: f64, cy: f64, t: u32) -> Paso {
+        if self.hecho {
+            return Paso::Nada;
+        }
+        let (dx, dy) = (cx - self.desde.x, cy - self.desde.y);
+        let (dx0, t0) = std::mem::replace(&mut self.ultimo, (dx, t));
+        if t0 != 0 && t > t0 {
+            self.velocidad = (dx - dx0) / f64::from(t - t0);
+        }
+        let mut recien = false;
+        if !self.activo {
+            if dx.abs() < ARRANQUE || dx.abs() < dy.abs() {
+                return Paso::Nada;
+            }
+            let lado = if dx > 0.0 {
+                Lado::Derecha
+            } else {
+                Lado::Izquierda
+            };
+            if !self.vale(lado) {
+                return Paso::Nada;
+            }
+            self.activo = true;
+            recien = true;
+        }
+        // Hacia un lado sin acción no se mueve.
+        let dx = match (dx > 0.0, self.derecha, self.izquierda) {
+            (true, false, _) | (false, _, false) => 0.0,
+            _ => dx,
+        };
+        let lado = decidir(dx, self.ancho);
+        if lado.is_some() {
+            self.hecho = true;
+            self.activo = false;
+        }
+        Paso::Corre { dx, recien, lado }
+    }
+
+    /// Al soltar corrido `dx`: el lado de un tirón corto y rápido, si tiene acción.
+    pub fn tiron(&self, dx: f64) -> Option<Lado> {
+        tiron(dx, self.velocidad).filter(|l| self.vale(*l))
     }
 }
 
@@ -130,19 +221,14 @@ impl Ui {
             self.foco = Some(o);
         }
         if let Some((_, r)) = self.hoja.deslizables.iter().find(|(d, _)| *d == o) {
-            let (derecha, izquierda) = self.lados(o);
             let (cx, cy) = self.al_contenido(x, y);
-            self.arrastre = Some(Arrastre {
-                objetivo: o,
-                desde: Point::new(cx, cy),
-                ancho: r.width(),
-                derecha,
-                izquierda,
-                activo: false,
-                hecho: false,
-                ultimo: (0.0, t),
-                velocidad: 0.0,
-            });
+            self.arrastre = Some(Arrastre::nuevo(
+                o,
+                Point::new(cx, cy),
+                r.width(),
+                self.lados(o),
+                t,
+            ));
         }
         if let Objetivo::Slider(id) = o {
             self.slider_a(id, x, &mut pedidos);
@@ -184,7 +270,7 @@ impl Ui {
             && a.activo
         {
             let dx = self.deslices.get(&a.objetivo).map_or(0.0, |d| d.dx(ahora));
-            match tiron(dx, a.velocidad).filter(|l| self.lado_vale(&a, *l)) {
+            match a.tiron(dx) {
                 Some(l) => self.soltar_de_costado(a.objetivo, l, a.ancho, &mut pedidos),
                 None => self.volver(a.objetivo, 0.0),
             }
@@ -386,54 +472,23 @@ impl Ui {
         }
     }
 
-    fn lado_vale(&self, a: &Arrastre, l: Lado) -> bool {
-        match l {
-            Lado::Derecha => a.derecha,
-            Lado::Izquierda => a.izquierda,
-        }
-    }
-
     fn arrastrar(&mut self, mut a: Arrastre, cx: f64, cy: f64, t: u32, pedidos: &mut Vec<Pedido>) {
-        if a.hecho {
+        let Paso::Corre { dx, recien, lado } = a.seguir(cx, cy, t) else {
+            if !a.hecho {
+                self.arrastre = Some(a);
+            }
             return;
-        }
-        let (dx, dy) = (cx - a.desde.x, cy - a.desde.y);
-        let (dx0, t0) = std::mem::replace(&mut a.ultimo, (dx, t));
-        if t0 != 0 && t > t0 {
-            a.velocidad = (dx - dx0) / f64::from(t - t0);
-        }
-        if !a.activo {
-            if dx.abs() < ARRANQUE || dx.abs() < dy.abs() {
-                self.arrastre = Some(a);
-                return;
-            }
-            let lado = if dx > 0.0 {
-                Lado::Derecha
-            } else {
-                Lado::Izquierda
-            };
-            if !self.lado_vale(&a, lado) {
-                self.arrastre = Some(a);
-                return;
-            }
-            // Le gana al click.
-            a.activo = true;
-            if let Some(o) = self.apretado.take() {
-                self.animos.apretar(o, false, Instant::now());
-            }
-        }
-        // Hacia un lado sin acción no se mueve.
-        let dx = match (dx > 0.0, a.derecha, a.izquierda) {
-            (true, false, _) | (false, _, false) => 0.0,
-            _ => dx,
         };
+        if recien && let Some(o) = self.apretado.take() {
+            self.animos.apretar(o, false, Instant::now());
+        }
         self.deslices.insert(a.objetivo, Desliz::quieto(dx));
-        self.arrastre = Some(a);
-        if let Some(l) = decidir(dx, a.ancho) {
-            a.hecho = true;
-            a.activo = false;
-            self.arrastre = None;
-            self.soltar_de_costado(a.objetivo, l, a.ancho, pedidos);
+        match lado {
+            Some(l) => {
+                self.arrastre = None;
+                self.soltar_de_costado(a.objetivo, l, a.ancho, pedidos);
+            }
+            None => self.arrastre = Some(a),
         }
     }
 
@@ -769,6 +824,34 @@ mod tests {
     use super::*;
     use morgan_motor::color::Paleta;
     use morgan_motor::forma::Borde;
+
+    #[test]
+    fn el_arrastre_arranca_de_costado_y_se_hace_pasado_el_umbral() {
+        let o = Objetivo::Aviso(1);
+        let mut a = Arrastre::nuevo(o, Point::new(0.0, 0.0), 200.0, (true, false), 1);
+        // Poco, o más vertical que horizontal: sigue siendo un click o un scroll.
+        assert_eq!(a.seguir(10.0, 0.0, 2), Paso::Nada);
+        assert_eq!(a.seguir(30.0, 40.0, 3), Paso::Nada);
+        // Hacia un lado sin acción no arranca.
+        assert_eq!(a.seguir(-30.0, 0.0, 4), Paso::Nada);
+        assert_eq!(
+            a.seguir(30.0, 0.0, 5),
+            Paso::Corre {
+                dx: 30.0,
+                recien: true,
+                lado: None
+            }
+        );
+        assert_eq!(
+            a.seguir(100.0, 0.0, 6),
+            Paso::Corre {
+                dx: 100.0,
+                recien: false,
+                lado: Some(Lado::Derecha)
+            }
+        );
+        assert_eq!(a.seguir(150.0, 0.0, 7), Paso::Nada, "ya se hizo");
+    }
 
     #[test]
     fn la_que_se_fue_no_deja_un_bloque_en_la_lista_nueva() {

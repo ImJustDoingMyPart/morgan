@@ -12,15 +12,40 @@ use gtk::prelude::*;
 use gtk::{gdk_pixbuf, gio, glib};
 use morgan_motor::vello::peniko::ImageData;
 
-use super::dibujo::avisos::tam_previa;
+use super::dibujo::avisos::tam_previa_en;
 use super::vista::{Aviso, Grupo};
 use crate::notificaciones::modelo::{self, Imagen, Notificacion};
 use crate::notificaciones::{Notificaciones, captura};
 use crate::pixeles::{self, Pintor};
 
-/// La columna de la imagen y el ícono chico de la app.
-const IMAGEN: i32 = 36;
-const CHICO: i32 = 16;
+/// Los tamaños de las imágenes de una tarjeta, en lógicos.
+pub struct Medidas {
+    /// Una foto, una tapa o los píxeles que mandó la app.
+    pub imagen: i32,
+    /// Un ícono del tema.
+    pub icono: i32,
+    /// El de la app, chico, en la esquina de la imagen.
+    pub chico: i32,
+    /// El ancho de la vista previa.
+    pub previa: f64,
+}
+
+/// En el centro, todo en la columna de 36.
+pub const CENTRO: Medidas = Medidas {
+    imagen: 36,
+    icono: 36,
+    chico: 16,
+    previa: 316.0,
+};
+
+/// En un toast, un ícono va a 24 en el cuadrito del OSD y una foto a 40 (`.image` de la hoja
+/// de GTK hasta 0.1.1).
+pub const TOAST: Medidas = Medidas {
+    imagen: 40,
+    icono: 24,
+    chico: 16,
+    previa: 268.0,
+};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 enum ClaveImagen {
@@ -31,6 +56,7 @@ enum ClaveImagen {
 
 pub struct Lista {
     notificaciones: Notificaciones,
+    medidas: Medidas,
     pintor: RefCell<Pintor>,
     imagenes: RefCell<HashMap<ClaveImagen, Option<ImageData>>>,
     previas: RefCell<HashMap<PathBuf, Option<ImageData>>>,
@@ -42,9 +68,10 @@ pub struct Lista {
 }
 
 impl Lista {
-    pub fn new(notificaciones: &Notificaciones, color: [f32; 4]) -> Rc<Self> {
+    pub fn new(notificaciones: &Notificaciones, color: [f32; 4], medidas: Medidas) -> Rc<Self> {
         Rc::new(Lista {
             notificaciones: notificaciones.clone(),
+            medidas,
             pintor: RefCell::default(),
             imagenes: RefCell::default(),
             previas: RefCell::default(),
@@ -91,6 +118,20 @@ impl Lista {
         grupos
     }
 
+    /// Esas notificaciones, en ese orden, cada una sola (los toasts).
+    pub fn sueltas(self: &Rc<Self>, ids: &[u32]) -> Vec<Aviso> {
+        let lista = self.notificaciones.lista().clone();
+        let escala = pixeles::escala();
+        let mut usadas = HashSet::new();
+        let avisos = ids
+            .iter()
+            .filter_map(|id| lista.iter().find(|n| n.id == *id))
+            .map(|n| self.aviso(n, escala, &mut usadas))
+            .collect();
+        self.imagenes.borrow_mut().retain(|k, _| usadas.contains(k));
+        avisos
+    }
+
     fn aviso(
         self: &Rc<Self>,
         n: &Notificacion,
@@ -110,12 +151,18 @@ impl Lista {
             ),
             None => (n.imagen.clone(), n.icono_app.clone()),
         };
+        let icono = matches!(columna, Some(Imagen::Nombre(_)));
+        let tam = if icono {
+            self.medidas.icono
+        } else {
+            self.medidas.imagen
+        };
         let imagen = columna
             .as_ref()
-            .and_then(|i| self.imagen(n.id, i, IMAGEN, escala, usadas));
+            .and_then(|i| self.imagen(n.id, i, tam, escala, usadas));
         let chico = chico
             .filter(|_| imagen.is_some())
-            .and_then(|i| self.imagen(n.id, &i, CHICO, escala, usadas));
+            .and_then(|i| self.imagen(n.id, &i, self.medidas.chico, escala, usadas));
         let previa = previa.and_then(|(ruta, w, h)| {
             let img = self.previa(&ruta, w, h, escala)?;
             Some((img, w, h))
@@ -124,10 +171,7 @@ impl Lista {
         let acciones = n
             .botones()
             .map(|a| {
-                let glifo = es_captura
-                    .then(|| captura::glifo(&a.clave))
-                    .flatten()
-                    .unwrap_or("󰅂");
+                let glifo = es_captura.then(|| captura::glifo(&a.clave)).flatten();
                 (a.clave.clone(), a.etiqueta.clone(), glifo)
             })
             .collect();
@@ -138,6 +182,7 @@ impl Lista {
             urgencia: n.urgencia,
             llegada: n.llegada,
             imagen,
+            icono,
             chico,
             previa,
             progreso: n.progreso,
@@ -189,7 +234,7 @@ impl Lista {
         if !self.pendientes.borrow_mut().insert(ruta.to_owned()) {
             return None;
         }
-        let (pw, ph) = tam_previa(w, h);
+        let (pw, ph) = tam_previa_en(w, h, self.medidas.previa);
         let (pw, ph) = (pw as i32 * escala, ph as i32 * escala);
         let archivo = gio::File::for_path(ruta);
         let ruta = ruta.to_owned();

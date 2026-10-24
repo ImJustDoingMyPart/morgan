@@ -17,7 +17,6 @@ mod calculadora;
 mod calendario;
 mod clima;
 mod centro;
-mod columna;
 mod comando;
 mod config;
 mod cuotas;
@@ -50,7 +49,6 @@ mod riel;
 mod setup;
 mod sistema;
 mod sonidos;
-mod tarjeta;
 mod teclas;
 mod tema;
 mod toasts;
@@ -151,7 +149,6 @@ fn main() -> ExitCode {
         );
         let hyprland = Hyprland::new();
         let notificaciones = Notificaciones::new(&config, hyprland.clone());
-        let toasts = toasts::Toasts::new(app, &notificaciones, &hyprland);
         let osd = Osd::new(&tema);
         {
             let (osd, hyprland) = (osd.clone(), hyprland.clone());
@@ -168,8 +165,8 @@ fn main() -> ExitCode {
         let fondos = fondos::Fondos::new(app, hyprland.clone(), &config.fondos);
         let centro = Centro::new(centro::Servicios {
             notificaciones: notificaciones.clone(),
+            hyprland: hyprland.clone(),
             osd: osd.clone(),
-            toasts: toasts.clone(),
             idle: idle.clone(),
             luz: luz.clone(),
             brillo: brillo.clone(),
@@ -304,7 +301,6 @@ fn main() -> ExitCode {
         glib::MainContext::default().spawn_local(async move {
             let _hold = hold;
             let _tema = tema;
-            let _toasts = toasts;
             while let Ok(call) = calls.recv().await {
                 // Cada pedido en su tarea: un reproductor que tarda en contestar no traba el volumen. El
                 // orden entre pedidos de volumen lo cuida la fila de `Audio`.

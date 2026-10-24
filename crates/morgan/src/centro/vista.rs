@@ -212,15 +212,17 @@ pub struct Aviso {
     pub cuerpo: String,
     pub urgencia: crate::notificaciones::modelo::Urgencia,
     pub llegada: i64,
-    /// En la columna de la imagen, a 36 px.
+    /// En la columna de la imagen (36 px en el centro; en un toast, 24 o 40).
     pub imagen: Option<ImageData>,
+    /// La imagen es un ícono del tema: en un toast va en el cuadrito del OSD.
+    pub icono: bool,
     /// El de la app, chico, en la esquina de la imagen.
     pub chico: Option<ImageData>,
     /// Una captura o una foto, abajo y a lo ancho, con su tamaño en lógicos.
     pub previa: Option<(ImageData, u32, u32)>,
     pub progreso: Option<i32>,
-    /// Clave, etiqueta y glifo de cada botón.
-    pub acciones: Vec<(String, String, &'static str)>,
+    /// Clave, etiqueta y glifo propio de cada botón (los de una captura).
+    pub acciones: Vec<(String, String, Option<&'static str>)>,
 }
 
 pub struct Grupo {
@@ -272,4 +274,16 @@ pub enum Evento {
     /// Del menú de la bandeja: la fila elegida, o que se cerró sin elegir.
     Elegido(i32),
     MenuCerrado,
+    Toast(EventoToast),
+}
+
+/// Lo que se hizo en un toast. Salvo copiar, el toast se va.
+#[derive(Debug)]
+pub enum EventoToast {
+    Accion(u32),
+    Boton(u32, String),
+    Cerrar(u32),
+    Copiar(u32),
+    /// El puntero sobre un toast (o sobre ninguno): su cuenta se frena.
+    Encima(Option<u32>),
 }

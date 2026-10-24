@@ -10,180 +10,11 @@ window.morgan {
  * declara la app e ignora la regla `blur` de la capa (con la región vacía, nada). GTK declara
  * la región donde hay un `backdrop-filter: blur` de 20px o más; el radio no importa más allá
  * de eso: el desenfoque es el de `decoration:blur` de Hyprland. */
-.floating-notifications .notification-row .notification-background .notification,
 .control-center,
 .launcher,
 .fondos .banda,
 .ventanas {
     backdrop-filter: blur(20px);
-}
-
-/* ─── Notificaciones ─── */
-.notification-row,
-.notification-row * {
-    font-family: "JetBrainsMono Nerd Font", monospace;
-}
-
-.notification-row {
-    background: none;
-    outline: none;
-}
-
-.notification-row .notification-background {
-    padding: 6px 12px;
-}
-
-.notification-row .notification-background .notification {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    padding: 0;
-    border-radius: 4px;
-    transition: background-color 100ms ease, transform 100ms ease;
-}
-
-.notification-row .notification-background .notification .notification-default-action {
-    padding: 4px;
-    margin: 0;
-    background: transparent;
-    color: @on_surface;
-    border: none;
-    border-radius: 4px;
-}
-
-.notification-row .notification-background .notification .notification-content {
-    background: transparent;
-    padding: 0;
-}
-
-.notification-row .notification-background .notification .image {
-    -gtk-icon-size: 40px;
-    border-radius: 4px;
-    margin: 4px;
-}
-
-.notification-row .notification-background .notification .app-icon {
-    -gtk-icon-size: 16px;
-    -gtk-icon-shadow: 0 1px 4px black;
-    margin: 6px;
-}
-
-.notification-row .notification-background .notification .summary {
-    font-size: 14px;
-    font-weight: normal;
-    color: @on_surface;
-}
-
-.notification-row .notification-background .notification .body {
-    font-size: 12px;
-    font-weight: normal;
-    color: @on_surface;
-    opacity: 0.5;
-}
-
-.notification-row .notification-background .notification .time {
-    font-size: 12px;
-    font-weight: normal;
-    color: @on_surface;
-    opacity: 0.35;
-    text-transform: lowercase;
-}
-
-.notification-row .notification-background .notification progressbar {
-    margin-top: 4px;
-}
-
-.notification-row .notification-background .notification progressbar trough {
-    background: @outline_variant;
-    border: none;
-}
-
-.notification-row .notification-background .notification progressbar progress {
-    background: @primary;
-    border: none;
-    margin: 0;
-}
-
-.notification-row .notification-background .notification.low .summary {
-    opacity: 0.6;
-}
-
-.notification-row .notification-background .notification.critical .summary {
-    color: @error;
-    font-weight: bold;
-}
-
-/* El aire de la izquierda deja la tarjeta en el mismo lugar que en el centro. */
-window.floating-notifications {
-    background: transparent;
-}
-
-.floating-notifications .notification-row .notification-background {
-    padding-left: 16px;
-}
-
-.floating-notifications .notification-row .notification-background .notification {
-    background: @morgan_fondo;
-    box-shadow:
-        1px 1px 5px 3px alpha(@tertiary, 0.3),
-        -1px -1px 5px 3px alpha(@primary, 0.3),
-        0 0 0 2px mix(@primary, @tertiary, 0.5),
-        1px 1px 0 1px @tertiary,
-        -1px -1px 0 1px @primary;
-}
-
-.floating-notifications .notification-row .notification-background .notification .image.icono {
-    -gtk-icon-size: 24px;
-    min-width: 36px;
-    min-height: 36px;
-    margin: 0 10px 0 0;
-    border-radius: 4px;
-    background: alpha(@on_surface, 0.08);
-}
-
-/* En fila, cada opción mide lo que su texto, el aire que sobra se reparte y el glifo no lleva
- * la columna de 36 px. */
-/* En columna, a ras de la acción por defecto: con los 4 px de cada opción, el texto (o el
- * glifo, en su columna) arranca donde el título. */
-.floating-notifications .notification .cc-lista.acciones {
-    margin: 6px 0 0 0;
-    padding: 0;
-}
-
-.floating-notifications .notification .cc-lista.acciones.en-fila {
-    margin: 6px 4px 4px 4px;
-}
-
-.floating-notifications .notification .cc-lista.acciones .cc-opcion {
-    padding: 6px 4px;
-}
-
-/* Sobre el fondo translúcido del toast, el 0,14 del panel casi no se ve. */
-.floating-notifications .notification .cc-lista.acciones .cc-opcion:hover,
-.floating-notifications .notification .cc-lista.acciones .cc-opcion:focus-visible {
-    background: alpha(@primary, 0.28);
-}
-
-.floating-notifications .notification .cc-lista.acciones.en-fila .cc-opcion {
-    padding: 6px 8px;
-}
-
-.floating-notifications .notification .cc-lista.acciones.en-fila .cc-opcion .glifo {
-    min-width: 0;
-}
-
-.floating-notifications .notification-row .notification-background .notification.critical {
-    box-shadow:
-        0 0 4px 2px alpha(@error, 0.5),
-        0 0 0 2px @error;
-}
-
-.floating-notifications scrollbar {
-    opacity: 0;
-}
-
-.notification-row .notification-background .notification:hover {
-    transform: scale(1.02);
 }
 
 /* ─── Paneles con GTK (la calculadora; el centro y el menú de la bandeja son del motor
@@ -222,7 +53,7 @@ window.blank-window {
     opacity: 0;
 }
 
-/* ── Tarjetas y opciones del menú de sistema y de los toasts ── */
+/* ── Tarjetas y opciones del menú de sistema ── */
 .cc-tarjeta label,
 .cc-opcion label {
     font-weight: normal;
@@ -333,19 +164,6 @@ window.blank-window {
 .cc-opcion .tilde {
     color: @tertiary;
     opacity: 1;
-}
-
-/* ── Lo que asoma debajo de una tarjeta que se arrastra ── */
-.deslizable-fondo {
-    border-radius: 4px;
-    background: alpha(@on_surface, 0.04);
-}
-
-.deslizable-fondo label {
-    font-size: 12px;
-    color: @on_surface;
-    opacity: 0.7;
-    padding: 0 16px;
 }
 
 /* ─── Launcher ─── */
@@ -872,10 +690,6 @@ window.fondos {
 .fondos .celda.sel {
     background-image: linear-gradient(45deg, @primary, @tertiary);
     box-shadow: 0 0 8px 1px alpha(@primary, 0.45);
-}
-
-.notification-row .notification-background .notification .preview {
-    border-radius: 4px;
 }
 
 /* ─── Lienzo de ventanas ───

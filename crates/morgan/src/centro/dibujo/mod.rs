@@ -18,6 +18,7 @@ pub mod menu;
 #[cfg(test)]
 mod prueba;
 mod rotulos;
+pub mod toasts;
 pub mod toque;
 pub mod trazo;
 

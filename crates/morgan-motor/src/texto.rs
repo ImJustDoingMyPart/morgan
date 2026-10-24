@@ -295,7 +295,20 @@ pub fn armar_recortado(
     escala: f32,
     max: f32,
 ) -> Layout<u8> {
-    let l = t.armar(&[(texto, rol)], px, escala);
+    armar_recortado_con_peso(t, texto, rol, px, 400.0, escala, max)
+}
+
+/// `armar_recortado` con otro grosor (el título en negrita de un toast crítico).
+pub fn armar_recortado_con_peso(
+    t: &mut Textos,
+    texto: &str,
+    rol: u8,
+    px: f32,
+    peso: f32,
+    escala: f32,
+    max: f32,
+) -> Layout<u8> {
+    let l = t.armar_con_peso(&[(texto, rol)], px, peso, escala);
     if l.width() <= max {
         return l;
     }
@@ -305,14 +318,17 @@ pub fn armar_recortado(
     while lo < hi {
         let m = (lo + hi).div_ceil(2);
         let prueba = format!("{}…", &texto[..cortes[m]]);
-        if t.armar(&[(&prueba, rol)], px, escala).width() <= max {
+        if t.armar_con_peso(&[(&prueba, rol)], px, peso, escala)
+            .width()
+            <= max
+        {
             lo = m;
         } else {
             hi = m - 1;
         }
     }
     let corte = cortes.get(lo).copied().unwrap_or(0);
-    t.armar(&[(&format!("{}…", &texto[..corte]), rol)], px, escala)
+    t.armar_con_peso(&[(&format!("{}…", &texto[..corte]), rol)], px, peso, escala)
 }
 
 /// La caja de la tinta de `l` (lo que se dibuja de verdad), en sus coordenadas: x0, y0, x1,

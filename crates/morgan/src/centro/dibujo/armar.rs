@@ -376,7 +376,6 @@ impl Ui {
         y + alto
     }
 
-    /// Lo que asoma debajo de una fila que se arrastra: la acción de ese lado.
     pub(super) fn pista(
         &mut self,
         h: &mut Hoja,
@@ -385,43 +384,15 @@ impl Ui {
         derecha: Option<(&str, &str)>,
         izquierda: Option<(&str, &str)>,
     ) {
-        let p = self.paleta;
-        let asomo = crate::deslizable::asomo(dx, r.width()) as f32;
-        let (accion, a_la_izquierda) = if dx > 0.0 {
-            (derecha, true)
-        } else {
-            (izquierda, false)
-        };
-        h.trazos.push(Trazo::Grupo {
+        pista(
+            &mut self.rotulos,
+            &self.paleta,
+            h,
             r,
-            escala: 1.0,
-            dx: 0.0,
-            dy: 0.0,
-            alfa: asomo,
-        });
-        h.trazos.push(Trazo::Caja {
-            r,
-            radio: RADIO,
-            color: op(&p.on_surface, 0.04),
-        });
-        if let Some((glifo, texto)) = accion {
-            let l = self
-                .rotulos
-                .linea(&format!("{glifo}  {texto}"), 12.0, 400.0);
-            let (w, al) = (self.ancho(&l), self.alto(&l));
-            let x = if a_la_izquierda {
-                r.x0 + 16.0
-            } else {
-                r.x1 - 16.0 - w
-            };
-            h.trazos.push(Trazo::Texto {
-                l,
-                x,
-                y: r.y0 + ((r.height() - al) / 2.0).floor(),
-                color: op(&p.on_surface, 0.7),
-            });
-        }
-        h.trazos.push(Trazo::Fin);
+            dx,
+            derecha,
+            izquierda,
+        );
     }
 
     // ── Niveles ──
@@ -1194,4 +1165,52 @@ pub(super) fn revelar<K: std::hash::Hash + Eq>(
     m.entry(k)
         .or_insert_with(|| Revelado::new(!abrir))
         .ir(abrir, dura, ahora);
+}
+
+/// Lo que asoma debajo de una fila que se arrastra: la acción de ese lado.
+#[allow(clippy::too_many_arguments)]
+pub fn pista(
+    rotulos: &mut super::Rotulos,
+    p: &morgan_motor::color::Paleta,
+    h: &mut Hoja,
+    r: Rect,
+    dx: f64,
+    derecha: Option<(&str, &str)>,
+    izquierda: Option<(&str, &str)>,
+) {
+    let asomo = crate::deslizable::asomo(dx, r.width()) as f32;
+    let (accion, a_la_izquierda) = if dx > 0.0 {
+        (derecha, true)
+    } else {
+        (izquierda, false)
+    };
+    h.trazos.push(Trazo::Grupo {
+        r,
+        escala: 1.0,
+        dx: 0.0,
+        dy: 0.0,
+        alfa: asomo,
+    });
+    h.trazos.push(Trazo::Caja {
+        r,
+        radio: RADIO,
+        color: op(&p.on_surface, 0.04),
+    });
+    if let Some((glifo, texto)) = accion {
+        let l = rotulos.linea(&format!("{glifo}  {texto}"), 12.0, 400.0);
+        let e = f64::from(rotulos.escala());
+        let (w, al) = (texto::caja(&l).0 / e, texto::alto_de_linea(&l) / e);
+        let x = if a_la_izquierda {
+            r.x0 + 16.0
+        } else {
+            r.x1 - 16.0 - w
+        };
+        h.trazos.push(Trazo::Texto {
+            l,
+            x,
+            y: r.y0 + ((r.height() - al) / 2.0).floor(),
+            color: op(&p.on_surface, 0.7),
+        });
+    }
+    h.trazos.push(Trazo::Fin);
 }

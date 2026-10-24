@@ -47,10 +47,15 @@ fn op(c: &Color, a: f32) -> Color {
     con_alfa(c, c[3] * a)
 }
 
-/// El tamaño de la vista previa de una imagen de `w` × `h`.
+/// El tamaño de la vista previa de una imagen de `w` × `h` en el centro.
 pub fn tam_previa(w: u32, h: u32) -> (f64, f64) {
+    tam_previa_en(w, h, ANCHO_PREVIA)
+}
+
+/// De ancho fijo `ancho`, y una vertical no pasa de 180.
+pub fn tam_previa_en(w: u32, h: u32, ancho: f64) -> (f64, f64) {
     let (w, h) = (i64::from(w.max(1)), i64::from(h.max(1)));
-    let caja = ANCHO_PREVIA as i64;
+    let caja = ancho as i64;
     let (a, b) = if caja * h / w <= ALTO_PREVIA as i64 {
         (caja, caja * h / w)
     } else {
@@ -550,7 +555,7 @@ impl Ui {
                         &mut sub,
                         a.id,
                         i,
-                        glifo,
+                        glifo.unwrap_or("󰅂"),
                         etiqueta,
                         ANCHO - 8.0,
                         sy,

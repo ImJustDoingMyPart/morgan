@@ -24,14 +24,6 @@ impl Urgencia {
             _ => Urgencia::Normal,
         }
     }
-
-    pub fn clase(self) -> &'static str {
-        match self {
-            Urgencia::Baja => "low",
-            Urgencia::Normal => "normal",
-            Urgencia::Critica => "critical",
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -471,6 +471,18 @@ fn escribir(dir: &Path, g: &Guardado) -> std::io::Result<()> {
     std::fs::rename(tmp, ruta)
 }
 
+/// Título y cuerpo sin markup, para copiar.
+pub fn texto_plano(n: &Notificacion) -> String {
+    let cuerpo = gtk::pango::parse_markup(&n.cuerpo, '\0')
+        .map(|(_, t, _)| t.to_string())
+        .unwrap_or_else(|_| n.cuerpo.clone());
+    [n.titulo(), cuerpo.as_str()]
+        .into_iter()
+        .filter(|t| !t.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

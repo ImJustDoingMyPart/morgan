@@ -17,7 +17,7 @@ use morgan_motor::color::Paleta;
 use morgan_motor::forma::Borde;
 use morgan_motor::gpu::{Gpu, Lienzo};
 use morgan_motor::vello::Scene;
-use smithay_client_toolkit::compositor::{CompositorHandler, CompositorState};
+use smithay_client_toolkit::compositor::{CompositorHandler, CompositorState, Region};
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::reexports::calloop::channel::{self, Sender};
 use smithay_client_toolkit::reexports::calloop::timer::{TimeoutAction, Timer};
@@ -44,10 +44,13 @@ use wayland_client::protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_s
 use wayland_client::{Connection, QueueHandle};
 
 use super::dibujo::menu::{MenuUi, Salida};
+use super::dibujo::toasts::{self, ToastsUi};
 use super::dibujo::toque::{IZQUIERDO, Pedido};
 use super::dibujo::{Objetivo, Ui};
 use super::ecualizador;
-use super::vista::{Contenido, Evento, Grupo, Iconos, ListaId, Menu, Nivel, Reproductor, Tarjeta};
+use super::vista::{
+    Aviso, Contenido, Evento, Grupo, Iconos, ListaId, Menu, Nivel, Reproductor, Tarjeta,
+};
 use crate::lamina::Lamina;
 
 // Llegan de a una y de vez en cuando: el tamaño de la más grande no pesa.
@@ -72,6 +75,8 @@ pub enum Orden {
     Limpiar,
     /// El menú de una app de la bandeja, o cerrarlo.
     Menu(Option<Box<Menu>>),
+    /// Los toasts que flotan, el más nuevo primero; sin ninguno, su capa se va.
+    Toasts(Vec<Aviso>),
 }
 
 /// Si no hay Wayland o la GPU no abre, el hilo termina: morgan sigue sin centro.
@@ -110,6 +115,13 @@ struct MenuSup {
     ui: MenuUi,
 }
 
+/// La columna de los toasts, mientras hay alguno: en la salida enfocada, arriba de todo.
+struct ToastsSup {
+    lamina: Lamina,
+    capa: LayerSurface,
+    inicio: Option<Instant>,
+}
+
 /// cava corriendo, con el hilo que lee sus renglones.
 struct Cava {
     proceso: std::process::Child,
@@ -144,6 +156,8 @@ struct Hilo {
     ui: Ui,
     panel: Option<Panel>,
     menu: Option<MenuSup>,
+    toasts: Option<ToastsSup>,
+    toasts_ui: ToastsUi,
     /// Abrir con la sesión desplegada espera a la primera hoja para enfocar.
     enfocar_al_armar: Option<Enfoque>,
     cava: Option<Cava>,
@@ -201,6 +215,8 @@ fn correr(
         ui: Ui::new(paleta, opacidad, borde),
         panel: None,
         menu: None,
+        toasts: None,
+        toasts_ui: ToastsUi::new(paleta, opacidad, borde),
         enfocar_al_armar: None,
         cava: None,
         reloj: None,
@@ -228,6 +244,9 @@ impl Hilo {
         if let Some(m) = &mut self.menu {
             m.lamina.sucio = true;
         }
+        if let Some(t) = &mut self.toasts {
+            t.lamina.sucio = true;
+        }
     }
 
     fn orden(&mut self, o: Orden) {
@@ -238,6 +257,8 @@ impl Hilo {
                 if let Some(m) = &mut self.menu {
                     (m.ui.paleta, m.ui.opacidad, m.ui.borde) = (p, o, b);
                 }
+                let t = &mut self.toasts_ui;
+                (t.paleta, t.opacidad, t.borde) = (p, o, b);
             }
             Orden::Abrir { sesion } => self.abrir(sesion),
             Orden::Cerrar => self.cerrar(false),
@@ -276,8 +297,43 @@ impl Hilo {
                     self.abrir_menu(*m);
                 }
             }
+            Orden::Toasts(v) => self.poner_toasts(v),
         }
         self.ensuciar();
+    }
+
+    fn poner_toasts(&mut self, v: Vec<Aviso>) {
+        self.toasts_ui.avisos = v;
+        if self.toasts_ui.avisos.is_empty() {
+            self.toasts = None;
+            self.toasts_ui.vaciar();
+            return;
+        }
+        if self.toasts.is_some() {
+            return;
+        }
+        let wl = self.compositor.create_surface(&self.qh);
+        let capa = self.capas.create_layer_surface(
+            &self.qh,
+            wl,
+            Layer::Overlay,
+            Some("morgan-notifications"),
+            None,
+        );
+        // El alto lo pone la salida: lo que no entra se scrollea adentro.
+        capa.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::RIGHT);
+        capa.set_size(toasts::ANCHO, 0);
+        capa.set_keyboard_interactivity(KeyboardInteractivity::None);
+        // Hasta el primer cuadro no responde nada: la columna no tapa los clicks.
+        if let Ok(r) = Region::new(&self.compositor) {
+            capa.wl_surface().set_input_region(Some(r.wl_region()));
+        }
+        capa.commit();
+        self.toasts = Some(ToastsSup {
+            lamina: Lamina::new((0, 0)),
+            capa,
+            inicio: None,
+        });
     }
 
     fn abrir_menu(&mut self, m: Menu) {
@@ -489,6 +545,7 @@ impl Hilo {
             self.pedidos(pedidos);
         }
         self.pintar_menu(ahora);
+        self.pintar_toasts(ahora);
         let Some(p) = &mut self.panel else {
             let _ = self.conn.flush();
             return;
@@ -538,6 +595,93 @@ impl Hilo {
         let wl = m.capa.wl_surface().clone();
         m.lamina
             .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+    }
+
+    /// Los toasts bajan desde su borde de abajo al aparecer la columna (`bajada.rs`); solo
+    /// responden las tarjetas.
+    fn pintar_toasts(&mut self, ahora: Instant) {
+        let terminados = self.toasts_ui.al_cuadro(ahora);
+        for e in terminados {
+            self.avisar(Evento::Toast(e));
+        }
+        let Some(t) = &mut self.toasts else { return };
+        let ui = &mut self.toasts_ui;
+        let anda = ui.anda(ahora)
+            || t.inicio
+                .is_none_or(|i| ahora.saturating_duration_since(i) < crate::bajada::duracion());
+        if !t.lamina.lista() || !(t.lamina.sucio || anda) {
+            return;
+        }
+        ui.tam = t.lamina.tam;
+        let escala = t.lamina.escala;
+        ui.armar(escala as f32, ahora);
+        let encima = ui.encima_cambio();
+        let inicio = *t.inicio.get_or_insert(ahora);
+        let micros = ahora.saturating_duration_since(inicio).as_micros() as i64;
+        let bajada = f64::from(crate::bajada::desplazamiento(micros, ui.fondo() as f32));
+        ui.pintar(&mut self.escena, f64::from(escala), bajada);
+        let wl = t.capa.wl_surface().clone();
+        if let Ok(r) = Region::new(&self.compositor) {
+            for c in ui.region(bajada) {
+                r.add(
+                    c.x0.floor() as i32,
+                    c.y0.floor() as i32,
+                    c.width().ceil() as i32,
+                    c.height().ceil() as i32,
+                );
+            }
+            wl.set_input_region(Some(r.wl_region()));
+        }
+        t.lamina
+            .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+        if let Some(e) = encima {
+            self.avisar(Evento::Toast(e));
+        }
+    }
+
+    fn puntero_toasts(&mut self, e: &PointerEvent) {
+        let (x, y) = e.position;
+        let ui = &mut self.toasts_ui;
+        let eventos = match e.kind {
+            PointerEventKind::Enter { serial } => {
+                self.serial_puntero = serial;
+                self.forma_puesta = None;
+                ui.mover(x, y, 0)
+            }
+            PointerEventKind::Motion { time } => ui.mover(x, y, time),
+            PointerEventKind::Leave { .. } => {
+                ui.salir();
+                Vec::new()
+            }
+            PointerEventKind::Press { button, time, .. } => {
+                ui.apretar(x, y, button, time);
+                Vec::new()
+            }
+            PointerEventKind::Release { button, .. } => ui.soltar(x, y, button),
+            PointerEventKind::Axis { vertical, .. } => {
+                if vertical.value120 != 0 {
+                    ui.rueda(f64::from(vertical.value120) / 120.0, true);
+                } else if vertical.discrete != 0 {
+                    ui.rueda(f64::from(vertical.discrete), true);
+                } else if vertical.absolute != 0.0 {
+                    ui.rueda(vertical.absolute, false);
+                }
+                Vec::new()
+            }
+        };
+        let encima = ui.encima_cambio();
+        for e in eventos.into_iter().chain(encima) {
+            self.avisar(Evento::Toast(e));
+        }
+        if let Some(t) = &mut self.toasts {
+            t.lamina.sucio = true;
+        }
+        if self.forma_puesta != Some(Shape::Default)
+            && let Some(f) = &self.forma
+        {
+            f.set_shape(self.serial_puntero, Shape::Default);
+            self.forma_puesta = Some(Shape::Default);
+        }
     }
 
     fn puntero_menu(&mut self, e: &PointerEvent) {
@@ -696,6 +840,14 @@ fn lanzar_cava() -> Result<(std::process::Child, channel::Channel<Vec<f64>>), St
 
 impl LayerShellHandler for Hilo {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, capa: &LayerSurface) {
+        // La salida se fue: la próxima lista la vuelve a crear en otra.
+        if self
+            .toasts
+            .as_ref()
+            .is_some_and(|t| t.capa.wl_surface() == capa.wl_surface())
+        {
+            self.toasts = None;
+        }
         if self
             .menu
             .as_ref()
@@ -721,6 +873,17 @@ impl LayerShellHandler for Hilo {
         _: u32,
     ) {
         let wl = capa.wl_surface();
+        if let Some(t) = self.toasts.as_mut().filter(|t| t.capa.wl_surface() == wl) {
+            if c.new_size.0 > 0 && c.new_size.1 > 0 {
+                t.lamina.tam = c.new_size;
+            }
+            if t.lamina.lienzo.is_none() {
+                // SAFETY: el lienzo se suelta antes que la capa (orden de los campos de ToastsSup).
+                t.lamina.lienzo = unsafe { Lienzo::nuevo(&mut self.gpu, &self.conn, wl) };
+            }
+            t.lamina.sucio = true;
+            return;
+        }
         if let Some(m) = self.menu.as_mut().filter(|m| m.capa.wl_surface() == wl) {
             if c.new_size.0 > 0 && c.new_size.1 > 0 {
                 m.lamina.tam = c.new_size;
@@ -804,6 +967,9 @@ impl Hilo {
     fn lamina(&mut self, wl: &wl_surface::WlSurface) -> Option<&mut Lamina> {
         if let Some(p) = self.panel.as_mut().filter(|p| p.capa.wl_surface() == wl) {
             return Some(&mut p.lamina);
+        }
+        if let Some(t) = self.toasts.as_mut().filter(|t| t.capa.wl_surface() == wl) {
+            return Some(&mut t.lamina);
         }
         self.menu
             .as_mut()
@@ -967,6 +1133,12 @@ impl PointerHandler for Hilo {
                 .is_some_and(|m| m.capa.wl_surface() == &e.surface)
             {
                 self.puntero_menu(e);
+            } else if self
+                .toasts
+                .as_ref()
+                .is_some_and(|t| t.capa.wl_surface() == &e.surface)
+            {
+                self.puntero_toasts(e);
             } else if self
                 .panel
                 .as_ref()

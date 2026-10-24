@@ -11,7 +11,7 @@ pub mod desplegable;
 mod dibujo;
 mod ecualizador;
 pub mod hilo;
-mod lista;
+pub mod lista;
 pub mod marquesina;
 mod resumen;
 pub mod vista;
@@ -41,16 +41,16 @@ use crate::toasts::Toasts;
 use acciones::{Acciones, Parte};
 use hilo::Orden;
 use vista::{
-    BotonCampo, BotonRepro, Caja, Campo, Contenido, Cuota, Deslizar, Evento, ListaId, Nivel,
-    NivelId, Opcion, Tarjeta, Toque,
+    BotonCampo, BotonRepro, Caja, Campo, Contenido, Cuota, Deslizar, Evento, EventoToast, ListaId,
+    Nivel, NivelId, Opcion, Tarjeta, Toque,
 };
 
 const CONFIRMAR_TRAS: Duration = Duration::from_millis(320);
 
 pub struct Servicios {
     pub notificaciones: Notificaciones,
+    pub hyprland: crate::hyprland::Hyprland,
     pub osd: Osd,
-    pub toasts: Toasts,
     pub idle: Idle,
     pub luz: Luz,
     pub brillo: crate::brillo::Brillo,
@@ -150,19 +150,26 @@ impl Centro {
         let (css, opacidad, borde) = s.tema.actual();
         let (tx, rx) = hilo::lanzar(Paleta::desde_css(&css), opacidad as f32, borde);
         let t = tx.clone();
-        let lista = lista::Lista::new(&s.notificaciones, color_texto(&s.tema));
-        let l = lista.clone();
+        let lista = lista::Lista::new(&s.notificaciones, color_texto(&s.tema), lista::CENTRO);
+        let toasts = Toasts::new(
+            tx.clone(),
+            &s.notificaciones,
+            &s.hyprland,
+            color_texto(&s.tema),
+        );
+        let (l, ts) = (lista.clone(), toasts.clone());
         s.tema.al_cambiar(move |css, opacidad, borde| {
             let p = Paleta::desde_css(css);
             l.poner_color(p.on_surface);
             let _ = t.send(Orden::Tema(p, opacidad as f32, borde));
+            ts.poner_color(p.on_surface);
         });
         let inner = Rc::new(Inner {
             hilo: tx,
             acciones: Acciones::default(),
             notificaciones: s.notificaciones,
             osd: s.osd,
-            toasts: s.toasts,
+            toasts,
             idle: s.idle,
             luz: s.luz,
             brillo: s.brillo,
@@ -362,7 +369,7 @@ impl Centro {
             Evento::Cerrar(id) => i.notificaciones.cerrar(id, Razon::Usuario),
             Evento::Copiar(id) => {
                 if let Some(n) = i.notificaciones.get(id) {
-                    let texto = crate::tarjeta::texto_plano(&n);
+                    let texto = crate::notificaciones::texto_plano(&n);
                     comando::lanzar(&["wl-copy", "--", &texto]);
                 }
             }
@@ -394,6 +401,23 @@ impl Centro {
                     (m.al_cerrar)();
                 }
             }
+            // Lo mismo que en la lista, y el toast se va (copiar lo deja).
+            Evento::Toast(t) => match t {
+                EventoToast::Accion(id) => {
+                    self.evento(Evento::Accion(id));
+                    i.toasts.quitar(id);
+                }
+                EventoToast::Boton(id, clave) => {
+                    self.evento(Evento::Boton(id, clave));
+                    i.toasts.quitar(id);
+                }
+                EventoToast::Cerrar(id) => {
+                    self.evento(Evento::Cerrar(id));
+                    i.toasts.quitar(id);
+                }
+                EventoToast::Copiar(id) => self.evento(Evento::Copiar(id)),
+                EventoToast::Encima(id) => i.toasts.encima(id),
+            },
         }
     }
 

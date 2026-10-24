@@ -80,15 +80,19 @@ impl Rotulos {
     /// Una línea que termina en «…» si no entra en `max` lógicos (una etiqueta de GTK con
     /// `ellipsize`).
     pub fn recortada(&mut self, s: &str, px: f32, max: f64) -> Rc<Layout<u8>> {
+        self.recortada_con_peso(s, px, 400.0, max)
+    }
+
+    pub fn recortada_con_peso(&mut self, s: &str, px: f32, peso: f32, max: f64) -> Rc<Layout<u8>> {
         let max_b = (max * f64::from(self.escala)).max(0.0) as u32;
         let c = Clave::Linea {
             texto: s.to_owned(),
             px: (px * 100.0) as u32,
-            peso: 400,
+            peso: peso as u16,
             max: Some(max_b),
         };
         self.buscar(c, |t, e| {
-            texto::armar_recortado(t, s, 0, px, e, max_b as f32)
+            texto::armar_recortado_con_peso(t, s, 0, px, peso, e, max_b as f32)
         })
     }
 
