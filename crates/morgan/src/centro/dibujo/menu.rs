@@ -153,7 +153,9 @@ impl MenuUi {
         }
         let ancho = (contenido + 2.0 * (BORDE_Y_RELLENO + LISTA + FILA_X)).max(MIN);
         let w = f64::from(self.tam.0);
-        let x1 = (w - f64::from(self.menu.derecha)).min(w - MARGEN).max(ancho + MARGEN);
+        let x1 = (w - f64::from(self.menu.derecha))
+            .min(w - MARGEN)
+            .max(ancho + MARGEN);
         let mut h = Hoja::default();
         let interior = ancho - 2.0 * BORDE_Y_RELLENO;
         let mut y = 0.0;
@@ -166,7 +168,8 @@ impl MenuUi {
         h.alto = y;
         let x0 = x1 - ancho;
         self.caja = Rect::new(x0, MARGEN, x1, MARGEN + y + 2.0 * BORDE_Y_RELLENO);
-        let vivos: std::collections::HashSet<Objetivo> = h.objetivos.iter().map(|(o, _)| *o).collect();
+        let vivos: std::collections::HashSet<Objetivo> =
+            h.objetivos.iter().map(|(o, _)| *o).collect();
         self.hoja = h;
         let _ = vivos;
         if let Some((x, y)) = self.puntero {
@@ -175,7 +178,15 @@ impl MenuUi {
     }
 
     /// Una sección en su recuadro: 4 de relleno y las filas; devuelve dónde termina.
-    fn armar_lista(&mut self, h: &mut Hoja, filas: &[NodoMenu], ancho: f64, y0: f64, otra: bool, ahora: Instant) -> f64 {
+    fn armar_lista(
+        &mut self,
+        h: &mut Hoja,
+        filas: &[NodoMenu],
+        ancho: f64,
+        y0: f64,
+        otra: bool,
+        ahora: Instant,
+    ) -> f64 {
         let inicio = h.trazos.len();
         let mut y = y0 + LISTA;
         let _ = otra;
@@ -194,7 +205,15 @@ impl MenuUi {
         y
     }
 
-    fn armar_fila(&mut self, h: &mut Hoja, n: &NodoMenu, x: f64, ancho: f64, y: f64, ahora: Instant) -> f64 {
+    fn armar_fila(
+        &mut self,
+        h: &mut Hoja,
+        n: &NodoMenu,
+        x: f64,
+        ancho: f64,
+        y: f64,
+        ahora: Instant,
+    ) -> f64 {
         let p = self.paleta;
         let o = Objetivo::Fila(n.id);
         // Lo de la derecha.
@@ -212,7 +231,9 @@ impl MenuUi {
             .or(casilla.map(|_| CASILLA));
         let tx = x + FILA_X;
         let max = (x + ancho - FILA_X - w_der.map_or(0.0, |w| w + ENTRE) - tx).max(0.0);
-        let etiqueta = self.rotulos.recortada(&sin_tecla(&n.etiqueta), 14.0, max.min(ETIQUETA_MAX));
+        let etiqueta = self
+            .rotulos
+            .recortada(&sin_tecla(&n.etiqueta), 14.0, max.min(ETIQUETA_MAX));
         let alto_contenido = self
             .alto(&etiqueta)
             .max(flecha.as_ref().map_or(0.0, |f| self.alto(f)))
@@ -220,8 +241,7 @@ impl MenuUi {
             .max(casilla.map_or(0.0, |_| CASILLA));
         let alto = FILA_Y * 2.0 + alto_contenido;
         let r = Rect::new(x, y, x + ancho, y + alto);
-        let abierto = !n.hijos.is_empty()
-            && self.revelados.get(&n.id).is_some_and(|r| r.abierto());
+        let abierto = !n.hijos.is_empty() && self.revelados.get(&n.id).is_some_and(|r| r.abierto());
         let si = self.encima == Some(n.id) || (self.foco_visible && self.foco == Some(n.id));
         let luz = self.animos.luz(o, si && n.habilitado, ahora);
         let fondo = if abierto {
@@ -322,7 +342,12 @@ impl MenuUi {
                 },
             );
             let v = (sy * f).round();
-            h.incrustar(sub, x, y + v - sy, Rect::new(x - 10.0, y, x + ancho + 10.0, y + v));
+            h.incrustar(
+                sub,
+                x,
+                y + v - sy,
+                Rect::new(x - 10.0, y, x + ancho + 10.0, y + v),
+            );
             y += v;
         }
         y
@@ -332,7 +357,11 @@ impl MenuUi {
         s.reset();
         let tr = Affine::scale(escala) * Affine::translate((0.0, -bajada.round()));
         panel(s, tr, &self.paleta, self.opacidad, self.caja, self.borde);
-        let base = tr * Affine::translate((self.caja.x0 + BORDE_Y_RELLENO, self.caja.y0 + BORDE_Y_RELLENO));
+        let base = tr
+            * Affine::translate((
+                self.caja.x0 + BORDE_Y_RELLENO,
+                self.caja.y0 + BORDE_Y_RELLENO,
+            ));
         trazo::pintar(s, &self.hoja.trazos, base, escala);
     }
 
@@ -341,7 +370,10 @@ impl MenuUi {
     }
 
     fn bajo(&self, x: f64, y: f64) -> Option<i32> {
-        let p = Point::new(x - self.caja.x0 - BORDE_Y_RELLENO, y - self.caja.y0 - BORDE_Y_RELLENO);
+        let p = Point::new(
+            x - self.caja.x0 - BORDE_Y_RELLENO,
+            y - self.caja.y0 - BORDE_Y_RELLENO,
+        );
         self.hoja
             .objetivos
             .iter()
@@ -382,7 +414,8 @@ impl MenuUi {
         self.foco_visible = false;
         if let Some(id) = self.bajo(x, y) {
             self.apretado = Some(id);
-            self.animos.apretar(Objetivo::Fila(id), true, Instant::now());
+            self.animos
+                .apretar(Objetivo::Fila(id), true, Instant::now());
         }
     }
 

@@ -73,7 +73,11 @@ macro_rules! sin_eventos {
         }
     )*};
 }
-sin_eventos!(wl_seat::WlSeat, ZwlrVirtualPointerManagerV1, ZwlrVirtualPointerV1);
+sin_eventos!(
+    wl_seat::WlSeat,
+    ZwlrVirtualPointerManagerV1,
+    ZwlrVirtualPointerV1
+);
 
 const IZQUIERDO: u32 = 0x110;
 const DERECHO: u32 = 0x111;
@@ -93,7 +97,10 @@ fn main() {
     let mut e = Estado::default();
     cola.roundtrip(&mut e).expect("roundtrip");
     cola.roundtrip(&mut e).expect("roundtrip");
-    let manager = e.manager.clone().expect("el compositor no tiene virtual pointer");
+    let manager = e
+        .manager
+        .clone()
+        .expect("el compositor no tiene virtual pointer");
     let p = manager.create_virtual_pointer(e.seat.as_ref(), &qh, ());
     let (w, h) = e.tam;
     let t0 = Instant::now();
@@ -150,7 +157,12 @@ fn main() {
             let pasos = num(3) as i32;
             for _ in 0..pasos.abs() {
                 p.axis_source(wl_pointer::AxisSource::Wheel);
-                p.axis_discrete(ms(), wl_pointer::Axis::VerticalScroll, 15.0 * f64::from(pasos.signum()), pasos.signum());
+                p.axis_discrete(
+                    ms(),
+                    wl_pointer::Axis::VerticalScroll,
+                    15.0 * f64::from(pasos.signum()),
+                    pasos.signum(),
+                );
                 p.frame();
                 esperar(20);
             }

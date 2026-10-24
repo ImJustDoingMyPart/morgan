@@ -47,11 +47,11 @@ use super::dibujo::menu::{MenuUi, Salida};
 use super::dibujo::toque::{IZQUIERDO, Pedido};
 use super::dibujo::{Objetivo, Ui};
 use super::ecualizador;
-use super::vista::{
-    Contenido, Evento, Grupo, Iconos, ListaId, Menu, Nivel, Reproductor, Tarjeta,
-};
+use super::vista::{Contenido, Evento, Grupo, Iconos, ListaId, Menu, Nivel, Reproductor, Tarjeta};
 use crate::lamina::Lamina;
 
+// Llegan de a una y de vez en cuando: el tamaño de la más grande no pesa.
+#[allow(clippy::large_enum_variant)]
 pub enum Orden {
     /// Los colores de `theme.css`, la opacidad del fondo y lo de afuera de los paneles.
     Tema(Paleta, f32, Borde),
@@ -71,7 +71,7 @@ pub enum Orden {
     /// Limpiar las notificaciones con la salida escalonada, como el botón.
     Limpiar,
     /// El menú de una app de la bandeja, o cerrarlo.
-    Menu(Option<Menu>),
+    Menu(Option<Box<Menu>>),
 }
 
 /// Si no hay Wayland o la GPU no abre, el hilo termina: morgan sigue sin centro.
@@ -244,9 +244,7 @@ impl Hilo {
             Orden::Tarjetas(t) => self.ui.datos.tarjetas = t,
             Orden::Lista(l, c) => {
                 // Un campo nuevo toma el foco.
-                let nuevo = campo_de(&c).filter(|g| {
-                    campo_de_lista(&self.ui, l) != Some(*g)
-                });
+                let nuevo = campo_de(&c).filter(|g| campo_de_lista(&self.ui, l) != Some(*g));
                 self.ui.datos.listas.insert(l, c);
                 if let Some(g) = nuevo
                     && self.panel.is_some()
@@ -274,7 +272,7 @@ impl Hilo {
             Orden::Menu(m) => {
                 self.menu = None;
                 if let Some(m) = m {
-                    self.abrir_menu(m);
+                    self.abrir_menu(*m);
                 }
             }
         }
@@ -333,13 +331,9 @@ impl Hilo {
             return;
         }
         let wl = self.compositor.create_surface(&self.qh);
-        let capa = self.capas.create_layer_surface(
-            &self.qh,
-            wl,
-            Layer::Top,
-            Some("morgan-center"),
-            None,
-        );
+        let capa =
+            self.capas
+                .create_layer_surface(&self.qh, wl, Layer::Top, Some("morgan-center"), None);
         capa.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
         capa.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
         capa.commit();
@@ -499,8 +493,7 @@ impl Hilo {
             return;
         };
         let anda = self.ui.anda(ahora)
-            || p
-                .inicio
+            || p.inicio
                 .is_none_or(|t| ahora.saturating_duration_since(t) < crate::bajada::duracion());
         if p.lamina.lista() && (p.lamina.sucio || anda) {
             self.ui.tam = p.lamina.tam;
@@ -516,9 +509,11 @@ impl Hilo {
             let micros = ahora.saturating_duration_since(inicio).as_micros() as i64;
             let fondo = self.ui.panel().y1 as f32;
             let bajada = crate::bajada::desplazamiento(micros, fondo);
-            self.ui.pintar(&mut self.escena, f64::from(escala), f64::from(bajada));
+            self.ui
+                .pintar(&mut self.escena, f64::from(escala), f64::from(bajada));
             let wl = p.capa.wl_surface().clone();
-            p.lamina.presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+            p.lamina
+                .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
             self.programar_parpadeo(ahora);
         }
         let _ = self.conn.flush();
@@ -540,7 +535,8 @@ impl Hilo {
         let bajada = crate::bajada::desplazamiento(micros, m.ui.panel().y1 as f32);
         m.ui.pintar(&mut self.escena, f64::from(escala), f64::from(bajada));
         let wl = m.capa.wl_surface().clone();
-        m.lamina.presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+        m.lamina
+            .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
     }
 
     fn puntero_menu(&mut self, e: &PointerEvent) {
@@ -648,9 +644,12 @@ impl Hilo {
 /// El número de cada lista que pide un campo nuevo (su generación), si lleva uno.
 fn campo_de(c: &Contenido) -> Option<u64> {
     match c {
-        Contenido::Opciones(v) => v
-            .iter()
-            .find_map(|o| o.campo.as_ref().filter(|c| c.caja.is_some()).map(|c| c.generacion)),
+        Contenido::Opciones(v) => v.iter().find_map(|o| {
+            o.campo
+                .as_ref()
+                .filter(|c| c.caja.is_some())
+                .map(|c| c.generacion)
+        }),
         Contenido::Cuotas(_) => None,
     }
 }
@@ -821,13 +820,7 @@ impl OutputHandler for Hilo {
 
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 
-    fn output_destroyed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: wl_output::WlOutput,
-    ) {
-    }
+    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 }
 
 impl SeatHandler for Hilo {
@@ -994,4 +987,3 @@ impl ProvidesRegistryState for Hilo {
 
 delegate_registry!(Hilo);
 delegate_dispatch2!(Hilo);
-

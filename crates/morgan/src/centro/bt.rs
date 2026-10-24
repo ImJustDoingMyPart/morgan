@@ -7,7 +7,7 @@ use zbus::zvariant::OwnedObjectPath;
 use super::acciones::Parte;
 use super::hilo::Orden;
 use super::vista::{BotonCampo, Caja, Campo, Contenido, Deslizar, ListaId, Opcion};
-use super::{Centro, BT, resumen};
+use super::{BT, Centro, resumen};
 use crate::bluetooth::{self, Dispositivo, Falla, Pedido};
 
 pub struct Emparejo {
@@ -88,7 +88,12 @@ impl Centro {
             for d in &e.cercanos {
                 let yo = self.clone();
                 let d2 = d.clone();
-                let mut o = Opcion::new(d.glifo(), &d.nombre, None, a.tocar(p, move || yo.elegir_bt(&d2)));
+                let mut o = Opcion::new(
+                    d.glifo(),
+                    &d.nombre,
+                    None,
+                    a.tocar(p, move || yo.elegir_bt(&d2)),
+                );
                 // Recién emparejado ya no está entre los cercanos: el campo espera afuera.
                 if emparejando.as_ref() == Some(&d.ruta) {
                     o.abierta = true;

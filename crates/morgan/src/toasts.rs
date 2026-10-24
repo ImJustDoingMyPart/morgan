@@ -19,7 +19,7 @@ use crate::columna::Columna;
 use crate::hyprland::Hyprland;
 use crate::notificaciones::modelo;
 use crate::notificaciones::{Cambio, Notificaciones};
-use crate::tarjeta::{self, Tarjeta};
+use crate::tarjeta::Tarjeta;
 
 const ANCHO: i32 = 304;
 
@@ -178,7 +178,7 @@ impl Inner {
                 inner.quitar(id);
             }
         });
-        let t = Tarjeta::new(&n, tarjeta::Forma::Toast, &self.notificaciones, al_tocar);
+        let t = Tarjeta::new(&n, &self.notificaciones, al_tocar);
 
         let hover = gtk::EventControllerMotion::new();
         let weak = Rc::downgrade(self);

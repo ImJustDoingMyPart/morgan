@@ -28,13 +28,24 @@ impl Pintor {
     }
 
     /// `p` de `tam` × `tam` píxeles; si es simbólico, de `color`.
-    pub fn paintable(&mut self, p: &gdk::Paintable, tam: i32, color: &gdk::RGBA) -> Option<ImageData> {
+    pub fn paintable(
+        &mut self,
+        p: &gdk::Paintable,
+        tam: i32,
+        color: &gdk::RGBA,
+    ) -> Option<ImageData> {
         let pintor = self.pintor()?;
         pixeles(p, tam, color, pintor)
     }
 
     /// Un ícono del tema por nombre, a `tam` lógicos y `escala`.
-    pub fn icono(&mut self, nombre: &str, tam: i32, escala: i32, color: &gdk::RGBA) -> Option<ImageData> {
+    pub fn icono(
+        &mut self,
+        nombre: &str,
+        tam: i32,
+        escala: i32,
+        color: &gdk::RGBA,
+    ) -> Option<ImageData> {
         let display = gdk::Display::default()?;
         let tema = gtk::IconTheme::for_display(&display);
         if !tema.has_icon(nombre) {

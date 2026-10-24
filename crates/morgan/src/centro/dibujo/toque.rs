@@ -257,7 +257,13 @@ impl Ui {
                 }
             }
             Objetivo::Nombre(n) => {
-                if let Some(l) = self.datos.niveles.iter().find(|x| x.id == n).and_then(|x| x.lista) {
+                if let Some(l) = self
+                    .datos
+                    .niveles
+                    .iter()
+                    .find(|x| x.id == n)
+                    .and_then(|x| x.lista)
+                {
                     self.alternar_lista(l, ahora);
                 }
             }
@@ -300,7 +306,11 @@ impl Ui {
                 }
             }
             Objetivo::AccionAviso(id, i) => {
-                if let Some(c) = self.aviso(id).and_then(|a| a.acciones.get(i)).map(|a| a.0.clone()) {
+                if let Some(c) = self
+                    .aviso(id)
+                    .and_then(|a| a.acciones.get(i))
+                    .map(|a| a.0.clone())
+                {
                     pedidos.push(Pedido::Gtk(Evento::Boton(id, c)));
                 }
             }
@@ -335,7 +345,12 @@ impl Ui {
         self.poner_nivel(id, v, pedidos);
     }
 
-    fn poner_nivel(&mut self, id: crate::centro::vista::NivelId, v: f64, pedidos: &mut Vec<Pedido>) {
+    fn poner_nivel(
+        &mut self,
+        id: crate::centro::vista::NivelId,
+        v: f64,
+        pedidos: &mut Vec<Pedido>,
+    ) {
         let Some(n) = self.datos.niveles.iter().find(|n| n.id == id) else {
             return;
         };
@@ -362,9 +377,9 @@ impl Ui {
 
     fn lados(&self, o: Objetivo) -> (bool, bool) {
         match o {
-            Objetivo::Opcion(l, i) => self
-                .opcion(l, i)
-                .map_or((false, false), |op| (op.derecha.is_some(), op.izquierda.is_some())),
+            Objetivo::Opcion(l, i) => self.opcion(l, i).map_or((false, false), |op| {
+                (op.derecha.is_some(), op.izquierda.is_some())
+            }),
             Objetivo::Aviso(_) => (true, true),
             Objetivo::Grupo(_) => (true, false),
             _ => (false, false),
@@ -392,7 +407,11 @@ impl Ui {
                 self.arrastre = Some(a);
                 return;
             }
-            let lado = if dx > 0.0 { Lado::Derecha } else { Lado::Izquierda };
+            let lado = if dx > 0.0 {
+                Lado::Derecha
+            } else {
+                Lado::Izquierda
+            };
             if !self.lado_vale(&a, lado) {
                 self.arrastre = Some(a);
                 return;
@@ -434,14 +453,22 @@ impl Ui {
 
     /// La acción de ese lado: la fila que se va sale y la acción se hace al llegar; la que
     /// vuelve la hace ya.
-    fn soltar_de_costado(&mut self, o: Objetivo, lado: Lado, ancho: f64, pedidos: &mut Vec<Pedido>) {
+    fn soltar_de_costado(
+        &mut self,
+        o: Objetivo,
+        lado: Lado,
+        ancho: f64,
+        pedidos: &mut Vec<Pedido>,
+    ) {
         let se_va = match (o, lado) {
-            (Objetivo::Opcion(l, i), Lado::Derecha) => {
-                self.opcion(l, i).and_then(|x| x.derecha.as_ref()).is_some_and(|d| d.se_va)
-            }
-            (Objetivo::Opcion(l, i), Lado::Izquierda) => {
-                self.opcion(l, i).and_then(|x| x.izquierda.as_ref()).is_some_and(|d| d.se_va)
-            }
+            (Objetivo::Opcion(l, i), Lado::Derecha) => self
+                .opcion(l, i)
+                .and_then(|x| x.derecha.as_ref())
+                .is_some_and(|d| d.se_va),
+            (Objetivo::Opcion(l, i), Lado::Izquierda) => self
+                .opcion(l, i)
+                .and_then(|x| x.izquierda.as_ref())
+                .is_some_and(|d| d.se_va),
             (_, Lado::Derecha) => true,
             (_, Lado::Izquierda) => false,
         };
@@ -476,9 +503,9 @@ impl Ui {
                 .map(|d| Evento::Tocar(d.accion)),
             (Objetivo::Aviso(id), Lado::Derecha) => Some(Evento::Cerrar(id)),
             (Objetivo::Aviso(id), Lado::Izquierda) => Some(Evento::Copiar(id)),
-            (Objetivo::Grupo(k), Lado::Derecha) => {
-                self.grupo_de(k).map(|g| Evento::CerrarGrupo(g.clave.clone()))
-            }
+            (Objetivo::Grupo(k), Lado::Derecha) => self
+                .grupo_de(k)
+                .map(|g| Evento::CerrarGrupo(g.clave.clone())),
             _ => None,
         };
         if let Some(e) = e {
@@ -511,7 +538,13 @@ impl Ui {
     // ── Teclado ──
 
     /// `ctrl` y `shift`: los modificadores sostenidos.
-    pub fn tecla(&mut self, k: Keysym, texto: Option<&str>, ctrl: bool, shift: bool) -> Vec<Pedido> {
+    pub fn tecla(
+        &mut self,
+        k: Keysym,
+        texto: Option<&str>,
+        ctrl: bool,
+        shift: bool,
+    ) -> Vec<Pedido> {
         let mut pedidos = Vec::new();
         if let Some(Objetivo::Campo(l)) = self.foco
             && self.tecla_campo(l, k, texto, ctrl, &mut pedidos)

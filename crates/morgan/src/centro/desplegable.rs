@@ -67,7 +67,12 @@ impl Grupo {
     }
 
     pub fn cerrar(&self) {
-        let vivas: Vec<gtk::Revealer> = self.listas.borrow().iter().filter_map(|r| r.upgrade()).collect();
+        let vivas: Vec<gtk::Revealer> = self
+            .listas
+            .borrow()
+            .iter()
+            .filter_map(|r| r.upgrade())
+            .collect();
         for r in vivas {
             r.set_reveal_child(false);
         }

@@ -52,7 +52,11 @@ impl Rotulos {
         }
     }
 
-    fn buscar(&mut self, c: Clave, armar: impl FnOnce(&mut Textos, f32) -> Layout<u8>) -> Rc<Layout<u8>> {
+    fn buscar(
+        &mut self,
+        c: Clave,
+        armar: impl FnOnce(&mut Textos, f32) -> Layout<u8>,
+    ) -> Rc<Layout<u8>> {
         if let Some((l, usado)) = self.guardados.get_mut(&c) {
             *usado = true;
             return l.clone();
@@ -83,7 +87,9 @@ impl Rotulos {
             peso: 400,
             max: Some(max_b),
         };
-        self.buscar(c, |t, e| texto::armar_recortado(t, s, 0, px, e, max_b as f32))
+        self.buscar(c, |t, e| {
+            texto::armar_recortado(t, s, 0, px, e, max_b as f32)
+        })
     }
 
     /// El cuerpo de una notificación: markup seguro (`b`, `i`, `u`), en renglones de `ancho`
@@ -98,7 +104,8 @@ impl Rotulos {
         };
         self.buscar(c, |t, e| {
             let tramos = tramos(markup);
-            let partes: Vec<(&str, Estilo)> = tramos.iter().map(|(s, e)| (s.as_str(), *e)).collect();
+            let partes: Vec<(&str, Estilo)> =
+                tramos.iter().map(|(s, e)| (s.as_str(), *e)).collect();
             t.parrafo(&partes, px, e, ancho_b as f32, lineas)
         })
     }

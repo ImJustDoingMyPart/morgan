@@ -287,3 +287,62 @@ impl Lienzo {
         true
     }
 }
+
+/// Los píxeles de `tex` (RGBA8, `COPY_SRC`), sin el relleno de fila que pide la GPU.
+pub fn leer(
+    device: &wgpu::Device,
+    cola: &wgpu::Queue,
+    tex: &wgpu::Texture,
+    w: u32,
+    h: u32,
+) -> Option<Vec<u8>> {
+    let alinear = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+    let fila = (w * 4).div_ceil(alinear) * alinear;
+    let buf = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("leer"),
+        size: (fila * h) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut enc = device.create_command_encoder(&Default::default());
+    enc.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: tex,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &buf,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(fila),
+                rows_per_image: None,
+            },
+        },
+        wgpu::Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        },
+    );
+    cola.submit([enc.finish()]);
+    buf.map_async(wgpu::MapMode::Read, .., |_| {});
+    if let Err(e) = device.poll(wgpu::PollType::Wait {
+        submission_index: None,
+        timeout: Some(std::time::Duration::from_secs(1)),
+    }) {
+        eprintln!("leer de la GPU: {e}");
+        return None;
+    }
+    let mut px = Vec::with_capacity((w * h * 4) as usize);
+    {
+        let datos = buf.get_mapped_range(..).ok()?;
+        for y in 0..h as usize {
+            let desde = y * fila as usize;
+            px.extend_from_slice(&datos[desde..desde + w as usize * 4]);
+        }
+    }
+    buf.unmap();
+    Some(px)
+}

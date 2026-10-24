@@ -18,33 +18,6 @@ window.morgan {
     backdrop-filter: blur(20px);
 }
 
-/* La barra conserva las puntas redondas: con 6px de alto, el radio de la tarjeta la haría
- * ver como un rectángulo mal cortado. */
-.cc-cuota progressbar,
-.cc-cuota progressbar trough,
-.cc-cuota progressbar progress {
-    min-width: 0;
-    min-height: 6px;
-    border-radius: 999px;
-    border: none;
-}
-
-.cc-cuota progressbar trough {
-    background: alpha(@outline_variant, 0.6);
-}
-
-/* Sin animación. */
-.cc-cuota progressbar progress {
-    background-image: linear-gradient(to right, @primary, @tertiary);
-    box-shadow: 0 0 4px 0 alpha(@tertiary, 0.35);
-    /* Sin borde, el margin: 0 -1px del tema por defecto lo dejaría en -2 px de ancho. */
-    margin: 0;
-}
-
-.cc-cuota progressbar:disabled {
-    opacity: 0.5;
-}
-
 /* ─── Notificaciones ─── */
 .notification-row,
 .notification-row * {
@@ -213,7 +186,8 @@ window.floating-notifications {
     transform: scale(1.02);
 }
 
-/* ─── Centro de control ─── */
+/* ─── Paneles con GTK (la calculadora; el centro y el menú de la bandeja son del motor
+ * propio) ─── */
 window.blank-window {
     background: transparent;
 }
@@ -248,223 +222,12 @@ window.blank-window {
     opacity: 0;
 }
 
-.control-center .control-center-list {
-    background: transparent;
-}
-
-/* Entre dos notificaciones van los 8 px del ritmo del panel. */
-.control-center .control-center-list > row,
-.control-center .control-center-list > row:hover,
-.control-center .control-center-list > row:focus {
-    background: transparent;
-    padding: 0;
-    outline: none;
-}
-
-/* "Limpiar": cada fila sale a la derecha y se apaga (el escalonado lo pone `lista.rs`). */
-.control-center .control-center-list > row {
-    transition: opacity 220ms ease-in, transform 220ms cubic-bezier(0.55, 0, 0.75, 0.2);
-}
-
-.control-center .control-center-list > row.saliendo {
-    opacity: 0;
-    transform: translateX(56px);
-}
-
-.control-center .control-center-list-placeholder {
-    color: @on_surface;
-    opacity: 0.35;
-    font-size: 13px;
-    padding: 18px 0 14px;
-}
-
-.control-center .control-center-list .notification-row .notification-background .notification {
-    background: alpha(@on_surface, 0.06);
-}
-
-.control-center .control-center-list .notification-row .notification-background .notification:hover,
-.control-center .control-center-list .notification-row:focus .notification-background .notification {
-    background: alpha(@primary, 0.25);
-}
-
-/* ── Ritmo del panel ──
- * - 16 px del borde del panel a cualquier caja (2 de borde + 14 de padding);
- * - 8 px entre dos cajas, sean cuales sean;
- * - 8 px adentro de cada caja, a cada lado.
- * Los íconos van en una columna de 36 px pegada a esos 8 px y los textos arrancan todos en la
- * misma vertical, a 8 + 36 + 10 = 54 px del borde de su caja. Dos tamaños de letra: 14 px para
- * lo que es título y 12 px atenuado para lo secundario. */
-.control-center .widget {
-    margin: 0;
-    padding: 0;
-}
-
-.control-center .notification-row .notification-background {
-    padding: 4px 0;
-}
-
-/* La primera y la última no suman los 4 px de afuera: el rótulo pone los 8 de arriba y el
- * borde del panel los 16 de abajo. */
-.control-center .control-center-list > row:first-child .notification-background {
-    padding-top: 0;
-}
-
-.control-center .control-center-list > row:last-child .notification-background {
-    padding-bottom: 0;
-}
-
-.control-center .notification-row .notification-background .notification .notification-default-action {
-    padding: 8px;
-}
-
-.control-center .notification-row .notification-background .notification .image {
-    -gtk-icon-size: 36px;
-    margin: 0 10px 0 0;
-}
-
-.control-center .notification-row .notification-background .notification .time {
-    margin-right: 0;
-}
-
-/* La pila colapsada va con fondos opacos: dos tintes que se pisan se sumarían. */
-.notification-group {
-    transition: opacity 200ms ease-in-out;
-}
-
-.notification-group:focus {
-    background: transparent;
-    outline: none;
-}
-
-.control-center .control-center-list .notification-group.collapsed .notification-row:last-child .notification-background .notification {
-    background: alpha(@on_surface, 0.06);
-}
-
-.control-center .control-center-list .notification-group.collapsed .notification-row:not(:last-child) .notification-background .notification {
-    background: alpha(@on_surface, 0.03);
-}
-
-.notification-group.collapsed .notification-row:not(:last-child) .notification-default-action,
-.notification-group.collapsed .notification-row:not(:last-child) .notification-action,
-.notification-group.collapsed .notification-row:not(:last-child) .notification-alt-actions {
-    opacity: 0;
-}
-
-/* El foco de teclado está en la fila de la lista, no en el grupo. */
-.control-center .control-center-list .notification-group.collapsed:hover .notification-row:last-child .notification-background .notification,
-.control-center .control-center-list > row:focus .notification-group.collapsed .notification-row:last-child .notification-background .notification {
-    background: alpha(@primary, 0.25);
-}
-
-.control-center .control-center-list .notification-group.collapsed:hover .notification-row:not(:last-child) .notification-background .notification,
-.control-center .control-center-list > row:focus .notification-group.collapsed .notification-row:not(:last-child) .notification-background .notification {
-    background: alpha(@primary, 0.12);
-}
-
-.control-center .control-center-list .notification-group.collapsed:hover .notification-row .notification-background .notification,
-.control-center .control-center-list > row:focus .notification-group.collapsed .notification-row .notification-background .notification {
-    transform: scale(1.02);
-}
-
-.notification-group .notification-group-headers,
-.notification-group .notification-group-buttons {
-    margin: 0 8px;
-    color: @on_surface;
-}
-
-.notification-group .notification-group-headers .notification-group-header {
-    color: @on_surface;
-    opacity: 0.5;
-    font-size: 12px;
-    font-weight: bold;
-    text-transform: lowercase;
-}
-
-/* El ícono de la app no se dibuja: el rótulo ya la nombra. */
-.notification-group .notification-group-headers .notification-group-icon {
-    opacity: 0;
-    min-width: 0;
-    min-height: 0;
-    -gtk-icon-size: 0;
-}
-
-.notification-group .notification-group-buttons button {
-    background: transparent;
-    color: @on_surface;
-    opacity: 0.35;
-    border: none;
-    box-shadow: none;
-    min-width: 0;
-    min-height: 0;
-    padding: 2px;
-    transition: color 100ms ease, opacity 100ms ease, transform 150ms ease;
-}
-
-.notification-group .notification-group-buttons button:hover {
-    background: transparent;
-    color: @primary;
-    opacity: 1;
-}
-
-.notification-group .notification-group-buttons button:active {
-    transform: scale(0.9);
-    transition: none;
-}
-
-.notification-group .notification-row .notification-background .notification {
-    background: alpha(@on_surface, 0.06);
-}
-
-.notification-group .notification-row .notification-background .notification:hover {
-    background: alpha(@primary, 0.25);
-}
-
-/* ── Widgets ── */
-.widget {
-    border-radius: 4px;
-    margin: 4px 6px;
-    padding: 4px;
-}
-
+/* ── Tarjetas y opciones del menú de sistema y de los toasts ── */
 .cc-tarjeta label,
-.cc-opcion label,
-.cc-nivel button {
+.cc-opcion label {
     font-weight: normal;
 }
 
-.cc-nivel button.glifo,
-.cc-clave button.glifo,
-.cc-nivel .rotulo button.nombre {
-    background: transparent;
-    color: @on_surface;
-    border: none;
-    box-shadow: none;
-    outline: none;
-    border-radius: 4px;
-    min-height: 0;
-    min-width: 0;
-    padding: 0;
-    transition: color 100ms ease, opacity 100ms ease, transform 150ms ease;
-}
-
-.cc-nivel button.glifo:hover,
-.cc-nivel button.glifo:focus-visible,
-.cc-clave button.glifo:hover,
-.cc-nivel .rotulo button.nombre.con-lista:hover,
-.cc-nivel .rotulo button.nombre.con-lista:focus-visible,
-.cc-nivel .rotulo button.nombre.abierto {
-    background: transparent;
-    color: @primary;
-    opacity: 1;
-}
-
-.cc-nivel button.glifo:active,
-.cc-nivel .rotulo button.nombre.con-lista:active {
-    transform: scale(0.9);
-    transition: none;
-}
-
-/* ── Tarjetas ── */
 .cc-tarjeta {
     background: alpha(@on_surface, 0.06);
     color: @on_surface;
@@ -572,127 +335,6 @@ window.blank-window {
     opacity: 1;
 }
 
-/* La clave de una Wi-Fi nueva: la caja del launcher debajo del renglón de la red, de su
- * mismo ancho y con sus columnas (el padding y el glifo de 36 de `.cc-opcion`). */
-.cc-clave {
-    margin: 2px 0;
-}
-
-.cc-clave .launcher-entrada {
-    margin-bottom: 0;
-    padding: 6px 10px 6px 4px;
-}
-
-.cc-clave .launcher-entrada label.glifo {
-    min-width: 32px;
-    margin-right: 4px;
-    opacity: 0.7;
-}
-
-/* En el panel, los glifos de las listas (14 px) arrancan donde los de los niveles (18 px
- * centrados en 36): columna de 32 más 4, así los nombres no se mueven. Lo de la derecha (el
- * tilde, el ojo de la clave) queda centrado sobre la perilla de un slider al 100 %, a 17 px
- * del borde de la caja. */
-.control-center .cc-opcion .glifo {
-    min-width: 32px;
-    margin-right: 4px;
-}
-
-.control-center .cc-opcion .tilde {
-    margin-right: 4px;
-}
-
-.cc-clave .launcher-entrada text {
-    font-size: 14px;
-}
-
-.cc-clave .aviso {
-    margin: 4px 4px 2px 50px;
-    font-size: 12px;
-    opacity: 0.5;
-}
-
-.cc-clave .aviso.error {
-    color: @error;
-    opacity: 1;
-}
-
-/* ── Niveles ── */
-.cc-niveles {
-    padding: 4px 8px;
-    border-radius: 4px;
-    background: alpha(@on_surface, 0.06);
-}
-
-.cc-nivel {
-    padding: 4px 0;
-}
-
-/* Las listas de un nivel (salidas, entradas, la salida de una app) sin padding a los
- * costados: así sus glifos y nombres caen en las columnas de los del nivel, como los de
- * las listas de las tarjetas. */
-.cc-niveles .cc-lista {
-    padding: 4px 0;
-}
-
-.cc-niveles .cc-opcion {
-    padding-left: 0;
-    padding-right: 0;
-}
-
-.cc-nivel button.glifo {
-    min-width: 36px;
-    min-height: 36px;
-    font-size: 18px;
-}
-
-.cc-nivel.mudo button.glifo {
-    color: @error;
-}
-
-.cc-nivel .rotulo label {
-    font-size: 12px;
-    color: @on_surface;
-}
-
-.cc-nivel .rotulo .nombre {
-    opacity: 0.5;
-}
-
-.cc-nivel .rotulo button.nombre.abierto,
-.cc-nivel .rotulo button.nombre.con-lista:hover {
-    opacity: 1;
-}
-
-.cc-nivel .rotulo .porcentaje {
-    color: @tertiary;
-}
-
-.cc-nivel.mudo .rotulo .porcentaje {
-    color: @error;
-}
-
-/* La tinta de lo gráfico llega a 8 + 9, en espejo con la del glifo (18 px centrados en su
- * columna de 36): la perilla al 100 % queda a 17 px del borde. */
-.cc-nivel scale {
-    padding: 4px 14px 2px 0;
-}
-
-/* ── Acciones de una notificación ── */
-.control-center .notification .cc-lista.acciones {
-    margin: 0 4px 4px 4px;
-    padding: 0;
-    background: alpha(@on_surface, 0.04);
-}
-
-.control-center .notification .cc-lista.acciones .cc-opcion {
-    padding: 6px 4px;
-}
-
-.control-center .control-center-list .notification-row .notification-background .notification.abierta {
-    background: alpha(@primary, 0.2);
-}
-
 /* ── Lo que asoma debajo de una tarjeta que se arrastra ── */
 .deslizable-fondo {
     border-radius: 4px;
@@ -704,204 +346,6 @@ window.blank-window {
     color: @on_surface;
     opacity: 0.7;
     padding: 0 16px;
-}
-
-/* ── Cuotas de IA ──
- * La barra termina donde el canal de un slider (el padding de su escala). */
-.cc-cuotas {
-    margin-top: 8px;
-}
-
-.cc-cuota progressbar {
-    background: none;
-    margin: 6px 14px 4px 0;
-}
-
-.cc-cuota .rotulo .renueva {
-    opacity: 0.5;
-}
-
-.cc-tarjeta.alerta .estado {
-    color: @error;
-}
-
-/* ── Sliders ── */
-.cc-nivel trough {
-    background: alpha(@outline_variant, 0.6);
-    border: none;
-    min-width: 0;
-    min-height: 5px;
-    border-radius: 4px;
-}
-
-.cc-nivel highlight {
-    background-image: linear-gradient(to right, @primary, @tertiary);
-    border: none;
-    min-width: 0;
-    /* El tema por defecto le pone margin: -1px para tapar su borde; sin borde, el gizmo
-     * mediría -2 px y GTK lo avisa en el journal. */
-    margin: 0;
-    border-radius: 4px;
-    transition: background-image 150ms ease-out, background-color 150ms ease-out;
-}
-
-.cc-nivel.mudo highlight {
-    background-image: none;
-    background: alpha(@on_surface, 0.25);
-}
-
-.cc-nivel slider {
-    background: @tertiary;
-    border: none;
-    box-shadow: 0 0 3px 0 alpha(@tertiary, 0.35);
-    min-width: 10px;
-    min-height: 10px;
-    margin: -5px;
-    transition: min-width 120ms ease-out, min-height 120ms ease-out, margin 120ms ease-out, box-shadow 200ms ease-out;
-}
-
-.cc-nivel.mudo slider {
-    background: @on_surface_variant;
-    box-shadow: none;
-}
-
-.cc-nivel scale:hover slider {
-    box-shadow:
-        0 0 3px 1px alpha(@tertiary, 0.5),
-        0 0 6px 2px alpha(@tertiary, 0.25);
-}
-
-.cc-nivel scale:active slider {
-    box-shadow:
-        0 0 4px 1px alpha(@tertiary, 0.5),
-        0 0 8px 2px alpha(@tertiary, 0.25);
-    min-width: 7px;
-    min-height: 7px;
-    margin: -3.5px;
-}
-
-/* Con el foco del teclado (las flechas mueven el nivel), la perilla más grande y con el
- * glow, para que se vea dónde se está. */
-.cc-nivel scale:focus-visible slider {
-    box-shadow:
-        0 0 4px 1px alpha(@tertiary, 0.6),
-        0 0 10px 3px alpha(@tertiary, 0.3);
-    min-width: 14px;
-    min-height: 14px;
-    margin: -7px;
-}
-
-/* ── Reproductor ── */
-
-.widget-mpris .widget-mpris-player {
-    margin: 0;
-    border-radius: 4px;
-    box-shadow: none;
-    background: alpha(@on_surface, 0.06);
-}
-
-.widget-mpris .widget-mpris-player .mpris-overlay {
-    padding: 8px;
-    background-color: transparent;
-}
-
-.widget-mpris .widget-mpris-player .mpris-overlay .widget-mpris-album-art {
-    border-radius: 4px;
-    box-shadow: none;
-}
-
-.widget-mpris .widget-mpris-player .mpris-overlay .widget-mpris-title {
-    font-size: 14px;
-    font-weight: normal;
-    color: @on_surface;
-}
-
-.widget-mpris .widget-mpris-player .mpris-overlay .widget-mpris-subtitle {
-    font-size: 12px;
-    color: @on_surface;
-    opacity: 0.5;
-}
-
-.widget-mpris .widget-mpris-player .mpris-overlay > box > button {
-    background: transparent;
-    color: @on_surface;
-    border: none;
-    box-shadow: none;
-    border-radius: 4px;
-    transition: color 100ms ease, transform 150ms ease;
-}
-
-.widget-mpris .widget-mpris-player .mpris-overlay > box > button:hover {
-    background: transparent;
-    color: @primary;
-}
-
-.widget-mpris .widget-mpris-player .mpris-overlay > box > button:active {
-    transform: scale(0.9);
-    transition: none;
-}
-
-.widget-mpris .widget-mpris-player .mpris-overlay > box > button:focus,
-.widget-mpris .widget-mpris-player .mpris-overlay > box > button:focus-visible {
-    outline: none;
-    box-shadow: none;
-}
-
-/* Sin fondo; la atenuación la pone el tema. */
-.widget-mpris .widget-mpris-player .mpris-overlay > box > button:disabled {
-    background: transparent;
-}
-
-/* `color` es el principio del degradé; `.fin`, el final. */
-.ecualizador {
-    color: @primary;
-    opacity: 0.22;
-    transition: opacity 600ms ease;
-}
-
-.ecualizador .fin {
-    color: @tertiary;
-}
-
-.ecualizador.quieto {
-    opacity: 0;
-}
-
-/* ── Notificaciones: el rótulo de la sección ── */
-.cc-seccion {
-    margin: 0 0 8px 0;
-}
-
-.cc-seccion label {
-    color: @on_surface;
-    opacity: 0.5;
-    font-size: 12px;
-    font-weight: bold;
-}
-
-.cc-seccion button {
-    background: transparent;
-    color: @on_surface;
-    border: none;
-    box-shadow: none;
-    min-height: 0;
-    min-width: 0;
-    padding: 0;
-    border-radius: 4px;
-    font-size: 12px;
-    opacity: 0.5;
-    transition: color 100ms ease, opacity 100ms ease, transform 150ms ease;
-}
-
-.cc-seccion button:hover {
-    background: transparent;
-    color: @primary;
-    opacity: 1;
-}
-
-.cc-seccion button:active {
-    transform: scale(0.9);
-    transition: none;
 }
 
 /* ─── Launcher ─── */
@@ -1119,14 +563,12 @@ window.blank-window {
     padding: 10px 12px;
 }
 
-.menu .cc-tarjeta .flecha,
-.menu-bandeja .cc-opcion .flecha {
+.menu .cc-tarjeta .flecha {
     color: @on_surface_variant;
     font-size: 16px;
 }
 
-.menu .casilla,
-.menu-bandeja .casilla {
+.menu .casilla {
     min-width: 14px;
     min-height: 14px;
     border-radius: 3px;
@@ -1134,8 +576,7 @@ window.blank-window {
     transition: background-color 150ms ease, border-color 150ms ease;
 }
 
-.menu .cc-tarjeta.encendida .casilla,
-.menu-bandeja .cc-opcion.encendida .casilla {
+.menu .cc-tarjeta.encendida .casilla {
     border-color: transparent;
     background-image: linear-gradient(135deg, @primary, @tertiary);
     box-shadow: 0 0 6px 0 alpha(@tertiary, 0.3);
@@ -1146,8 +587,7 @@ window.blank-window {
     color: @tertiary;
 }
 
-.menu .cc-opcion,
-.menu-bandeja .cc-opcion {
+.menu .cc-opcion {
     padding: 6px 12px;
 }
 
@@ -1255,21 +695,8 @@ tooltip label {
     color: @on_surface;
 }
 
-.menu-bandeja > .cc-lista:first-child {
-    margin-top: 0;
-}
-
-.menu-bandeja .otra-seccion {
-    margin-top: 8px;
-}
-
-.menu-bandeja .cc-opcion.abierto,
 .cc-lista .cc-opcion.abierto {
     background: alpha(@primary, 0.2);
-}
-
-.menu-bandeja .cc-opcion:disabled {
-    opacity: 0.6;
 }
 
 /* ─── Calculadora ─── */

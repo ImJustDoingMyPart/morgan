@@ -72,7 +72,12 @@ pub struct Opcion {
 }
 
 impl Opcion {
-    pub fn new(glifo: impl Into<String>, texto: impl Into<String>, marcada: Option<bool>, accion: Id) -> Self {
+    pub fn new(
+        glifo: impl Into<String>,
+        texto: impl Into<String>,
+        marcada: Option<bool>,
+        accion: Id,
+    ) -> Self {
         Opcion {
             glifo: glifo.into(),
             texto: texto.into(),

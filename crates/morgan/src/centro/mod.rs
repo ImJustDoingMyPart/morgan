@@ -95,8 +95,7 @@ struct Inner {
     clave: RefCell<Option<Pedido>>,
     /// El dispositivo que se está emparejando, con lo que muestra su campo.
     emparejo: RefCell<Option<bt::Emparejo>>,
-    /// La confirmación de sesión a medias: glifo, pregunta, comando y si ya se habilitó.
-    confirmando: RefCell<Option<(&'static str, &'static str, &'static [&'static str], bool)>>,
+    confirmando: RefCell<Option<Confirmacion>>,
     /// Cada campo nuevo lleva otro número: lo escrito se borra y toma el foco.
     generaciones: Cell<u64>,
     /// Las acciones de cada nivel, que no cambian mientras exista (un arrastre no se corta).
@@ -128,6 +127,9 @@ impl Drop for Inner {
         }
     }
 }
+
+/// La confirmación de sesión a medias: glifo, pregunta, comando y si ya se habilitó el «Sí».
+type Confirmacion = (&'static str, &'static str, &'static [&'static str], bool);
 
 struct Pedido {
     visible: Visible,
@@ -229,7 +231,7 @@ impl Centro {
             elegir: Box::new(elegir),
             al_cerrar: Box::new(al_cerrar),
         }));
-        self.mandar(Orden::Menu(Some(m)));
+        self.mandar(Orden::Menu(Some(Box::new(m))));
     }
 
     pub fn cerrar_menu(&self) {
@@ -348,9 +350,9 @@ impl Centro {
             Evento::Enviar(id, s) => i.acciones.hacer_enviar(id, s),
             Evento::Repro(b) => match b {
                 BotonRepro::Mezcla => i.mpris.alternar_mezcla(),
-                BotonRepro::Anterior => i.mpris.pedir("Previous"),
+                BotonRepro::Anterior => i.mpris.pedir("Previous"), // no-tr
                 BotonRepro::Play => i.mpris.pedir("PlayPause"),
-                BotonRepro::Siguiente => i.mpris.pedir("Next"),
+                BotonRepro::Siguiente => i.mpris.pedir("Next"), // no-tr
                 BotonRepro::Repetir => i.mpris.ciclar_repeticion(),
             },
             Evento::Accion(id) => i.notificaciones.accion(id, "default"),
@@ -561,15 +563,35 @@ impl Centro {
         let ops = vec![
             directo("󰌾", tr!("Bloquear pantalla"), &["loginctl", "lock-session"]),
             directo("󰤄", tr!("Suspender"), &["systemctl", "suspend"]),
-            confirmar("󰍃", tr!("Cerrar sesión"), tr!("Sí, cerrar sesión"), comando::salir_de_la_sesion()),
-            confirmar("󰜉", tr!("Reiniciar"), tr!("Sí, reiniciar"), &["systemctl", "reboot"]),
-            confirmar("󰐥", tr!("Apagar"), tr!("Sí, apagar"), &["systemctl", "poweroff"]),
+            confirmar(
+                "󰍃",
+                tr!("Cerrar sesión"),
+                tr!("Sí, cerrar sesión"),
+                comando::salir_de_la_sesion(),
+            ),
+            confirmar(
+                "󰜉",
+                tr!("Reiniciar"),
+                tr!("Sí, reiniciar"),
+                &["systemctl", "reboot"],
+            ),
+            confirmar(
+                "󰐥",
+                tr!("Apagar"),
+                tr!("Sí, apagar"),
+                &["systemctl", "poweroff"],
+            ),
         ];
         self.mandar(Orden::Lista(ListaId::Sesion, Contenido::Opciones(ops)));
     }
 
     /// El "Sí" se habilita un rato después: un doble click no confirma solo.
-    fn confirmar(&self, glifo: &'static str, pregunta: &'static str, args: &'static [&'static str]) {
+    fn confirmar(
+        &self,
+        glifo: &'static str,
+        pregunta: &'static str,
+        args: &'static [&'static str],
+    ) {
         self.inner
             .confirmando
             .replace(Some((glifo, pregunta, args, false)));
@@ -806,7 +828,12 @@ impl Centro {
             e.salidas.retain(|s| !fuera.contains(&s.indice));
         }
         let mut niveles = Vec::new();
-        let nivel = |id: NivelId, glifo: &str, nombre: &str, valor: f64, mudo: bool, lista: Option<ListaId>| {
+        let nivel = |id: NivelId,
+                     glifo: &str,
+                     nombre: &str,
+                     valor: f64,
+                     mudo: bool,
+                     lista: Option<ListaId>| {
             let (mover, glifo_accion) = self.acciones_nivel(id);
             Nivel {
                 id,
@@ -821,7 +848,14 @@ impl Centro {
         };
         if let Some(s) = e.salida_predeterminada() {
             let glifo = if s.mudo { "󰖁" } else { s.glifo() };
-            niveles.push(nivel(NivelId::Salida, glifo, &s.descripcion, s.volumen, s.mudo, Some(ListaId::Salida)));
+            niveles.push(nivel(
+                NivelId::Salida,
+                glifo,
+                &s.descripcion,
+                s.volumen,
+                s.mudo,
+                Some(ListaId::Salida),
+            ));
         }
         for a in &e.apps {
             let actual = e.salidas.iter().find(|s| s.indice == a.salida);
@@ -842,12 +876,33 @@ impl Centro {
         match e.entrada_predeterminada() {
             Some(m) => {
                 let glifo = if m.mudo { "󰍭" } else { "󰍬" };
-                niveles.push(nivel(NivelId::Microfono, glifo, &m.descripcion, m.volumen, m.mudo, Some(ListaId::Microfono)));
+                niveles.push(nivel(
+                    NivelId::Microfono,
+                    glifo,
+                    &m.descripcion,
+                    m.volumen,
+                    m.mudo,
+                    Some(ListaId::Microfono),
+                ));
             }
-            None => niveles.push(nivel(NivelId::Microfono, "󰍭", tr!("Sin micrófono"), 0.0, true, Some(ListaId::Microfono))),
+            None => niveles.push(nivel(
+                NivelId::Microfono,
+                "󰍭",
+                tr!("Sin micrófono"),
+                0.0,
+                true,
+                Some(ListaId::Microfono),
+            )),
         }
         if i.brillo.disponible() {
-            niveles.push(nivel(NivelId::Brillo, "󰖙", tr!("Brillo"), i.brillo.valor(), false, None));
+            niveles.push(nivel(
+                NivelId::Brillo,
+                "󰖙",
+                tr!("Brillo"),
+                i.brillo.valor(),
+                false,
+                None,
+            ));
         }
         // Las apps que se fueron sueltan sus acciones.
         {
@@ -889,7 +944,12 @@ impl Centro {
                 .map(|s| {
                     let m = i.mezclador.clone();
                     let nombre = s.nombre.clone();
-                    Opcion::new(s.glifo(), &s.descripcion, None, a.tocar(p, move || m.predeterminar(&nombre)))
+                    Opcion::new(
+                        s.glifo(),
+                        &s.descripcion,
+                        None,
+                        a.tocar(p, move || m.predeterminar(&nombre)),
+                    )
                 })
                 .collect();
             self.mandar(Orden::Lista(ListaId::Salida, Contenido::Opciones(ops)));
@@ -913,7 +973,12 @@ impl Centro {
                 .map(|s| {
                     let m = i.mezclador.clone();
                     let nombre = s.nombre.clone();
-                    Opcion::new("󰍬", &s.descripcion, None, a.tocar(p, move || m.predeterminar_entrada(&nombre)))
+                    Opcion::new(
+                        "󰍬",
+                        &s.descripcion,
+                        None,
+                        a.tocar(p, move || m.predeterminar_entrada(&nombre)),
+                    )
                 })
                 .collect();
             self.mandar(Orden::Lista(ListaId::Microfono, Contenido::Opciones(ops)));
@@ -941,7 +1006,12 @@ impl Centro {
                 .filter(|s| s.indice != app.salida)
                 .map(|s| {
                     let (m, indice, nombre) = (i.mezclador.clone(), app.indice, s.nombre.clone());
-                    Opcion::new(s.glifo(), &s.descripcion, None, a.tocar(p, move || m.mover_app(indice, &nombre)))
+                    Opcion::new(
+                        s.glifo(),
+                        &s.descripcion,
+                        None,
+                        a.tocar(p, move || m.mover_app(indice, &nombre)),
+                    )
                 })
                 .collect();
             self.mandar(Orden::Lista(l, Contenido::Opciones(ops)));
@@ -1009,7 +1079,12 @@ impl Centro {
         let mut ops: Vec<Opcion> = otras.into_iter().map(conexion).collect();
         if let Some(w) = e.wifi {
             let r = i.red.clone();
-            ops.push(Opcion::new("󰤨", "Wi-Fi", Some(w), a.tocar(p, move || r.alternar_wifi())));
+            ops.push(Opcion::new(
+                "󰤨",
+                "Wi-Fi",
+                Some(w),
+                a.tocar(p, move || r.alternar_wifi()),
+            ));
         }
         if e.wifi == Some(true) {
             for c in wifis {
@@ -1046,7 +1121,12 @@ impl Centro {
         for v in &e.visibles {
             let yo = self.clone();
             let v2 = v.clone();
-            let mut o = Opcion::new(v.glifo(), &v.nombre, None, a.tocar(p, move || yo.elegir_wifi(&v2)));
+            let mut o = Opcion::new(
+                v.glifo(),
+                &v.nombre,
+                None,
+                a.tocar(p, move || yo.elegir_wifi(&v2)),
+            );
             if pedida.as_ref() == Some(&v.ssid) {
                 o.abierta = true;
                 o.campo = self.campo_clave();

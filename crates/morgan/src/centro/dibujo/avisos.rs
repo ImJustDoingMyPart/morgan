@@ -25,7 +25,7 @@ use crate::pila;
 
 const RELLENO: f64 = 8.0;
 const AL_TEXTO: f64 = 10.0;
-const LINEAS: usize = crate::tarjeta::LINEAS_CENTRO as usize;
+const LINEAS: usize = 10;
 /// La vista previa: de ancho fijo, y una vertical no pasa de 180.
 const ANCHO_PREVIA: f64 = 316.0;
 const ALTO_PREVIA: f64 = 180.0;
@@ -105,7 +105,8 @@ impl Ui {
             if self.limpiando.is_none() {
                 h.objetivo(o, r, true);
             }
-            h.trazos.push(Trazo::escalar(r, self.animos.escala(o, ahora)));
+            h.trazos
+                .push(Trazo::escalar(r, self.animos.escala(o, ahora)));
             h.trazos.push(Trazo::Texto {
                 l: limpiar,
                 x: r.x0,
@@ -165,7 +166,12 @@ impl Ui {
                 h.incrustar(sub, 0.0, y, Rect::new(-40.0, y, ANCHO + 80.0, y + alto));
                 h.trazos.push(Trazo::Fin);
             } else {
-                h.incrustar(sub, 0.0, y, Rect::new(-40.0, y - 4.0, ANCHO + 40.0, y + alto + 4.0));
+                h.incrustar(
+                    sub,
+                    0.0,
+                    y,
+                    Rect::new(-40.0, y - 4.0, ANCHO + 40.0, y + alto + 4.0),
+                );
             }
             y += alto;
         }
@@ -223,7 +229,12 @@ impl Ui {
                     dy: 0.0,
                     alfa: crate::deslizable::opacidad(dx, ANCHO) as f32,
                 });
-                h.incrustar(sub, 0.0, y, Rect::new(-20.0, y - 4.0, ANCHO + 20.0, y + alto + 4.0));
+                h.incrustar(
+                    sub,
+                    0.0,
+                    y,
+                    Rect::new(-20.0, y - 4.0, ANCHO + 20.0, y + alto + 4.0),
+                );
                 h.trazos.push(Trazo::Fin);
                 y += alto;
             }
@@ -239,7 +250,15 @@ impl Ui {
         let escala = 1.0 + 0.02 * f64::from(luz);
         let mut frente = Hoja::default();
         let frente_fondo = self.fondo_aviso(g.avisos[0].id, luz, false);
-        let alto = self.armar_aviso(&mut frente, &g.avisos[0], arriba, abajo, frente_fondo, true, ahora);
+        let alto = self.armar_aviso(
+            &mut frente,
+            &g.avisos[0],
+            arriba,
+            abajo,
+            frente_fondo,
+            true,
+            ahora,
+        );
         let visibles = g.avisos.len().min(pila::APILADAS);
         let total = alto + f64::from(pila::DESPLAZAMIENTO) * (visibles as f64 - 1.0);
         let r = Rect::new(0.0, y + arriba, ANCHO, y + total - abajo);
@@ -299,6 +318,7 @@ impl Ui {
             h.objetivos.push((o, r + mover));
         }
         h.enfocables.extend(frente.enfocables);
+        h.presentes.extend(frente.presentes);
         h.trazos.extend(frente.trazos);
         h.trazos.push(Trazo::Fin);
         h.trazos.push(Trazo::Fin);
@@ -329,9 +349,7 @@ impl Ui {
             (Objetivo::Contraer(k), "pan-up", x1 - BOTON - 4.0 - BOTON),
         ];
         let max = (botones[1].2 - 4.0 - 8.0 - 12.0).max(0.0);
-        let nombre = self
-            .rotulos
-            .recortada(&g.nombre.to_lowercase(), 12.0, max);
+        let nombre = self.rotulos.recortada(&g.nombre.to_lowercase(), 12.0, max);
         let nh = self.alto(&nombre);
         let alto = nh.max(BOTON);
         h.trazos.push(Trazo::Texto {
@@ -341,11 +359,17 @@ impl Ui {
             color: op(&p.on_surface, 0.5),
         });
         for (o, icono, x) in botones {
-            let r = Rect::new(x, ((alto - BOTON) / 2.0).floor(), x + BOTON, ((alto - BOTON) / 2.0).floor() + BOTON);
+            let r = Rect::new(
+                x,
+                ((alto - BOTON) / 2.0).floor(),
+                x + BOTON,
+                ((alto - BOTON) / 2.0).floor() + BOTON,
+            );
             let l = self.luz(o, ahora);
             let color = mezclar(&op(&p.on_surface, 0.35), &p.primary, l);
             h.objetivo(o, r, false);
-            h.trazos.push(Trazo::escalar(r, self.animos.escala(o, ahora)));
+            h.trazos
+                .push(Trazo::escalar(r, self.animos.escala(o, ahora)));
             let img = match icono {
                 "pan-up" => self.datos.iconos.contraer.clone(),
                 _ => self.datos.iconos.cerrar.clone(),
@@ -383,7 +407,11 @@ impl Ui {
         let inicio = h.trazos.len();
         let ancho = ANCHO - 2.0 * RELLENO;
         let tiene_imagen = a.imagen.is_some();
-        let tx = if tiene_imagen { x + CUADRO + AL_TEXTO } else { x };
+        let tx = if tiene_imagen {
+            x + CUADRO + AL_TEXTO
+        } else {
+            x
+        };
         let tw = x + ancho - tx;
         // El título y la hora.
         let hora = crate::notificaciones::modelo::relativo(
@@ -405,10 +433,11 @@ impl Ui {
             self.rotulos.recortada(&a.titulo, 14.0, (tw - wh).max(0.0))
         };
         let th = self.alto(&titulo).max(self.alto(&lh));
-        let cuerpo = (!a.cuerpo.is_empty()).then(|| self.rotulos.parrafo(&a.cuerpo, 12.0, tw, LINEAS));
-        let ch = cuerpo
-            .as_ref()
-            .map_or(0.0, |c| (morgan_motor::texto::caja(c).1 / f64::from(self.rotulos.escala())).ceil());
+        let cuerpo =
+            (!a.cuerpo.is_empty()).then(|| self.rotulos.parrafo(&a.cuerpo, 12.0, tw, LINEAS));
+        let ch = cuerpo.as_ref().map_or(0.0, |c| {
+            (morgan_motor::texto::caja(c).1 / f64::from(self.rotulos.escala())).ceil()
+        });
         let alto_textos = th + ch;
         let alto_fila = if tiene_imagen {
             CUADRO.max(alto_textos)
@@ -517,7 +546,16 @@ impl Ui {
                 let mut sub = Hoja::default();
                 let mut sy = 0.0;
                 for (i, (_, etiqueta, glifo)) in a.acciones.iter().enumerate() {
-                    sy = self.armar_accion(&mut sub, a.id, i, glifo, etiqueta, ANCHO - 8.0, sy, ahora);
+                    sy = self.armar_accion(
+                        &mut sub,
+                        a.id,
+                        i,
+                        glifo,
+                        etiqueta,
+                        ANCHO - 8.0,
+                        sy,
+                        ahora,
+                    );
                 }
                 sub.trazos.insert(
                     0,
@@ -560,13 +598,16 @@ impl Ui {
         let p = self.paleta;
         let lg = self.rotulos.linea(glifo, 14.0, 400.0);
         let tx = 4.0 + 32.0 + 4.0 + 10.0;
-        let lt = self.rotulos.recortada(etiqueta, 14.0, (ancho - 4.0 - tx).max(0.0));
+        let lt = self
+            .rotulos
+            .recortada(etiqueta, 14.0, (ancho - 4.0 - tx).max(0.0));
         let alto = 12.0 + self.alto(&lt).max(self.alto(&lg));
         let r = Rect::new(0.0, y, ancho, y + alto);
         let o = Objetivo::AccionAviso(id, i);
         let l = self.luz(o, ahora);
         h.objetivo(o, r, true);
-        h.trazos.push(Trazo::escalar(r, self.animos.escala(o, ahora)));
+        h.trazos
+            .push(Trazo::escalar(r, self.animos.escala(o, ahora)));
         h.trazos.push(Trazo::Caja {
             r,
             radio: RADIO,

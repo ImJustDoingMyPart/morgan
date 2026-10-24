@@ -74,7 +74,10 @@ pub enum Trazo {
         color: Color,
     },
     /// Lo que sigue, hasta `Fin`, recortado a `r`.
-    Recorte { r: Rect, radio: f64 },
+    Recorte {
+        r: Rect,
+        radio: f64,
+    },
     /// Lo que sigue, hasta `Fin`, achicado (o agrandado) hacia el centro de `r`, corrido y con
     /// opacidad.
     Grupo {
@@ -85,7 +88,10 @@ pub enum Trazo {
         alfa: f32,
     },
     /// Lo que sigue, hasta `Fin`, escalado desde la esquina de lo de arriba.
-    Escala { x: f64, y: f64 },
+    Escala {
+        x: f64,
+        y: f64,
+    },
     Fin,
 }
 
@@ -244,7 +250,13 @@ pub fn pintar(s: &mut Scene, trazos: &[Trazo], base: Affine, escala: f64) {
                 if capa {
                     // Una capa con la opacidad, del tamaño de lo que se ve de la hoja.
                     let todo = Rect::new(-1e5, -1e5, 1e5, 1e5);
-                    s.push_layer(Fill::NonZero, BlendMode::default(), *alfa, Affine::IDENTITY, &todo);
+                    s.push_layer(
+                        Fill::NonZero,
+                        BlendMode::default(),
+                        *alfa,
+                        Affine::IDENTITY,
+                        &todo,
+                    );
                 }
                 pila.push(Nivel { tr: t, capa });
             }

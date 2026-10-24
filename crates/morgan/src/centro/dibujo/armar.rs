@@ -83,7 +83,14 @@ impl Ui {
     }
 
     /// El fondo de algo que se toca: el tinte de reposo, el del puntero, y el de lo abierto.
-    fn fondo(&mut self, o: Objetivo, reposo: f32, puntero: f32, abierto: bool, ahora: Instant) -> Color {
+    fn fondo(
+        &mut self,
+        o: Objetivo,
+        reposo: f32,
+        puntero: f32,
+        abierto: bool,
+        ahora: Instant,
+    ) -> Color {
         let p = &self.paleta;
         let (base, encendido) = (op(&p.on_surface, reposo), op(&p.primary, puntero));
         let l = self.luz(o, ahora);
@@ -123,7 +130,8 @@ impl Ui {
                 let abierta = matches!(t.que, Toque::Lista(l) if self.abierta == Some(l));
                 let fondo = self.fondo(o, 0.06, 0.14, abierta, ahora);
                 h.objetivo(o, r, true);
-                h.trazos.push(Trazo::escalar(r, self.animos.escala(o, ahora)));
+                h.trazos
+                    .push(Trazo::escalar(r, self.animos.escala(o, ahora)));
                 h.trazos.push(Trazo::Caja {
                     r,
                     radio: RADIO,
@@ -218,7 +226,8 @@ impl Ui {
         ahora: Instant,
     ) -> f64 {
         let f = self.revelado(l, ahora);
-        if f <= 0.0 {
+        // Abriéndose desde cero se arma igual: lo que tiene el foco ya está.
+        if f <= 0.0 && self.abierta != Some(l) {
             return y;
         }
         let Some(contenido) = self.datos.listas.get(&l).cloned() else {
@@ -236,7 +245,12 @@ impl Ui {
         };
         let v = visto(alto, f);
         // Se despliega hacia abajo: lo de abajo asoma primero.
-        h.incrustar(sub, x, y + v - alto, Rect::new(x - 20.0, y, x + ancho + 20.0, y + v));
+        h.incrustar(
+            sub,
+            x,
+            y + v - alto,
+            Rect::new(x - 20.0, y, x + ancho + 20.0, y + v),
+        );
         y + v
     }
 
@@ -304,9 +318,16 @@ impl Ui {
         }
         let dx = self.deslices.get(&obj).map_or(0.0, |d| d.dx(ahora));
         if dx != 0.0 {
-            self.pista(h, r, dx, o.derecha.as_ref().map(|d| (d.glifo, d.texto.as_str())), o.izquierda.as_ref().map(|d| (d.glifo, d.texto.as_str())));
+            self.pista(
+                h,
+                r,
+                dx,
+                o.derecha.as_ref().map(|d| (d.glifo, d.texto.as_str())),
+                o.izquierda.as_ref().map(|d| (d.glifo, d.texto.as_str())),
+            );
         }
-        let alfa = if o.habilitada { 1.0 } else { 0.6 } * crate::deslizable::opacidad(dx, ancho) as f32;
+        let alfa =
+            if o.habilitada { 1.0 } else { 0.6 } * crate::deslizable::opacidad(dx, ancho) as f32;
         h.trazos.push(Trazo::Grupo {
             r,
             escala: self.animos.escala(obj, ahora),
@@ -339,7 +360,12 @@ impl Ui {
         });
         if let Some(t) = tilde {
             let w = self.ancho(&t);
-            let caja = Rect::new(x + ancho - 4.0 - 4.0 - w, gy, x + ancho - 4.0 - 4.0, gy + self.alto(&t));
+            let caja = Rect::new(
+                x + ancho - 4.0 - 4.0 - w,
+                gy,
+                x + ancho - 4.0 - 4.0,
+                gy + self.alto(&t),
+            );
             h.trazos.push(Trazo::Glifo {
                 l: t,
                 c: caja.center(),
@@ -379,7 +405,9 @@ impl Ui {
             color: op(&p.on_surface, 0.04),
         });
         if let Some((glifo, texto)) = accion {
-            let l = self.rotulos.linea(&format!("{glifo}  {texto}"), 12.0, 400.0);
+            let l = self
+                .rotulos
+                .linea(&format!("{glifo}  {texto}"), 12.0, 400.0);
             let (w, al) = (self.ancho(&l), self.alto(&l));
             let x = if a_la_izquierda {
                 r.x0 + 16.0
@@ -422,7 +450,15 @@ impl Ui {
 
     /// Un nivel (`cc-nivel`, 4 arriba y abajo): el glifo en su columna, y en la otra el nombre
     /// y el porcentaje encima del slider; debajo, su lista.
-    fn armar_nivel(&mut self, h: &mut Hoja, n: &Nivel, x: f64, ancho: f64, y0: f64, ahora: Instant) -> f64 {
+    fn armar_nivel(
+        &mut self,
+        h: &mut Hoja,
+        n: &Nivel,
+        x: f64,
+        ancho: f64,
+        y0: f64,
+        ahora: Instant,
+    ) -> f64 {
         let p = self.paleta;
         let y = y0 + 4.0;
         let valor = match self.arrastrando {
@@ -443,7 +479,8 @@ impl Ui {
         if n.glifo_accion.is_some() {
             h.objetivo(og, caja_glifo, true);
         }
-        h.trazos.push(Trazo::escalar(caja_glifo, self.animos.escala(og, ahora)));
+        h.trazos
+            .push(Trazo::escalar(caja_glifo, self.animos.escala(og, ahora)));
         h.trazos.push(Trazo::Glifo {
             l: glifo,
             c: caja_glifo.center(),
@@ -461,7 +498,9 @@ impl Ui {
         };
         let lp = self.rotulos.linea(&porcentaje, 12.0, 400.0);
         let wp = self.ancho(&lp);
-        let nombre = self.rotulos.recortada(&n.nombre, 12.0, (cw - wp - 6.0).max(0.0));
+        let nombre = self
+            .rotulos
+            .recortada(&n.nombre, 12.0, (cw - wp - 6.0).max(0.0));
         let lh = self.alto(&nombre).max(self.alto(&lp));
         let alto_col = lh + 2.0 + ESCALA_ALTO;
         let cy = y + ((CUADRO - alto_col) / 2.0).floor();
@@ -479,7 +518,8 @@ impl Ui {
         if n.lista.is_some() {
             h.objetivo(on, r_nombre, true);
         }
-        h.trazos.push(Trazo::escalar(r_nombre, self.animos.escala(on, ahora)));
+        h.trazos
+            .push(Trazo::escalar(r_nombre, self.animos.escala(on, ahora)));
         h.trazos.push(Trazo::Texto {
             l: nombre,
             x: cx,
@@ -494,7 +534,12 @@ impl Ui {
             color: if n.mudo { p.error } else { p.tertiary },
         });
         let sy = cy + lh + 2.0;
-        let canal = Rect::new(cx, sy + CANAL_Y, cx + cw - ESCALA_DERECHA, sy + CANAL_Y + CANAL_ALTO);
+        let canal = Rect::new(
+            cx,
+            sy + CANAL_Y,
+            cx + cw - ESCALA_DERECHA,
+            sy + CANAL_Y + CANAL_ALTO,
+        );
         self.armar_slider(h, n, canal, valor, ahora);
         let mut y = y + CUADRO;
         if let Some(l) = n.lista {
@@ -509,7 +554,12 @@ impl Ui {
         let p = self.paleta;
         let o = Objetivo::Slider(n.id);
         // Donde responde: el canal con su alto de escala.
-        let zona = Rect::new(canal.x0 - 5.0, canal.y0 - CANAL_Y, canal.x1 + 5.0, canal.y0 - CANAL_Y + ESCALA_ALTO);
+        let zona = Rect::new(
+            canal.x0 - 5.0,
+            canal.y0 - CANAL_Y,
+            canal.x1 + 5.0,
+            canal.y0 - CANAL_Y + ESCALA_ALTO,
+        );
         h.objetivo(o, zona, true);
         h.trazos.push(Trazo::Caja {
             r: canal,
@@ -538,7 +588,12 @@ impl Ui {
         let encima = self.luz(o, ahora);
         let tam = self.perilla(n.id, o, ahora);
         let c = Point::new(cx, canal.center().y);
-        let r = Rect::new(c.x - tam / 2.0, c.y - tam / 2.0, c.x + tam / 2.0, c.y + tam / 2.0);
+        let r = Rect::new(
+            c.x - tam / 2.0,
+            c.y - tam / 2.0,
+            c.x + tam / 2.0,
+            c.y + tam / 2.0,
+        );
         if !n.mudo {
             let enfocada = self.foco_visible && self.foco == Some(o);
             let apretada = self.apretado == Some(o);
@@ -567,7 +622,11 @@ impl Ui {
         h.trazos.push(Trazo::Caja {
             r,
             radio: tam / 2.0,
-            color: if n.mudo { p.on_surface_variant } else { p.tertiary },
+            color: if n.mudo {
+                p.on_surface_variant
+            } else {
+                p.tertiary
+            },
         });
     }
 
@@ -584,7 +643,11 @@ impl Ui {
             .perillas
             .entry(id)
             .or_insert_with(|| morgan_motor::curva::Transicion::new(10.0));
-        t.ir(destino, crate::animaciones::dur(Duration::from_millis(120)), ahora);
+        t.ir(
+            destino,
+            crate::animaciones::dur(Duration::from_millis(120)),
+            ahora,
+        );
         f64::from(t.valor(ahora))
     }
 
@@ -598,7 +661,7 @@ impl Ui {
         let mut y = top + 4.0;
         for (i, c) in filas.iter().enumerate() {
             let tocable = !c.otras.is_empty();
-            y = self.armar_cuota(h, c, Some(i).filter(|_| tocable), 8.0, ancho - 16.0, y, ahora);
+            y = self.armar_cuota(h, c, tocable.then_some(i), 8.0, ancho - 16.0, y, ahora);
             let f = self
                 .revelados_cuotas
                 .get(&i)
@@ -662,7 +725,9 @@ impl Ui {
         let wp = self.ancho(&lp);
         let renueva = (!c.renueva.is_empty()).then(|| self.rotulos.linea(&c.renueva, 12.0, 400.0));
         let wr = renueva.as_ref().map_or(0.0, |r| self.ancho(r) + 6.0);
-        let nombre = self.rotulos.recortada(&c.nombre, 12.0, (cw - wp - 6.0 - wr).max(0.0));
+        let nombre = self
+            .rotulos
+            .recortada(&c.nombre, 12.0, (cw - wp - 6.0 - wr).max(0.0));
         let lh = self.alto(&nombre).max(self.alto(&lp));
         let alto_col = lh + 2.0 + 6.0 + BARRA_ALTO + 4.0;
         let cy = y + ((CUADRO - alto_col) / 2.0).floor();
@@ -715,7 +780,12 @@ impl Ui {
             radio: BARRA_ALTO / 2.0,
             color: op(&p.outline_variant, 0.6),
         });
-        let lleno = Rect::new(canal.x0, canal.y0, canal.x0 + canal.width() * c.fraccion.clamp(0.0, 1.0), canal.y1);
+        let lleno = Rect::new(
+            canal.x0,
+            canal.y0,
+            canal.x0 + canal.width() * c.fraccion.clamp(0.0, 1.0),
+            canal.y1,
+        );
         if lleno.width() > 0.0 {
             h.trazos.push(Trazo::Sombra {
                 r: lleno,
@@ -772,7 +842,12 @@ impl Ui {
         if let Some(img) = &r.caratula {
             h.trazos.push(Trazo::Imagen {
                 img: img.clone(),
-                r: Rect::new(x, y + ((alto_arriba - CARATULA) / 2.0).floor(), x + CARATULA, y + ((alto_arriba - CARATULA) / 2.0).floor() + CARATULA),
+                r: Rect::new(
+                    x,
+                    y + ((alto_arriba - CARATULA) / 2.0).floor(),
+                    x + CARATULA,
+                    y + ((alto_arriba - CARATULA) / 2.0).floor() + CARATULA,
+                ),
                 radio: RADIO,
                 alfa: 1.0,
             });
@@ -781,7 +856,9 @@ impl Ui {
         // El título en marquesina si no entra.
         let sobra = (self.ancho(&titulo) - tw).max(0.0);
         self.sobra_titulo = sobra;
-        let t = ahora.saturating_duration_since(self.marquesina).as_secs_f64();
+        let t = ahora
+            .saturating_duration_since(self.marquesina)
+            .as_secs_f64();
         let corrido = marquesina::posicion(t, sobra).round();
         h.trazos.push(Trazo::Recorte {
             r: Rect::new(tx, ty, tx + tw, ty + th),
@@ -807,16 +884,31 @@ impl Ui {
         // Los botones, centrados, cada 6.
         let mut botones = Vec::new();
         if let Some(m) = r.mezcla {
-            botones.push((BotonRepro::Mezcla, self.datos.iconos.mezcla.clone(), true, m));
+            botones.push((
+                BotonRepro::Mezcla,
+                self.datos.iconos.mezcla.clone(),
+                true,
+                m,
+            ));
         }
-        botones.push((BotonRepro::Anterior, self.datos.iconos.anterior.clone(), r.puede_anterior, true));
+        botones.push((
+            BotonRepro::Anterior,
+            self.datos.iconos.anterior.clone(),
+            r.puede_anterior,
+            true,
+        ));
         let play = if r.sonando {
             self.datos.iconos.pausa.clone()
         } else {
             self.datos.iconos.play.clone()
         };
         botones.push((BotonRepro::Play, play, true, true));
-        botones.push((BotonRepro::Siguiente, self.datos.iconos.siguiente.clone(), r.puede_siguiente, true));
+        botones.push((
+            BotonRepro::Siguiente,
+            self.datos.iconos.siguiente.clone(),
+            r.puede_siguiente,
+            true,
+        ));
         if let Some(rep) = &r.repetir {
             let icono = if rep == "Track" {
                 self.datos.iconos.repetir_uno.clone()
@@ -841,8 +933,14 @@ impl Ui {
             }
             if let Some(img) = icono {
                 let c = rb.center();
-                let ri = Rect::new(c.x - ICONO_REPRO / 2.0, c.y - ICONO_REPRO / 2.0, c.x + ICONO_REPRO / 2.0, c.y + ICONO_REPRO / 2.0);
-                h.trazos.push(Trazo::escalar(rb, self.animos.escala(o, ahora)));
+                let ri = Rect::new(
+                    c.x - ICONO_REPRO / 2.0,
+                    c.y - ICONO_REPRO / 2.0,
+                    c.x + ICONO_REPRO / 2.0,
+                    c.y + ICONO_REPRO / 2.0,
+                );
+                h.trazos
+                    .push(Trazo::escalar(rb, self.animos.escala(o, ahora)));
                 h.trazos.push(Trazo::Mascara { img, r: ri, color });
                 h.trazos.push(Trazo::Fin);
             }
@@ -921,7 +1019,12 @@ impl Ui {
                 color: op(&p.on_surface, 0.06),
             });
             let glifo = self.rotulos.linea(caja.glifo, pt_glifo(), 400.0);
-            let col = Rect::new(x + 4.0, y + 6.0, x + 4.0 + COLUMNA_GLIFO, y + 6.0 + alto_texto);
+            let col = Rect::new(
+                x + 4.0,
+                y + 6.0,
+                x + 4.0 + COLUMNA_GLIFO,
+                y + 6.0 + alto_texto,
+            );
             h.trazos.push(Trazo::Glifo {
                 l: glifo,
                 c: col.center(),
@@ -937,7 +1040,12 @@ impl Ui {
                 };
                 let lb = self.rotulos.linea(s, pt_glifo(), 400.0);
                 let w = self.ancho(&lb);
-                let rb = Rect::new(x + ancho - 10.0 - w, y + 6.0, x + ancho - 10.0, y + 6.0 + alto_texto);
+                let rb = Rect::new(
+                    x + ancho - 10.0 - w,
+                    y + 6.0,
+                    x + ancho - 10.0,
+                    y + 6.0 + alto_texto,
+                );
                 let o = Objetivo::BotonCampo(l);
                 let color = if caja.ocupado {
                     op(&p.on_surface, 0.5)
@@ -968,13 +1076,19 @@ impl Ui {
         if let Some((aviso, error)) = &c.aviso {
             y += 4.0;
             let ancho_aviso = ancho - 50.0 - 4.0;
-            let la = self.rotulos.parrafo(&glib_escape(aviso), 12.0, ancho_aviso, 0);
+            let la = self
+                .rotulos
+                .parrafo(&glib_escape(aviso), 12.0, ancho_aviso, 0);
             let al = texto::caja(&la).1 / self.escala_f();
             h.trazos.push(Trazo::Texto {
                 l: la,
                 x: x + 50.0,
                 y,
-                color: if *error { p.error } else { op(&p.on_surface, 0.5) },
+                color: if *error {
+                    p.error
+                } else {
+                    op(&p.on_surface, 0.5)
+                },
             });
             y += al + 2.0;
         }
@@ -989,7 +1103,9 @@ fn pt_glifo() -> f32 {
 
 /// Un texto plano como markup (para los párrafos, que lo leen así).
 pub(super) fn glib_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 /// Si el título del reproductor no entra y anda en marquesina.

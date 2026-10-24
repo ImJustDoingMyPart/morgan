@@ -8,8 +8,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use gtk::{gdk_pixbuf, gio, glib};
 use gtk::prelude::*;
+use gtk::{gdk_pixbuf, gio, glib};
 use morgan_motor::vello::peniko::ImageData;
 
 use super::dibujo::avisos::tam_previa;
@@ -91,7 +91,12 @@ impl Lista {
         grupos
     }
 
-    fn aviso(self: &Rc<Self>, n: &Notificacion, escala: i32, usadas: &mut HashSet<ClaveImagen>) -> Aviso {
+    fn aviso(
+        self: &Rc<Self>,
+        n: &Notificacion,
+        escala: i32,
+        usadas: &mut HashSet<ClaveImagen>,
+    ) -> Aviso {
         // Una captura o una foto va abajo, a lo ancho; en su columna queda el ícono de la app.
         let previa = vista_previa(n.imagen.as_ref());
         let (columna, chico) = match &previa {
@@ -171,7 +176,13 @@ impl Lista {
     }
 
     /// La vista previa, si ya está; si no, se pide (decodificada ya achicada, fuera del hilo).
-    fn previa(self: &Rc<Self>, ruta: &std::path::Path, w: u32, h: u32, escala: i32) -> Option<ImageData> {
+    fn previa(
+        self: &Rc<Self>,
+        ruta: &std::path::Path,
+        w: u32,
+        h: u32,
+        escala: i32,
+    ) -> Option<ImageData> {
         if let Some(i) = self.previas.borrow().get(ruta) {
             return i.clone();
         }
@@ -185,13 +196,11 @@ impl Lista {
         let yo = Rc::downgrade(self);
         glib::MainContext::default().spawn_local(async move {
             let img = match archivo.read_future(glib::Priority::DEFAULT).await {
-                Ok(flujo) => {
-                    gdk_pixbuf::Pixbuf::from_stream_at_scale_future(&flujo, pw, ph, true)
-                        .await
-                        .map_err(|e| eprintln!("morgan: vista previa: {e}"))
-                        .ok()
-                        .map(|pb| pixeles::de_pixbuf(&pb))
-                }
+                Ok(flujo) => gdk_pixbuf::Pixbuf::from_stream_at_scale_future(&flujo, pw, ph, true)
+                    .await
+                    .map_err(|e| eprintln!("morgan: vista previa: {e}"))
+                    .ok()
+                    .map(|pb| pixeles::de_pixbuf(&pb)),
                 Err(e) => {
                     eprintln!("morgan: vista previa: {e}");
                     None

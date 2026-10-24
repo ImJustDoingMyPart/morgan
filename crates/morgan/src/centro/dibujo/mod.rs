@@ -13,8 +13,10 @@
 
 mod armar;
 pub mod avisos;
-pub mod menu;
 pub mod campo;
+pub mod menu;
+#[cfg(test)]
+mod prueba;
 mod rotulos;
 pub mod toque;
 pub mod trazo;
@@ -163,9 +165,9 @@ impl Desliz {
     }
 
     pub fn anda(&self, ahora: Instant) -> bool {
-        self.desde != self.hasta && crate::deslizable::avance(
-            ahora.saturating_duration_since(self.t0).as_micros() as i64,
-        ) < 1.0
+        self.desde != self.hasta
+            && crate::deslizable::avance(ahora.saturating_duration_since(self.t0).as_micros() as i64)
+                < 1.0
     }
 }
 
@@ -179,12 +181,16 @@ pub struct Hoja {
     pub enfocables: Vec<Objetivo>,
     /// Las filas que se arrastran de costado, con su ancho.
     pub deslizables: Vec<(Objetivo, Rect)>,
+    /// Todo lo que está en la hoja, aunque lo recorte algo que se despliega: conserva el foco
+    /// y sus animaciones.
+    pub presentes: Vec<Objetivo>,
     pub alto: f64,
 }
 
 impl Hoja {
     pub fn objetivo(&mut self, o: Objetivo, r: Rect, enfocable: bool) {
         self.objetivos.push((o, r));
+        self.presentes.push(o);
         if enfocable {
             self.enfocables.push(o);
         }
@@ -193,7 +199,9 @@ impl Hoja {
     /// `otra` (armada desde 0) corrida a `(dx, dy)` y recortada a `recorte`: lo que se
     /// despliega. Lo que queda fuera del recorte no responde.
     pub fn incrustar(&mut self, otra: Hoja, dx: f64, dy: f64, recorte: Rect) {
+        // Lo que todavía no asoma (una lista que empieza a abrirse) igual está.
         if recorte.height() <= 0.0 {
+            self.presentes.extend(otra.presentes);
             return;
         }
         self.trazos.push(Trazo::Recorte {
@@ -212,6 +220,7 @@ impl Hoja {
             }
         }
         self.enfocables.extend(otra.enfocables);
+        self.presentes.extend(otra.presentes);
         for (o, r) in otra.deslizables {
             self.deslizables.push((o, r + mover));
         }
@@ -367,7 +376,7 @@ impl Ui {
         self.rotulos.poner_escala(escala);
         let mut h = Hoja::default();
         self.armar_todo(&mut h, ahora);
-        let vivos: HashSet<Objetivo> = h.objetivos.iter().map(|(o, _)| *o).collect();
+        let vivos: HashSet<Objetivo> = h.presentes.iter().copied().collect();
         self.animos.retener(&vivos);
         self.deslices
             .retain(|o, d| vivos.contains(o) && (d.dx(ahora) != 0.0 || d.anda(ahora)));
@@ -405,11 +414,7 @@ impl Ui {
         let tr = Affine::scale(escala) * Affine::translate((0.0, -b));
         panel(s, tr, &self.paleta, self.opacidad, self.panel(), self.borde);
         let v = self.ventana();
-        s.push_clip_layer(
-            morgan_motor::vello::peniko::Fill::NonZero,
-            tr,
-            &v,
-        );
+        s.push_clip_layer(morgan_motor::vello::peniko::Fill::NonZero, tr, &v);
         let base = tr * Affine::translate((v.x0, v.y0 - self.scroll.round()));
         trazo::pintar(s, &self.hoja.trazos, base, escala);
         s.pop_layer();

@@ -204,7 +204,11 @@ impl Ui {
         }
         let lt = self.rotulos.linea(&texto, 14.0, 400.0);
         let hasta = self.rotulos.linea(&texto[..cursor], 14.0, 400.0);
-        let xc = if cursor == 0 { 0.0 } else { hasta.width() as f64 / f64::from(self.rotulos.escala()) };
+        let xc = if cursor == 0 {
+            0.0
+        } else {
+            hasta.width() as f64 / f64::from(self.rotulos.escala())
+        };
         // Que el cursor quede a la vista.
         let mut corrido = corrido_antes;
         if xc - corrido > zona.width() - 1.0 {

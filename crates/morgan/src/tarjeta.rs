@@ -1,3 +1,5 @@
+//! La tarjeta de un toast (el centro dibuja las suyas sin GTK, `centro/dibujo/avisos.rs`).
+
 
 use std::rc::Rc;
 
@@ -7,30 +9,19 @@ use gtk::{gio, pango};
 use crate::centro::desplegable::{Item, opcion};
 use crate::deslizable::{Accion, Deslizable};
 use crate::notificaciones::modelo::{self, Imagen, Notificacion};
-use crate::notificaciones::servidor::{self, Razon};
+use crate::notificaciones::servidor::Razon;
 use crate::notificaciones::{Notificaciones, captura};
 
 pub const LINEAS_TOAST: i32 = 5;
-pub const LINEAS_CENTRO: i32 = 10;
-
-/// Flotando no lleva hora.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Forma {
-    Toast,
-    Centro,
-}
 
 pub struct Tarjeta {
     pub raiz: gtk::Box,
     pub fondo: gtk::Box,
-    hora: gtk::Label,
-    llegada: i64,
 }
 
 impl Tarjeta {
     pub fn new(
         n: &Notificacion,
-        forma: Forma,
         notificaciones: &Notificaciones,
         al_tocar: Rc<dyn Fn()>,
     ) -> Tarjeta {
@@ -132,15 +123,6 @@ impl Tarjeta {
         resumen.set_xalign(0.0);
         resumen.set_hexpand(true);
         arriba.append(&resumen);
-        let hora = gtk::Label::new(None);
-        hora.add_css_class("time");
-        hora.set_valign(gtk::Align::Start);
-        hora.set_visible(forma == Forma::Centro);
-        arriba.append(&hora);
-        let lineas = match forma {
-            Forma::Toast => LINEAS_TOAST,
-            Forma::Centro => LINEAS_CENTRO,
-        };
         if !n.cuerpo.is_empty() {
             let cuerpo = gtk::Label::new(None);
             cuerpo.set_markup(&n.cuerpo);
@@ -149,14 +131,14 @@ impl Tarjeta {
             cuerpo.set_wrap(true);
             cuerpo.set_wrap_mode(pango::WrapMode::WordChar);
             cuerpo.set_natural_wrap_mode(gtk::NaturalWrapMode::Word);
-            cuerpo.set_lines(lineas);
+            cuerpo.set_lines(LINEAS_TOAST);
             cuerpo.set_xalign(0.0);
             cuerpo.set_yalign(0.0);
             cuerpo.set_hexpand(true);
             textos.append(&cuerpo);
         }
         if let Some((ruta, ancho, alto)) = previa {
-            contenido.append(&imagen_previa(&ruta, ancho, alto, forma));
+            contenido.append(&imagen_previa(&ruta, ancho, alto));
         }
         if let Some(v) = n.progreso {
             let barra = gtk::ProgressBar::new();
@@ -165,43 +147,10 @@ impl Tarjeta {
         }
 
         let botones: Vec<_> = n.botones().cloned().collect();
-        // En el centro, las acciones no se ven hasta tocar la tarjeta: entonces se despliegan
-        // debajo con la forma de las listas del panel. Flotando siguen a la vista (el toast
-        // dura unos segundos).
-        let mut desplegar: Option<gtk::Revealer> = None;
-        if !botones.is_empty() && forma == Forma::Centro {
-            let es_captura = captura::es_captura(n);
-            let items = botones
-                .into_iter()
-                .map(|a| {
-                    let notificaciones = notificaciones.clone();
-                    let al_tocar = al_tocar.clone();
-                    let id = n.id;
-                    let glifo = es_captura
-                        .then(|| captura::glifo(&a.clave))
-                        .flatten()
-                        .unwrap_or("󰅂");
-                    Item::new(glifo, a.etiqueta.clone(), None, move || {
-                        notificaciones.accion(id, &a.clave);
-                        al_tocar();
-                    })
-                })
-                .collect::<Vec<_>>();
-            let lista = gtk::Box::new(gtk::Orientation::Vertical, 0);
-            lista.add_css_class("cc-lista");
-            lista.add_css_class("acciones");
-            for it in items {
-                lista.append(&opcion(it));
-            }
-            let r = gtk::Revealer::new();
-            r.set_transition_type(gtk::RevealerTransitionType::SlideDown);
-            r.set_transition_duration(crate::animaciones::ms(200));
-            r.set_child(Some(&lista));
-            fondo.append(&r);
-            desplegar = Some(r);
-        } else if !botones.is_empty() {
-            // Flotando, la misma lista del centro: en fila si entran todas enteras, si no en
-            // columna. Sin la flecha del centro: solo el glifo propio de una acción.
+        // A la vista (el toast dura unos segundos), con la forma de las listas del panel.
+        if !botones.is_empty() {
+            // En fila si entran todas enteras, si no en columna. Sin la flecha del centro: solo
+            // el glifo propio de una acción.
             let es_captura = captura::es_captura(n);
             let glifos: Vec<Option<&str>> = botones
                 .iter()
@@ -259,40 +208,16 @@ impl Tarjeta {
         click.set_button(0);
         let notificaciones = notificaciones.clone();
         let id = n.id;
-        let f = fondo.clone();
         click.connect_released(move |g, _, _, _| {
-            match (g.current_button(), &desplegar) {
-                // Con acciones (en el centro), el click las muestra o las esconde.
-                (1, Some(r)) => {
-                    let abrir = !r.reveals_child();
-                    r.set_reveal_child(abrir);
-                    if abrir {
-                        f.add_css_class("abierta");
-                    } else {
-                        f.remove_css_class("abierta");
-                    }
-                    return;
-                }
-                (1, None) => notificaciones.accion(id, "default"),
+            match g.current_button() {
+                1 => notificaciones.accion(id, "default"),
                 _ => notificaciones.cerrar(id, Razon::Usuario),
             }
             al_tocar();
         });
         accion.add_controller(click);
 
-        let t = Tarjeta {
-            raiz,
-            fondo,
-            hora,
-            llegada: n.llegada,
-        };
-        t.actualizar_hora();
-        t
-    }
-
-    pub fn actualizar_hora(&self) {
-        self.hora
-            .set_text(&modelo::relativo(servidor::ahora() - self.llegada));
+        Tarjeta { raiz, fondo }
     }
 }
 
@@ -330,12 +255,7 @@ pub fn texto_plano(n: &Notificacion) -> String {
 }
 
 /// Fijo, para que el alto salga de la proporción sin medir nada.
-fn ancho_previa(forma: Forma) -> i32 {
-    match forma {
-        Forma::Toast => 268,
-        Forma::Centro => 316,
-    }
-}
+const ANCHO_PREVIA: i32 = 268;
 
 /// Una captura vertical no se come la pantalla.
 const ALTO_PREVIA: i32 = 180;
@@ -348,12 +268,12 @@ fn vista_previa(img: Option<&Imagen>) -> Option<(std::path::PathBuf, i32, i32)> 
     modelo::es_vista_previa(ancho, alto).then(|| (ruta.clone(), ancho, alto))
 }
 
-/// La imagen se decodifica ya escalada, fuera del hilo de GTK: abrir el centro con varias
-/// capturas en el historial no traba nada. Va dentro de un `Fixed`, que le da su tamaño
-/// natural: los toasts se miden ancho-para-alto y una imagen vertical pediría todo el ancho.
-fn imagen_previa(ruta: &std::path::Path, ancho: i32, alto: i32, forma: Forma) -> gtk::Fixed {
+/// La imagen se decodifica ya escalada, fuera del hilo de GTK. Va dentro de un `Fixed`, que le
+/// da su tamaño natural: los toasts se miden ancho-para-alto y una imagen vertical pediría
+/// todo el ancho.
+fn imagen_previa(ruta: &std::path::Path, ancho: i32, alto: i32) -> gtk::Fixed {
     let (ancho, alto) = (i64::from(ancho.max(1)), i64::from(alto.max(1)));
-    let caja = i64::from(ancho_previa(forma));
+    let caja = i64::from(ANCHO_PREVIA);
     let (w, h) = if caja * alto / ancho <= i64::from(ALTO_PREVIA) {
         (caja, caja * alto / ancho)
     } else {
