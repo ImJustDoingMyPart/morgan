@@ -360,6 +360,21 @@ mod tests {
         // Rápida: todo a 0,6.
         let rapida = super::lua(por_id("precise"), velocidad("fast"));
         assert!(rapida.contains("leaf = \"windowsIn\", enabled = true, speed = 1.2,"));
+        // El cambio de workspace también sigue la velocidad, en todas las composiciones.
+        for c in COMPOSICIONES {
+            let rapida = super::lua(c, velocidad("fast"));
+            assert!(
+                rapida.contains("leaf = \"workspacesIn\", enabled = true, speed = 1.5,"),
+                "{}",
+                c.id
+            );
+            let serena = super::lua(c, velocidad("calm"));
+            assert!(
+                serena.contains("leaf = \"workspacesIn\", enabled = true, speed = 3,"),
+                "{}",
+                c.id
+            );
+        }
     }
 
     #[test]
