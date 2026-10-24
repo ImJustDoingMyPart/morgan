@@ -1003,6 +1003,22 @@ impl Ui {
     ) -> f64 {
         let p = self.paleta;
         let mut y = y0 + 2.0;
+        let (tf, latido) = self.animo_campo(l, c, ahora);
+        // El fallo, como el de la clave del bloqueo a la mitad: tiembla (420 ms) y se tiñe de
+        // `error` (el `fallo` del menú de sistema, que arranca más fuerte, como el brillo del
+        // bloqueo) y se va de a poco; el aviso aparece
+        // después del temblor.
+        let temblor = crate::animaciones::dur(Duration::from_millis(420)).as_secs_f64();
+        let dx = tf.map_or(0.0, |t| {
+            f64::from(morgan_motor::curva::sacudida((t / temblor) as f32)) * 0.5
+        });
+        let tinte = tf.map_or(0.0, |t| {
+            (-t / crate::animaciones::dur(Duration::from_millis(600)).as_secs_f64()).exp() as f32
+        });
+        let aviso_alfa = tf.map_or(1.0, |t| {
+            let d = crate::animaciones::dur(Duration::from_millis(200)).as_secs_f64();
+            ((t - temblor) / d).clamp(0.0, 1.0) as f32
+        });
         if let Some(caja) = &c.caja {
             let entrada = self.campos.entry(l).or_default();
             entrada.preparar(c.generacion);
@@ -1013,10 +1029,17 @@ impl Ui {
             };
             let alto = 6.0 + alto_texto + 6.0;
             let r = Rect::new(x, y, x + ancho, y + alto);
+            h.trazos.push(Trazo::Grupo {
+                r,
+                escala: 1.0,
+                dx,
+                dy: 0.0,
+                alfa: latido,
+            });
             h.trazos.push(Trazo::Caja {
                 r,
                 radio: RADIO,
-                color: op(&p.on_surface, 0.06),
+                color: mezclar(&op(&p.on_surface, 0.06), &op(&p.error, 0.3), tinte),
             });
             let glifo = self.rotulos.linea(caja.glifo, pt_glifo(), 400.0);
             let col = Rect::new(
@@ -1071,6 +1094,7 @@ impl Ui {
             }
             let enfocado = self.foco == Some(o);
             self.armar_entrada(h, l, caja, zona, enfocado, ahora);
+            h.trazos.push(Trazo::Fin);
             y += alto;
         }
         if let Some((aviso, error)) = &c.aviso {
@@ -1080,6 +1104,14 @@ impl Ui {
                 .rotulos
                 .parrafo(&glib_escape(aviso), 12.0, ancho_aviso, 0);
             let al = texto::caja(&la).1 / self.escala_f();
+            let alfa = if *error { aviso_alfa } else { 1.0 };
+            h.trazos.push(Trazo::Grupo {
+                r: Rect::ZERO,
+                escala: 1.0,
+                dx: 0.0,
+                dy: 0.0,
+                alfa,
+            });
             h.trazos.push(Trazo::Texto {
                 l: la,
                 x: x + 50.0,
@@ -1090,9 +1122,47 @@ impl Ui {
                     op(&p.on_surface, 0.5)
                 },
             });
+            h.trazos.push(Trazo::Fin);
             y += al + 2.0;
         }
         y + 2.0
+    }
+}
+
+impl Ui {
+    /// Desde cuándo tiembla el campo de `l` (segundos, mientras dura) y su opacidad por el
+    /// latido mientras está ocupado (el `grabando` del menú de sistema: 1 → 0,55 → 1 en 1 s).
+    fn animo_campo(
+        &mut self,
+        l: ListaId,
+        c: &crate::centro::vista::Campo,
+        ahora: Instant,
+    ) -> (Option<f64>, f32) {
+        let visto = self.fallos.get(&l).map_or(0, |(n, _)| *n);
+        if c.fallo > visto {
+            self.fallos.insert(l, (c.fallo, ahora));
+        }
+        let tf = self
+            .fallos
+            .get(&l)
+            .filter(|(n, _)| *n == c.fallo && c.fallo > 0)
+            .map(|(_, t)| ahora.saturating_duration_since(*t).as_secs_f64())
+            .filter(|t| *t < crate::animaciones::dur(Duration::from_secs(3)).as_secs_f64());
+        let ocupado = c.caja.as_ref().is_some_and(|k| k.ocupado);
+        let latido = if ocupado {
+            let desde = *self.latidos.entry(l).or_insert(ahora);
+            let ciclo = crate::animaciones::dur(Duration::from_secs(1)).as_secs_f64();
+            let f = (ahora.saturating_duration_since(desde).as_secs_f64() / ciclo).fract();
+            let ida = 1.0 - (2.0 * f - 1.0).abs();
+            1.0 - 0.45 * morgan_motor::curva::ease_in_out(ida as f32)
+        } else {
+            self.latidos.remove(&l);
+            1.0
+        };
+        if tf.is_some() || ocupado {
+            self.campo_anda = true;
+        }
+        (tf, latido)
     }
 }
 

@@ -19,6 +19,7 @@ pub struct Emparejo {
     respuesta: Option<Respuesta>,
     /// Ya terminó mal: el campo solo queda para leer el aviso.
     fallo: bool,
+    fallos: u64,
 }
 
 /// Lo que muestra la caja: un código para leer (y quizás confirmar) o para escribir.
@@ -148,6 +149,7 @@ impl Centro {
             generacion: x.generacion,
             caja,
             aviso: x.aviso.clone(),
+            fallo: x.fallos,
         })
     }
 
@@ -171,6 +173,7 @@ impl Centro {
             ocupado: false,
             respuesta: None,
             fallo: false,
+            fallos: 0,
         }));
         self.pintar_bt();
         let yo = self.clone();
@@ -186,6 +189,7 @@ impl Centro {
                 }
                 Err(Falla::Otra) => {
                     p.fallo = true;
+                    p.fallos = yo.generacion();
                     p.respuesta.take();
                     p.caja = None;
                     p.aviso = Some((tr!("No se pudo emparejar").into(), true));

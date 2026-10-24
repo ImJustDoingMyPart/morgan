@@ -109,6 +109,9 @@ pub struct Campo {
     /// `None`: sin caja, solo el aviso («Emparejando…»).
     pub caja: Option<Caja>,
     pub aviso: Option<(String, bool)>,
+    /// Sube con cada fallo (una clave mala): la caja tiembla y se tiñe de rojo, y el aviso
+    /// aparece después.
+    pub fallo: u64,
 }
 
 #[derive(Clone, Debug, PartialEq)]

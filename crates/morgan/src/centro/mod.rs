@@ -136,6 +136,8 @@ struct Pedido {
     generacion: u64,
     aviso: Option<(String, bool)>,
     ocupado: bool,
+    /// El número del último fallo (de `generacion`, que siempre sube).
+    fallos: u64,
 }
 
 /// El color del texto del tema, para los íconos simbólicos.
@@ -1086,8 +1088,19 @@ impl Centro {
                 a.tocar(p, move || r.alternar_wifi()),
             ));
         }
+        // Mientras se prueba una clave, NetworkManager la tiene guardada (se borra si falla):
+        // no aparece como guardada, y la fila con su campo sigue donde estaba.
+        let probando = i
+            .clave
+            .borrow()
+            .as_ref()
+            .filter(|p| p.ocupado)
+            .map(|p| p.visible.clone());
         if e.wifi == Some(true) {
             for c in wifis {
+                if probando.as_ref().is_some_and(|v| v.nombre == c.nombre) {
+                    continue;
+                }
                 let yo = self.clone();
                 let ruta = c.ruta.clone();
                 let yo2 = self.clone();
@@ -1112,13 +1125,19 @@ impl Centro {
             }
         }
         let pedida = i.clave.borrow().as_ref().map(|p| p.visible.ssid.clone());
-        // La red se fue de la vista: el campo no tiene adónde ir.
+        let mut visibles = e.visibles.clone();
         if let Some(ssid) = &pedida
-            && !e.visibles.iter().any(|v| &v.ssid == ssid)
+            && !visibles.iter().any(|v| &v.ssid == ssid)
         {
-            i.clave.replace(None);
+            match probando {
+                Some(v) => visibles.insert(0, v),
+                // La red se fue de la vista: el campo no tiene adónde ir.
+                None => {
+                    i.clave.replace(None);
+                }
+            }
         }
-        for v in &e.visibles {
+        for v in &visibles {
             let yo = self.clone();
             let v2 = v.clone();
             let mut o = Opcion::new(
@@ -1176,6 +1195,7 @@ impl Centro {
             generacion: self.generacion(),
             aviso: None,
             ocupado: false,
+            fallos: 0,
         });
         i.clave.replace(nuevo);
         self.pintar_red();
@@ -1207,6 +1227,7 @@ impl Centro {
                 escape,
             }),
             aviso: pedido.aviso.clone(),
+            fallo: pedido.fallos,
         })
     }
 
@@ -1216,8 +1237,10 @@ impl Centro {
             return;
         };
         if !red::clave_valida(v.seguridad, &clave) {
+            let n = self.generacion();
             if let Some(p) = i.clave.borrow_mut().as_mut() {
                 p.aviso = Some((tr!("Tiene de 8 a 63 caracteres").into(), true));
+                p.fallos = n;
             }
             self.pintar_red();
             return;
@@ -1229,38 +1252,52 @@ impl Centro {
         self.pintar_red();
         let yo = self.clone();
         let ssid = v.ssid.clone();
+        let nombre = v.nombre.clone();
         i.red.conectar_nueva(&v, Some(clave), move |r| {
+            // Con el campo a la vista, el resultado va ahí; si se cerró (el centro, o Escape)
+            // mientras se probaba, lo dice el OSD: nunca en silencio.
             let sigue = yo
                 .inner
                 .clave
                 .borrow()
                 .as_ref()
                 .is_some_and(|p| p.visible.ssid == ssid);
+            let falla = |f: &red::Falla| match f {
+                red::Falla::Clave => tr!("Contraseña incorrecta"),
+                red::Falla::Otra => tr!("No se pudo conectar"),
+            };
             match r {
                 Ok(()) => {
                     if sigue {
                         yo.inner.clave.replace(None);
+                    } else {
+                        yo.inner.osd.mostrar(&crate::osd::Aviso::estado(
+                            "󰤨",
+                            &nombre,
+                            tr!("Conectada"),
+                            true,
+                            2000,
+                        ));
                     }
                     yo.pintar_red();
                 }
                 Err(f) if sigue => {
                     let g = yo.generacion();
                     if let Some(p) = yo.inner.clave.borrow_mut().as_mut() {
-                        // Lo escrito se borra y el campo vuelve a tomar el foco.
+                        // Lo escrito se borra y el campo vuelve a tomar el foco; tiembla.
                         p.ocupado = false;
                         p.generacion = g;
-                        p.aviso = Some((
-                            match f {
-                                red::Falla::Clave => tr!("Contraseña incorrecta"),
-                                red::Falla::Otra => tr!("No se pudo conectar"),
-                            }
-                            .into(),
-                            true,
-                        ));
+                        p.fallos = g;
+                        p.aviso = Some((falla(&f).into(), true));
                     }
                     yo.pintar_red();
                 }
-                Err(_) => {}
+                Err(f) => {
+                    yo.inner
+                        .osd
+                        .mostrar(&crate::osd::Aviso::fallo("󰤫", &nombre, falla(&f), 3000));
+                    yo.pintar_red();
+                }
             }
         });
     }

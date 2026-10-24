@@ -79,10 +79,16 @@ fn campo(caja: Caja, aviso: (&str, bool)) -> Campo {
         generacion: 1,
         caja: Some(caja),
         aviso: Some((aviso.0.into(), aviso.1)),
+        fallo: 0,
     }
 }
 
 fn capturar(ui: &mut Ui, nombre: &str) {
+    capturar_en(ui, nombre, &[Duration::from_secs(2)]);
+}
+
+/// Arma en `t0` y después en cada instante de `despues`; dibuja el último.
+fn capturar_en(ui: &mut Ui, nombre: &str, despues: &[Duration]) {
     let Some(dir) = std::env::var_os("MORGAN_CENTRO_CAPTURA") else {
         panic!("MORGAN_CENTRO_CAPTURA");
     };
@@ -90,9 +96,9 @@ fn capturar(ui: &mut Ui, nombre: &str) {
     ui.tam = (w, h);
     let t0 = Instant::now();
     ui.armar(1.0, t0);
-    // Que terminen las transiciones.
-    let t = t0 + Duration::from_secs(2);
-    ui.armar(1.0, t);
+    for d in despues {
+        ui.armar(1.0, t0 + *d);
+    }
     let mut s = Scene::new();
     ui.pintar(&mut s, 1.0, 0.0);
     let mut gpu = Gpu::sin_display("morgan");
@@ -194,4 +200,66 @@ fn captura_sin_compositor() {
     ui.foco_visible = true;
     assert_eq!(ui.foco, Some(Objetivo::BotonCampo(ListaId::Bluetooth)));
     capturar(&mut ui, "codigo.ppm");
+}
+
+/// La lista de Red con el campo de «Vecino»: `fallo` y `ocupado` como lleguen.
+fn red_con_campo(fallo: u64, ocupado: bool, aviso: (&str, bool)) -> Ui {
+    let mut ui = nuevo();
+    let mut abierta = Opcion::new("󰤢", "Vecino", None, 10);
+    abierta.abierta = true;
+    let mut c = campo(
+        Caja {
+            glifo: "\u{F033E}",
+            placeholder: "Contraseña".into(),
+            clave: true,
+            fijo: None,
+            boton: Some(BotonCampo::Ojo),
+            ocupado,
+            enviar: 11,
+            escape: 12,
+        },
+        aviso,
+    );
+    c.fallo = fallo;
+    abierta.campo = Some(c);
+    ui.datos.listas.insert(
+        ListaId::Red,
+        Contenido::Opciones(vec![Opcion::new("󰤨", "Wi-Fi", Some(true), 7), abierta]),
+    );
+    ui.desplegar(Some(ListaId::Red), Instant::now());
+    if let Some(r) = ui.revelados.get_mut(&ListaId::Red) {
+        r.poner(true);
+    }
+    ui
+}
+
+#[test]
+#[ignore]
+fn captura_del_fallo() {
+    // Cuadros del fallo: el campo llega con un fallo nuevo en t0.
+    for (i, ms) in [0u64, 60, 140, 300, 500, 700, 1200].into_iter().enumerate() {
+        let mut ui = red_con_campo(0, false, ("Conectando…", false));
+        let t0 = Instant::now();
+        ui.armar(1.0, t0);
+        if let Some(Contenido::Opciones(v)) = ui.datos.listas.get_mut(&ListaId::Red)
+            && let Some(c) = v[1].campo.as_mut()
+        {
+            c.fallo = 5;
+            c.aviso = Some(("Contraseña incorrecta".into(), true));
+        }
+        ui.tam = (2560, 1440);
+        ui.armar(1.0, t0 + Duration::from_millis(1));
+        capturar_en(
+            &mut ui,
+            &format!("fallo-{i}-{ms}.ppm"),
+            &[Duration::from_millis(ms + 1)],
+        );
+    }
+    // El latido, en lo más bajo (medio segundo).
+    let mut ui = red_con_campo(0, true, ("Conectando…", false));
+    capturar_en(
+        &mut ui,
+        "latido.ppm",
+        &[Duration::ZERO, Duration::from_millis(500)],
+    );
 }

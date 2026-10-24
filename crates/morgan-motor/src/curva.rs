@@ -159,6 +159,31 @@ impl Revelado {
     }
 }
 
+/// El temblor de un fallo, en píxeles, para `t` de 0 a 1: tres idas y vueltas que se apagan
+/// (la de la clave del bloqueo; el campo de una Wi-Fi la usa a la mitad).
+pub fn sacudida(t: f32) -> f32 {
+    const K: [(f32, f32); 7] = [
+        (0.0, 0.0),
+        (0.14, -11.0),
+        (0.30, 9.0),
+        (0.46, -6.0),
+        (0.62, 4.0),
+        (0.80, -2.0),
+        (1.0, 0.0),
+    ];
+    if !(0.0..1.0).contains(&t) {
+        return 0.0;
+    }
+    let i = K
+        .iter()
+        .rposition(|(k, _)| *k <= t)
+        .unwrap_or(0)
+        .min(K.len() - 2);
+    let ((t0, v0), (t1, v1)) = (K[i], K[i + 1]);
+    let f = (t - t0) / (t1 - t0);
+    v0 + (v1 - v0) * (f * f * (3.0 - 2.0 * f))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

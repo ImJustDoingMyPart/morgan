@@ -70,7 +70,7 @@ impl Rotulos {
                 apagada,
                 ..
             } => Some(t.armar(&[(&porcentaje(*p, *apagada), ROL)], PX_CHICO, escala)),
-            Cuerpo::Estado { .. } => None,
+            Cuerpo::Estado { .. } | Cuerpo::Fallo { .. } => None,
         };
         let libre = match &porcentaje {
             Some(p) => max - texto::caja(p).0 as f32 - ENTRE_TITULO_Y_PORCENTAJE as f32 * escala,
@@ -78,7 +78,7 @@ impl Rotulos {
         };
         let titulo = texto::armar_recortado(t, &a.titulo, ROL, PX_TITULO, escala, libre);
         let estado = match &a.cuerpo {
-            Cuerpo::Estado { texto: e, .. } if !e.is_empty() => {
+            Cuerpo::Estado { texto: e, .. } | Cuerpo::Fallo { texto: e } if !e.is_empty() => {
                 Some(texto::armar_recortado(t, e, ROL, PX_CHICO, escala, max))
             }
             _ => None,
@@ -128,6 +128,7 @@ pub fn pintar(
         }
     );
     let mudo = matches!(a.cuerpo, Cuerpo::Barra { apagada: true, .. });
+    let fallo = matches!(a.cuerpo, Cuerpo::Fallo { .. });
 
     tarjeta(
         s,
@@ -172,7 +173,13 @@ pub fn pintar(
         );
     }
     if let Some(l) = &rot.glifo {
-        let c = if encendido { p.surface } else { p.on_surface };
+        let c = if encendido {
+            p.surface
+        } else if fallo {
+            p.error
+        } else {
+            p.on_surface
+        };
         let centro = cuadro.center();
         let esq = texto::esquina_por_tinta(l, centro.x * escala, centro.y * escala);
         texto_en(s, l, esq, c);
@@ -193,6 +200,8 @@ pub fn pintar(
     if let Some(l) = &rot.estado {
         let c = if encendido {
             con_alfa(&p.tertiary, 0.9)
+        } else if fallo {
+            p.error
         } else {
             con_alfa(&p.on_surface, 0.5)
         };

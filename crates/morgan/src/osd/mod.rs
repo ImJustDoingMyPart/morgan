@@ -36,6 +36,10 @@ pub enum Cuerpo {
         texto: String,
         encendido: bool,
     },
+    /// Algo que no salió (una clave mala): glifo y texto en `error`, como lo mudo.
+    Fallo {
+        texto: String,
+    },
     /// `apagada`: el nivel que había antes de silenciar, atenuado.
     Barra {
         fraccion: f64,
@@ -45,6 +49,17 @@ pub enum Cuerpo {
 }
 
 impl Aviso {
+    pub fn fallo(icono: &str, titulo: &str, texto: &str, ms: u32) -> Aviso {
+        Aviso {
+            icono: Some(icono.into()),
+            titulo: titulo.into(),
+            cuerpo: Cuerpo::Fallo {
+                texto: texto.into(),
+            },
+            ms,
+        }
+    }
+
     pub fn estado(icono: &str, titulo: &str, texto: &str, encendido: bool, ms: u32) -> Aviso {
         Aviso {
             icono: Some(icono.into()),

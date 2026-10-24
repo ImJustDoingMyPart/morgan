@@ -267,6 +267,12 @@ pub struct Ui {
     pub revelados_acciones: HashMap<u32, Revelado>,
     /// Lo escrito en el campo de cada lista.
     pub campos: HashMap<ListaId, Entrada>,
+    /// El último fallo visto de cada campo y cuándo llegó (tiembla y se tiñe desde ahí), y
+    /// desde cuándo late uno ocupado.
+    pub fallos: HashMap<ListaId, (u64, Instant)>,
+    pub latidos: HashMap<ListaId, Instant>,
+    /// Un campo tiembla, se destiñe o late: hace falta otro cuadro.
+    pub campo_anda: bool,
     pub foco: Option<Objetivo>,
     /// El foco se ve (se llegó con el teclado), como el `focus-visible` de GTK.
     pub foco_visible: bool,
@@ -313,6 +319,9 @@ impl Ui {
             con_acciones: HashSet::new(),
             revelados_acciones: HashMap::new(),
             campos: HashMap::new(),
+            fallos: HashMap::new(),
+            latidos: HashMap::new(),
+            campo_anda: false,
             foco: None,
             foco_visible: false,
             encima: None,
@@ -375,6 +384,7 @@ impl Ui {
     pub fn armar(&mut self, escala: f32, ahora: Instant) {
         self.rotulos.poner_escala(escala);
         let mut h = Hoja::default();
+        self.campo_anda = false;
         self.armar_todo(&mut h, ahora);
         let vivos: HashSet<Objetivo> = h.presentes.iter().copied().collect();
         self.animos.retener(&vivos);
@@ -403,6 +413,7 @@ impl Ui {
             || self.deslices.values().any(|d| d.anda(ahora))
             || self.ecualizador.0.anda(ahora)
             || self.limpiando.is_some()
+            || self.campo_anda
             || self.marquesina_anda()
     }
 
@@ -438,6 +449,7 @@ impl Ui {
         self.limpiando = None;
         self.scroll = 0.0;
         self.campos.clear();
+        self.latidos.clear();
     }
 
     /// Abrir una lista cierra la que estaba abierta; tocar la abierta la cierra.

@@ -304,29 +304,6 @@ pub(crate) fn con_relieve(
     });
 }
 
-fn sacudida(t: f32) -> f32 {
-    const K: [(f32, f32); 7] = [
-        (0.0, 0.0),
-        (0.14, -11.0),
-        (0.30, 9.0),
-        (0.46, -6.0),
-        (0.62, 4.0),
-        (0.80, -2.0),
-        (1.0, 0.0),
-    ];
-    if !(0.0..1.0).contains(&t) {
-        return 0.0;
-    }
-    let i = K
-        .iter()
-        .rposition(|(k, _)| *k <= t)
-        .unwrap_or(0)
-        .min(K.len() - 2);
-    let ((t0, v0), (t1, v1)) = (K[i], K[i + 1]);
-    let f = (t - t0) / (t1 - t0);
-    v0 + (v1 - v0) * (f * f * (3.0 - 2.0 * f))
-}
-
 fn campo(
     s: &mut Scene,
     e: &Estado,
@@ -340,7 +317,11 @@ fn campo(
     let par = e.anillo.valor(t);
     let estilo = e.estilo;
     let tr = if estilo.sacudida {
-        origen * Affine::translate((sacudida(seg(t - e.t_fallo) / 0.42) as f64, 0.0))
+        origen
+            * Affine::translate((
+                morgan_motor::curva::sacudida(seg(t - e.t_fallo) / 0.42) as f64,
+                0.0,
+            ))
     } else {
         origen
     };
@@ -713,6 +694,7 @@ mod tests {
 
     #[test]
     fn la_sacudida_vuelve_a_cero() {
+        use morgan_motor::curva::sacudida;
         assert_eq!(sacudida(0.0), 0.0);
         assert_eq!(sacudida(1.0), 0.0);
         assert!(sacudida(0.14) < -10.0);
