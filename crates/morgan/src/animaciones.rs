@@ -58,12 +58,14 @@ pub const COMPOSICIONES: &[Composicion] = &[
     Composicion {
         id: "fade",
         nombre: "Fundido",
-        descripcion: "Aparece sin viajar",
+        descripcion: "Se funde con un leve viaje",
         ventanas: "popin 97%",
         curva: DECEL,
-        workspaces: "fade",
+        // El workspace se funde y viaja apenas en vertical: la ventana que se lleva a otro
+        // (`window.move`, que lo sigue) sube o baja con él.
+        workspaces: "slidefadevert 20%",
         curva_workspace: DECEL,
-        especial: "fade",
+        especial: "slidefadevert 20%",
     },
 ];
 
