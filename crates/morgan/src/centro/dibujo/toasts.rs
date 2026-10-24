@@ -214,11 +214,7 @@ impl ToastsUi {
     fn armar_toast(&mut self, h: &mut Hoja, a: &Aviso, ahora: Instant) -> f64 {
         let p = self.paleta;
         let (x, mut y) = (RELLENO, RELLENO);
-        let (col_w, col_h) = match (&a.imagen, a.icono) {
-            (None, _) => (0.0, 0.0),
-            (Some(_), true) => (CUADRO + AL_TEXTO, CUADRO),
-            (Some(_), false) => (FOTO + 2.0 * MARGEN_FOTO, FOTO + 2.0 * MARGEN_FOTO),
-        };
+        let (col_w, col_h) = columna(a);
         let tx = x + col_w;
         let tw = CONTENIDO - col_w;
         let titulo = if a.urgencia == Urgencia::Critica {
@@ -411,7 +407,7 @@ impl ToastsUi {
     }
 
     /// A lo ancho de la tarjeta, sin relleno: con imagen, el glifo en su columna de 36 y el
-    /// texto a 10 (donde el título); sin imagen, el texto en el borde (o tras el glifo, a 8).
+    /// texto donde el título; sin imagen, el texto en el borde (o tras el glifo, a 8).
     fn botones_en_columna(&mut self, h: &mut Hoja, a: &Aviso, y0: f64, ahora: Instant) -> f64 {
         let p = self.paleta;
         let inicio = h.trazos.len();
@@ -420,7 +416,7 @@ impl ToastsUi {
         for (i, (_, etiqueta, g)) in a.acciones.iter().enumerate() {
             let lg = g.map(|g| self.rotulos.linea(g, 14.0, 400.0));
             let tx = match (con_imagen, &lg) {
-                (true, _) => 4.0 + CUADRO + AL_TEXTO,
+                (true, _) => RELLENO + columna(a).0,
                 (false, Some(_)) => 4.0 + CUADRO + 8.0,
                 (false, None) => 4.0,
             };
@@ -727,6 +723,17 @@ impl ToastsUi {
     }
 }
 
+/// Lo que ocupa la imagen a la izquierda del texto (ancho hasta el texto, alto). Un ícono del
+/// tema queda con el mismo aire hasta el borde de la tarjeta, arriba, abajo y hasta el texto
+/// (10 px; Roberto, 2026-10-24): centrado en los 36 de alto, a 6 del relleno y a 10 del texto.
+fn columna(a: &Aviso) -> (f64, f64) {
+    match (&a.imagen, a.icono) {
+        (None, _) => (0.0, 0.0),
+        (Some(_), true) => ((CUADRO + ICONO) / 2.0 + AL_TEXTO, CUADRO),
+        (Some(_), false) => (FOTO + 2.0 * MARGEN_FOTO, FOTO + 2.0 * MARGEN_FOTO),
+    }
+}
+
 /// El ancho de cada botón de una fila de `total`: lo que mide su contenido (`anchos`) con 8
 /// a cada lado, y lo que sobra repartido en enteros, el resto a los primeros (un `GtkBox` con
 /// todos en `hexpand`).
@@ -811,6 +818,39 @@ mod tests {
         // El derecho cierra.
         let e = ui.soltar(c.x, c.y, 0x111);
         assert!(matches!(e[..], [EventoToast::Cerrar(7)]));
+    }
+
+    #[test]
+    fn el_icono_tiene_el_mismo_aire_por_los_cuatro_lados() {
+        let mut a = aviso(5, &[]);
+        a.imagen = Some(ImageData {
+            data: morgan_motor::vello::peniko::Blob::new(std::sync::Arc::new(vec![
+                0u8;
+                4 * 24 * 24
+            ])),
+            format: morgan_motor::vello::peniko::ImageFormat::Rgba8,
+            alpha_type: morgan_motor::vello::peniko::ImageAlphaType::Alpha,
+            width: 24,
+            height: 24,
+        });
+        a.icono = true;
+        a.cuerpo.clear();
+        let ui = ui(vec![a]);
+        let c = &ui.cartas[0];
+        let Some(Trazo::Imagen { r, .. }) =
+            c.trazos.iter().find(|t| matches!(t, Trazo::Imagen { .. }))
+        else {
+            panic!("sin ícono");
+        };
+        let Some(Trazo::Texto { x, .. }) =
+            c.trazos.iter().find(|t| matches!(t, Trazo::Texto { .. }))
+        else {
+            panic!("sin título");
+        };
+        assert_eq!(r.x0, 10.0, "al borde");
+        assert_eq!(x - r.x1, 10.0, "al texto");
+        assert_eq!(r.y0, 10.0, "arriba");
+        assert_eq!(c.r.height() - r.y1, 10.0, "abajo");
     }
 
     #[test]
