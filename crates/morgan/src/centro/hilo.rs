@@ -44,6 +44,7 @@ use wayland_client::protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_s
 use wayland_client::{Connection, QueueHandle};
 
 use super::dibujo::ajustes::{self, AjustesUi};
+use super::dibujo::calculadora::CalculadoraUi;
 use super::dibujo::launcher::{self, LauncherUi};
 use super::dibujo::menu::{MenuUi, Salida};
 use super::dibujo::toasts::{self, ToastsUi};
@@ -51,7 +52,7 @@ use super::dibujo::toque::{IZQUIERDO, Pedido};
 use super::dibujo::{Objetivo, Ui};
 use super::ecualizador;
 use super::vista::{
-    Aviso, Contenido, Evento, EventoAjustes, EventoLauncher, Grupo, Iconos, IndiceAjustes, ListaId,
+    Aviso, Contenido, Evento, EventoAjustes, EventoCalculadora, VistaCalculadora, EventoLauncher, Grupo, Iconos, IndiceAjustes, ListaId,
     ListaLauncher, Lugar, Menu, Nivel, PaginaAjustes, Reproductor, Tarjeta,
 };
 use crate::lamina::Lamina;
@@ -106,6 +107,10 @@ pub enum Orden {
     /// Una página armada una vez con el menú cerrado: las fuentes de la galería se cargan
     /// antes de la primera apertura.
     AjustesPrecalentar(PaginaAjustes),
+    /// La calculadora: abrirla, cerrarla y lo que muestra.
+    CalculadoraAbrir,
+    CalculadoraCerrar,
+    Calculadora(VistaCalculadora),
 }
 
 /// Si no hay Wayland o la GPU no abre, el hilo termina: morgan sigue sin centro.
@@ -198,6 +203,8 @@ struct Hilo {
     launcher_ui: LauncherUi,
     ajustes: Option<LauncherSup>,
     ajustes_ui: AjustesUi,
+    calculadora: Option<LauncherSup>,
+    calculadora_ui: CalculadoraUi,
     /// Abrir con la sesión desplegada espera a la primera hoja para enfocar.
     enfocar_al_armar: Option<Enfoque>,
     cava: Option<Cava>,
@@ -261,6 +268,8 @@ fn correr(
         launcher_ui: LauncherUi::new(paleta, opacidad, borde),
         ajustes: None,
         ajustes_ui: AjustesUi::new(paleta, opacidad, borde),
+        calculadora: None,
+        calculadora_ui: CalculadoraUi::new(paleta, opacidad, borde),
         enfocar_al_armar: None,
         cava: None,
         reloj: None,
@@ -297,6 +306,9 @@ impl Hilo {
         if let Some(a) = &mut self.ajustes {
             a.lamina.sucio = true;
         }
+        if let Some(c) = &mut self.calculadora {
+            c.lamina.sucio = true;
+        }
     }
 
     fn orden(&mut self, o: Orden) {
@@ -313,6 +325,8 @@ impl Hilo {
                 (l.paleta, l.opacidad, l.borde) = (p, o, b);
                 let a = &mut self.ajustes_ui;
                 (a.paleta, a.opacidad, a.borde) = (p, o, b);
+                let c = &mut self.calculadora_ui;
+                (c.paleta, c.opacidad, c.borde) = (p, o, b);
             }
             Orden::Abrir { sesion } => self.abrir(sesion),
             Orden::Cerrar => self.cerrar(false),
@@ -382,6 +396,9 @@ impl Hilo {
                 }
             }
             Orden::AjustesGrabando(g) => self.ajustes_ui.grabando = g,
+            Orden::CalculadoraAbrir => self.abrir_calculadora(),
+            Orden::CalculadoraCerrar => self.calculadora = None,
+            Orden::Calculadora(v) => self.calculadora_ui.poner(v),
             Orden::AjustesPrecalentar(p) => {
                 if self.ajustes.is_none() {
                     self.ajustes_ui.precalentar(p);
@@ -446,6 +463,42 @@ impl Hilo {
             capa,
             inicio: None,
         });
+    }
+
+    fn abrir_calculadora(&mut self) {
+        if self.calculadora.is_some() {
+            return;
+        }
+        self.calculadora_ui.abrir();
+        let wl = self.compositor.create_surface(&self.qh);
+        let capa = self.capas.create_layer_surface(
+            &self.qh,
+            wl,
+            Layer::Top,
+            Some("morgan-calculator"),
+            None,
+        );
+        capa.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
+        capa.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        capa.commit();
+        self.calculadora = Some(LauncherSup {
+            lamina: Lamina::new((0, 0)),
+            capa,
+            inicio: None,
+        });
+    }
+
+    fn eventos_calculadora(&mut self, v: Vec<EventoCalculadora>) {
+        for e in v {
+            let cierra = matches!(e, EventoCalculadora::Cerrada);
+            self.avisar(Evento::Calculadora(e));
+            if cierra {
+                self.calculadora = None;
+            }
+        }
+        if let Some(c) = &mut self.calculadora {
+            c.lamina.sucio = true;
+        }
     }
 
     fn abrir_ajustes(&mut self) {
@@ -756,6 +809,7 @@ impl Hilo {
         self.pintar_toasts(ahora);
         self.pintar_launcher(ahora);
         self.pintar_ajustes(ahora);
+        self.pintar_calculadora(ahora);
         let Some(p) = &mut self.panel else {
             let _ = self.conn.flush();
             return;
@@ -840,6 +894,71 @@ impl Hilo {
         a.lamina
             .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
         self.programar_parpadeo(ahora);
+    }
+
+    /// Baja desde su borde de abajo al abrir (`bajada.rs`), como el centro.
+    fn pintar_calculadora(&mut self, ahora: Instant) {
+        let Some(c) = &mut self.calculadora else { return };
+        let ui = &mut self.calculadora_ui;
+        let anda = ui.anda(ahora)
+            || c.inicio
+                .is_none_or(|t| ahora.saturating_duration_since(t) < crate::bajada::duracion());
+        if !c.lamina.lista() || !(c.lamina.sucio || anda) {
+            return;
+        }
+        ui.tam = c.lamina.tam;
+        let escala = c.lamina.escala;
+        ui.armar(escala as f32, ahora);
+        let inicio = *c.inicio.get_or_insert(ahora);
+        let micros = ahora.saturating_duration_since(inicio).as_micros() as i64;
+        let bajada = crate::bajada::desplazamiento(micros, ui.panel().y1 as f32);
+        ui.pintar(&mut self.escena, f64::from(escala), f64::from(bajada));
+        let wl = c.capa.wl_surface().clone();
+        c.lamina
+            .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+    }
+
+    fn puntero_calculadora(&mut self, e: &PointerEvent) {
+        let (x, y) = e.position;
+        let ui = &mut self.calculadora_ui;
+        let v = match e.kind {
+            PointerEventKind::Enter { serial } => {
+                self.serial_puntero = serial;
+                self.forma_puesta = None;
+                ui.mover(x, y);
+                Vec::new()
+            }
+            PointerEventKind::Motion { .. } => {
+                ui.mover(x, y);
+                Vec::new()
+            }
+            PointerEventKind::Leave { .. } => {
+                ui.salir();
+                Vec::new()
+            }
+            PointerEventKind::Press { .. } => {
+                ui.apretar(x, y);
+                Vec::new()
+            }
+            PointerEventKind::Release { button, .. } => ui.soltar(x, y, button == IZQUIERDO),
+            PointerEventKind::Axis { vertical, .. } => {
+                if vertical.value120 != 0 {
+                    ui.rueda(f64::from(vertical.value120) / 120.0, true);
+                } else if vertical.discrete != 0 {
+                    ui.rueda(f64::from(vertical.discrete), true);
+                } else if vertical.absolute != 0.0 {
+                    ui.rueda(vertical.absolute, false);
+                }
+                Vec::new()
+            }
+        };
+        self.eventos_calculadora(v);
+        if self.forma_puesta != Some(Shape::Default)
+            && let Some(f) = &self.forma
+        {
+            f.set_shape(self.serial_puntero, Shape::Default);
+            self.forma_puesta = Some(Shape::Default);
+        }
     }
 
     fn puntero_ajustes(&mut self, e: &PointerEvent) {
@@ -1124,6 +1243,14 @@ impl Hilo {
             self.salida_menu(s);
             return;
         }
+        if self.calculadora.is_some() {
+            let m = self.mods;
+            let v = self
+                .calculadora_ui
+                .tecla(ev.keysym, ev.utf8.as_deref(), m.ctrl, m.alt);
+            self.eventos_calculadora(v);
+            return;
+        }
         if self.ajustes.is_some() {
             let m = self.mods;
             let pedidos = self.ajustes_ui.tecla(
@@ -1215,6 +1342,13 @@ fn lanzar_cava() -> Result<(std::process::Child, channel::Channel<Vec<f64>>), St
 impl LayerShellHandler for Hilo {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, capa: &LayerSurface) {
         if self
+            .calculadora
+            .as_ref()
+            .is_some_and(|c| c.capa.wl_surface() == capa.wl_surface())
+        {
+            self.eventos_calculadora(vec![EventoCalculadora::Cerrada]);
+        }
+        if self
             .ajustes
             .as_ref()
             .is_some_and(|a| a.capa.wl_surface() == capa.wl_surface())
@@ -1268,6 +1402,7 @@ impl LayerShellHandler for Hilo {
             .as_mut()
             .filter(|l| l.capa.wl_surface() == wl)
             .or(self.launcher.as_mut().filter(|l| l.capa.wl_surface() == wl))
+            .or(self.calculadora.as_mut().filter(|l| l.capa.wl_surface() == wl))
         {
             if c.new_size.0 > 0 && c.new_size.1 > 0 {
                 l.lamina.tam = c.new_size;
@@ -1382,6 +1517,9 @@ impl Hilo {
         }
         if let Some(a) = self.ajustes.as_mut().filter(|a| a.capa.wl_surface() == wl) {
             return Some(&mut a.lamina);
+        }
+        if let Some(c) = self.calculadora.as_mut().filter(|c| c.capa.wl_surface() == wl) {
+            return Some(&mut c.lamina);
         }
         self.menu
             .as_mut()
@@ -1563,6 +1701,12 @@ impl PointerHandler for Hilo {
                 .is_some_and(|a| a.capa.wl_surface() == &e.surface)
             {
                 self.puntero_ajustes(e);
+            } else if self
+                .calculadora
+                .as_ref()
+                .is_some_and(|c| c.capa.wl_surface() == &e.surface)
+            {
+                self.puntero_calculadora(e);
             } else if self
                 .panel
                 .as_ref()

@@ -13,7 +13,7 @@ mod bandeja;
 mod barra;
 mod bluetooth;
 mod brillo;
-mod calculadora;
+pub(crate) mod calculadora;
 mod calendario;
 mod clima;
 mod centro;
@@ -41,7 +41,6 @@ mod notificaciones;
 mod osd;
 mod pixeles;
 mod pila;
-mod pliegue;
 mod privacidad;
 mod red;
 mod reproductor;
@@ -176,7 +175,7 @@ fn main() -> ExitCode {
         let iconos_bandeja = config.barra.iconos_bandeja.clone();
         let tele = config.barra.tele.clone();
         let calendario = calendario::Calendario::new(hilo_barra.clone(), &agenda, &config.clima);
-        let calculadora = calculadora::Calculadora::new(app);
+        let calculadora = calculadora::Calculadora::new(&centro);
         let audio = Audio::new(&config.sonido);
         let sonidos = sonidos::Sonidos::new(&config.sonido);
         let servicios = Rc::new(Servicios {

@@ -2027,7 +2027,7 @@ struct MedidaOpcion {
 
 /// Las columnas de una grilla pareja (`column-homogeneous`): dónde empieza cada una y su
 /// ancho, en enteros, el resto a las primeras.
-fn parejas(total: f64, n: usize, espacio: f64) -> Vec<(f64, f64)> {
+pub(super) fn parejas(total: f64, n: usize, espacio: f64) -> Vec<(f64, f64)> {
     let libre = (total - espacio * (n as f64 - 1.0)).max(0.0) as i64;
     let n_i = n as i64;
     let mut x = 0.0;

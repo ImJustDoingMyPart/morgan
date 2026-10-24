@@ -108,7 +108,11 @@ parar)
     parar "${2:?falta el nombre}"
     ;;
 morgan)
+    # El de antes puede ser otro binario (MORGAN_BIN, con otro nombre): si queda vivo, el
+    # nuevo no consigue el socket y morganctl sigue hablando con el viejo.
     parar morgan
+    for anterior in $(cat "$estado/binarios" 2>/dev/null); do parar "$anterior"; done
+    basename "${MORGAN_BIN:-morgan}" | cut -c1-15 >>"$estado/binarios"
     display=$(cat "$estado/display")
     # Lo que morgan lanza y actúa sobre la sesión real (apagar, suspender, la unidad de la
     # luz nocturna, el brillo por DDC, el fondo, las apps con uwsm, lo que el launcher escribe

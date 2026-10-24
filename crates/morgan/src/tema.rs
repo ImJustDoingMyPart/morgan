@@ -55,7 +55,7 @@ impl Tema {
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
         let inner = Rc::new(Inner {
-            estructura: RefCell::new(estructura(shell, borde)),
+            estructura: RefCell::new(estructura(shell)),
             link,
             provider,
             pendiente: Cell::new(false),
@@ -92,11 +92,8 @@ impl Tema {
     }
 
     fn rehacer(&self) {
-        let (shell, borde) = (
-            self.inner.shell.borrow().clone(),
-            self.inner.cargado.borrow().2,
-        );
-        self.inner.estructura.replace(estructura(&shell, borde));
+        let shell = self.inner.shell.borrow().clone();
+        self.inner.estructura.replace(estructura(&shell));
         self.inner.estado.borrow_mut().colores = None;
         self.inner.refrescar();
     }
@@ -196,26 +193,11 @@ fn recarga(event: FileMonitorEvent) -> bool {
     )
 }
 
-/// Con la sombra negra, lo de afuera del anillo de los paneles es el de
-/// `forma::Borde::Sombra` (una línea negra y una sombra suave) en vez del brillo de la hoja.
-const BORDE_SOMBRA: &str = "
-.control-center {
-    box-shadow:
-        0 0 0 1px black,
-        0 0 6px 1px alpha(black, 0.5);
-}
-";
-
-fn estructura(shell: &Shell, borde: Borde) -> String {
+fn estructura(shell: &Shell) -> String {
     let o = shell.opacidad;
-    let extra = if borde == Borde::Sombra {
-        BORDE_SOMBRA
-    } else {
-        ""
-    };
     format!(
         "@define-color morgan_fondo alpha(@surface_container_low, {o});\n\
-         @define-color morgan_barra alpha(@surface, {o});\n{}{extra}",
+         @define-color morgan_barra alpha(@surface, {o});\n{}",
         crate::animaciones::escalar_css(include_str!("estilo.css"))
     )
 }
@@ -231,7 +213,6 @@ mod tests {
                 opacidad: 0.85,
                 ..Shell::default()
             },
-            Borde::Brillo,
         );
         assert!(
             hoja.starts_with("@define-color morgan_fondo alpha(@surface_container_low, 0.85);\n")
@@ -243,17 +224,9 @@ mod tests {
                     opacidad: 1.0,
                     ..Shell::default()
                 },
-                Borde::Brillo
             )
             .contains(", 1);")
         );
-    }
-
-    #[test]
-    fn la_sombra_negra_reemplaza_el_brillo() {
-        let shell = Shell::default();
-        assert!(!estructura(&shell, Borde::Brillo).contains(BORDE_SOMBRA));
-        assert!(estructura(&shell, Borde::Sombra).ends_with(BORDE_SOMBRA));
     }
 
     #[test]

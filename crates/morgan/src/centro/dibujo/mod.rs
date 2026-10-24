@@ -14,6 +14,7 @@
 mod armar;
 pub mod ajustes;
 pub mod avisos;
+pub mod calculadora;
 pub mod campo;
 pub mod launcher;
 pub mod menu;
@@ -83,6 +84,10 @@ pub enum Objetivo {
     Ajuste(super::vista::Lugar),
     OpcionAjuste(super::vista::Lugar),
     Pantalla(super::vista::Lugar),
+    /// De la calculadora: una tecla de la botonera, la pantalla y una fila de la cinta.
+    Tecla(usize, usize),
+    Visor,
+    Cuenta(usize),
 }
 
 /// Cómo responde cada clase de objetivo, como en la hoja de GTK: lo que tarda en encenderse con
@@ -98,6 +103,8 @@ fn tiempos(o: Objetivo) -> (Duration, f64, Duration) {
         Objetivo::Ajuste(_) => (ms(150), 0.97, ms(100)),
         Objetivo::OpcionAjuste(_) => (ms(100), 1.0, ms(100)),
         Objetivo::Pantalla(_) => (ms(150), 1.0, ms(100)),
+        Objetivo::Tecla(..) => (ms(150), 0.94, ms(100)),
+        Objetivo::Visor | Objetivo::Cuenta(_) => (ms(150), 1.0, Duration::ZERO),
         Objetivo::Aviso(_) | Objetivo::Grupo(_) => (ms(100), 1.0, ms(100)),
         Objetivo::Campo(_) => (ms(100), 1.0, ms(100)),
         Objetivo::Slider(_) => (ms(200), 1.0, ms(120)),

@@ -18,6 +18,8 @@ enum Clave {
         max: Option<u32>,
         /// Otra familia que la del shell.
         familia: Option<String>,
+        /// El «…» al principio.
+        al_inicio: bool,
     },
     /// Tramos con su rol y su tamaño, con «…» si no entran.
     Tramos {
@@ -81,6 +83,7 @@ impl Rotulos {
             peso: peso as u16,
             max: None,
             familia: None,
+            al_inicio: false,
         };
         self.buscar(c, |t, e| t.armar_con_peso(&[(s, 0)], px, peso, e))
     }
@@ -99,10 +102,25 @@ impl Rotulos {
             peso: peso as u16,
             max: Some(max_b),
             familia: None,
+            al_inicio: false,
         };
         self.buscar(c, |t, e| {
             texto::armar_recortado_con_peso(t, s, 0, px, peso, e, max_b as f32)
         })
+    }
+
+    /// Una línea que empieza con «…» si no entra en `max` lógicos (`ellipsize = Start`).
+    pub fn recortada_al_inicio(&mut self, s: &str, px: f32, max: f64) -> Rc<Layout<u8>> {
+        let max_b = (max * f64::from(self.escala)).max(0.0) as u32;
+        let c = Clave::Linea {
+            texto: s.to_owned(),
+            px: (px * 100.0) as u32,
+            peso: 400,
+            max: Some(max_b),
+            familia: None,
+            al_inicio: true,
+        };
+        self.buscar(c, |t, e| texto::armar_recortado_al_inicio(t, s, 0, px, e, max_b as f32))
     }
 
     /// `recortada` en otra familia (la galería de fuentes del menú).
@@ -114,6 +132,7 @@ impl Rotulos {
             peso: 400,
             max: Some(max_b),
             familia: Some(familia.to_owned()),
+            al_inicio: false,
         };
         self.buscar(c, |t, e| {
             texto::armar_recortado_en(t, s, familia, 0, px, 400.0, e, max_b as f32)

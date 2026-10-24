@@ -453,6 +453,37 @@ pub fn armar_recortado_en(
     t.armar_en(&[(&format!("{}…", &texto[..corte]), rol)], familia, px, peso, escala)
 }
 
+/// Como una etiqueta de GTK con `ellipsize = Start`: si no entra en `max` (píxeles del
+/// buffer), se le saca el principio y empieza con «…» (la cuenta larga de la calculadora,
+/// que importa por el final).
+pub fn armar_recortado_al_inicio(
+    t: &mut Textos,
+    texto: &str,
+    rol: u8,
+    px: f32,
+    escala: f32,
+    max: f32,
+) -> Layout<u8> {
+    let l = t.armar(&[(texto, rol)], px, escala);
+    if l.width() <= max {
+        return l;
+    }
+    let cortes: Vec<usize> = texto.char_indices().map(|(i, _)| i).collect();
+    // El corte más temprano (lo más largo que queda) que entra con los puntos suspensivos.
+    let (mut lo, mut hi) = (0, cortes.len().saturating_sub(1));
+    while lo < hi {
+        let m = (lo + hi) / 2;
+        let prueba = format!("…{}", &texto[cortes[m]..]);
+        if t.armar(&[(&prueba, rol)], px, escala).width() <= max {
+            hi = m;
+        } else {
+            lo = m + 1;
+        }
+    }
+    let corte = cortes.get(lo).copied().unwrap_or(texto.len());
+    t.armar(&[(&format!("…{}", &texto[corte..]), rol)], px, escala)
+}
+
 /// La caja de la tinta de `l` (lo que se dibuja de verdad), en sus coordenadas: x0, y0, x1,
 /// y1. Los glifos de la Nerd Font tienen el dibujo corrido dentro del ancho que reservan.
 pub fn tinta(l: &Layout<u8>) -> Option<[f64; 4]> {

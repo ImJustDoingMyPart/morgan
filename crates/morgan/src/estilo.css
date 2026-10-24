@@ -10,46 +10,9 @@ window.morgan {
  * declara la app e ignora la regla `blur` de la capa (con la región vacía, nada). GTK declara
  * la región donde hay un `backdrop-filter: blur` de 20px o más; el radio no importa más allá
  * de eso: el desenfoque es el de `decoration:blur` de Hyprland. */
-.control-center,
 .fondos .banda,
 .ventanas {
     backdrop-filter: blur(20px);
-}
-
-/* ─── Paneles con GTK (la calculadora; el centro y el menú de la bandeja son del motor
- * propio) ─── */
-window.blank-window {
-    background: transparent;
-}
-
-.control-center,
-.control-center * {
-    font-family: "JetBrainsMono Nerd Font", monospace;
-}
-
-/* El anillo es un borde de verdad (2 px; GTK parte las esquinas en diagonal). Por fuera, el
- * glow tenue de todo el shell (el de `forma::Borde::Brillo`): GTK apila la última sombra
- * arriba. Con la sombra negra lo pisa `BORDE_SOMBRA` de tema.rs. */
-.control-center {
-    margin: 8px;
-    padding: 14px;
-    border-radius: 4px;
-    color: @on_surface;
-    border: 2px solid;
-    border-color: @primary @tertiary @tertiary @primary;
-    background: @morgan_fondo;
-    box-shadow:
-        1px 1px 5px 1px alpha(@tertiary, 0.3),
-        -1px -1px 5px 1px alpha(@primary, 0.3);
-}
-
-.control-center viewport,
-.control-center scrolledwindow {
-    background: transparent;
-}
-
-.control-center scrollbar {
-    opacity: 0;
 }
 
 /* Los tooltips son superficies propias, sin la clase de la ventana que los abre: esto vale
@@ -67,115 +30,6 @@ tooltip label {
     font-family: "JetBrainsMono Nerd Font", monospace;
     font-size: 11px;
     color: @on_surface;
-}
-
-/* ─── Calculadora ─── */
-.calculadora .calc-pantalla {
-    background: alpha(@on_surface, 0.06);
-    border-radius: 4px;
-    padding: 4px;
-}
-
-.calculadora .calc-actual,
-.calculadora .calc-fila {
-    background: transparent;
-    color: @on_surface;
-    border: none;
-    box-shadow: none;
-    border-radius: 4px;
-    padding: 8px 10px;
-    min-height: 0;
-    transition: background-color 150ms ease;
-}
-
-.calculadora .calc-fila {
-    padding: 4px 10px;
-}
-
-.calculadora .calc-actual:hover {
-    background: alpha(@on_surface, 0.03);
-}
-
-.calculadora .calc-fila:hover {
-    background: alpha(@primary, 0.14);
-}
-
-.calculadora .calc-fila:active {
-    background: alpha(@primary, 0.2);
-    transition: none;
-}
-
-.calculadora .calc-fila label {
-    font-size: 13px;
-    font-weight: normal;
-}
-
-.calculadora .calc-fila .cuenta {
-    opacity: 0.5;
-}
-
-.calculadora .calc-pantalla .grande {
-    font-size: 26px;
-    font-weight: normal;
-}
-
-.calculadora .calc-pantalla .chica {
-    font-size: 13px;
-    font-weight: normal;
-    opacity: 0.5;
-}
-
-.calculadora .calc-pantalla .chica.copiado {
-    color: @tertiary;
-    opacity: 1;
-}
-
-.calculadora .calc-botonera {
-    padding: 8px;
-    border-radius: 4px;
-    background: alpha(@on_surface, 0.06);
-}
-
-.calculadora .calc-tecla {
-    background: transparent;
-    color: @on_surface;
-    border: none;
-    box-shadow: none;
-    border-radius: 4px;
-    padding: 10px 0;
-    min-height: 0;
-    min-width: 0;
-    transition: background-color 150ms ease, transform 100ms ease;
-}
-
-.calculadora .calc-tecla label {
-    font-size: 16px;
-    font-weight: normal;
-}
-
-.calculadora .calc-tecla:hover {
-    background: alpha(@primary, 0.14);
-}
-
-.calculadora .calc-tecla:active,
-.calculadora .calc-tecla.apretada {
-    background: alpha(@primary, 0.2);
-    transform: scale(0.94);
-    transition: none;
-}
-
-.calculadora .calc-tecla.operador {
-    color: @tertiary;
-}
-
-.calculadora .calc-tecla.funcion {
-    color: @on_surface_variant;
-}
-
-.calculadora .calc-tecla.igual {
-    background-image: linear-gradient(135deg, @primary, @tertiary);
-    color: @surface;
-    box-shadow: 0 0 6px 0 alpha(@tertiary, 0.3);
 }
 
 /* ─── Banda de fondos ───

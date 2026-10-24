@@ -381,6 +381,32 @@ pub enum EventoAjustes {
     Cerrado,
 }
 
+/// Lo que muestra la calculadora: la pantalla (la cuenta o el resultado grande, y debajo lo
+/// otro, tenue) y la cinta de las cuentas hechas, la última abajo.
+#[derive(Clone, Debug, Default)]
+pub struct VistaCalculadora {
+    pub grande: String,
+    /// Sin nada escrito: el «0» atenuado.
+    pub vacia: bool,
+    pub chica: String,
+    /// «copiado», en `tertiary`, un instante.
+    pub copiado: bool,
+    /// Cuenta y resultado de cada una.
+    pub cinta: Vec<(String, String)>,
+}
+
+/// Lo que pide la calculadora al hilo de GTK.
+#[derive(Debug)]
+pub enum EventoCalculadora {
+    Accion(crate::calculadora::modelo::Accion),
+    /// Lo escrito con el teclado, ya pasado a lo que se ve (`modelo::del_teclado`), o el
+    /// resultado de una fila de la cinta.
+    Escribir(String),
+    Copiar,
+    /// La cerró ella misma (Escape, un click afuera).
+    Cerrada,
+}
+
 /// Lo que se tocó, para el hilo de GTK.
 #[derive(Debug)]
 pub enum Evento {
@@ -408,6 +434,7 @@ pub enum Evento {
     Toast(EventoToast),
     Launcher(EventoLauncher),
     Ajustes(EventoAjustes),
+    Calculadora(EventoCalculadora),
 }
 
 /// Lo que se hizo en un toast. Salvo copiar, el toast se va.
