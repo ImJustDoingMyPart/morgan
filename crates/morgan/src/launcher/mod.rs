@@ -16,7 +16,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use gtk::prelude::*;
-use gtk::{gdk, gio, glib};
+use gtk::{gio, glib};
 use morgan_ipc::ModoLauncher as Modo;
 use morgan_motor::vello::peniko::ImageData;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
@@ -26,7 +26,7 @@ use crate::centro::hilo::Orden;
 use crate::centro::vista::{
     EventoLauncher, FilaLauncher, IconoFila, ListaLauncher, TipoFila, Turno,
 };
-use crate::pixeles::{self, Pintor};
+use crate::pixeles;
 use crate::{comando, icono};
 use busqueda::{Entrada, Historial, Orden as OrdenBusqueda};
 
@@ -90,7 +90,6 @@ struct Inner {
     version: Cell<u64>,
     /// El campo se vacía con la próxima lista, con este placeholder.
     vaciar: RefCell<Option<String>>,
-    pintor: RefCell<Pintor>,
     /// Los íconos del tema por nombre (los de las filas que explican, el teclado de los atajos).
     iconos: RefCell<HashMap<String, Option<ImageData>>>,
     _monitor: gio::AppInfoMonitor,
@@ -215,7 +214,6 @@ impl Launcher {
             sesion: Cell::new(0),
             version: Cell::new(0),
             vaciar: RefCell::default(),
-            pintor: RefCell::default(),
             iconos: RefCell::default(),
             _monitor: monitor.clone(),
         });
@@ -416,16 +414,9 @@ impl Launcher {
         accion: &Accion,
     ) -> FilaLauncher {
         let icono = match icono {
-            Icono::App(i) => gdk::Display::default().and_then(|d| {
-                icono::pixeles(
-                    &d,
-                    i,
-                    ICONO,
-                    pixeles::escala(),
-                    &mut self.inner.pintor.borrow_mut(),
-                )
-                .map(IconoFila::Imagen)
-            }),
+            Icono::App(i) => {
+                icono::de_gicon(i, ICONO as u32, pixeles::escala() as u32).map(IconoFila::Imagen)
+            }
             Icono::Nombre(n) => {
                 let img = self
                     .inner
@@ -433,12 +424,7 @@ impl Launcher {
                     .borrow_mut()
                     .entry(n.to_owned())
                     .or_insert_with(|| {
-                        self.inner.pintor.borrow_mut().icono(
-                            n,
-                            ICONO,
-                            pixeles::escala(),
-                            &gdk::RGBA::WHITE,
-                        )
+                        icono::de_nombre(n, ICONO as u32, pixeles::escala() as u32, [1.0; 4])
                     })
                     .clone();
                 // Los simbólicos se pintan del color del texto, como los pintaba GTK.

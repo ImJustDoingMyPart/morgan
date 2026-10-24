@@ -8,15 +8,14 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use gtk::prelude::*;
-use gtk::{gdk_pixbuf, gio, glib};
+use gtk::{gio, glib};
 use morgan_motor::vello::peniko::ImageData;
 
 use super::dibujo::avisos::tam_previa_en;
 use super::vista::{Aviso, Grupo};
 use crate::notificaciones::modelo::{self, Imagen, Notificacion};
 use crate::notificaciones::{Notificaciones, captura};
-use crate::pixeles::{self, Pintor};
+use crate::pixeles;
 
 /// Los tamaños de las imágenes de una tarjeta, en lógicos.
 pub struct Medidas {
@@ -57,7 +56,6 @@ enum ClaveImagen {
 pub struct Lista {
     notificaciones: Notificaciones,
     medidas: Medidas,
-    pintor: RefCell<Pintor>,
     imagenes: RefCell<HashMap<ClaveImagen, Option<ImageData>>>,
     previas: RefCell<HashMap<PathBuf, Option<ImageData>>>,
     pendientes: RefCell<HashSet<PathBuf>>,
@@ -72,7 +70,6 @@ impl Lista {
         Rc::new(Lista {
             notificaciones: notificaciones.clone(),
             medidas,
-            pintor: RefCell::default(),
             imagenes: RefCell::default(),
             previas: RefCell::default(),
             pendientes: RefCell::default(),
@@ -210,8 +207,7 @@ impl Lista {
         }
         let i = match img {
             Imagen::Nombre(n) => {
-                let c = pixeles::color(self.color.get());
-                self.pintor.borrow_mut().icono(n, tam, escala, &c)
+                crate::icono::de_nombre(n, tam as u32, escala as u32, self.color.get())
             }
             Imagen::Archivo(p) => pixeles::archivo(p, lado),
             Imagen::Datos(px) => de_datos(px, lado),
@@ -236,21 +232,16 @@ impl Lista {
         }
         let (pw, ph) = tam_previa_en(w, h, self.medidas.previa);
         let (pw, ph) = (pw as i32 * escala, ph as i32 * escala);
-        let archivo = gio::File::for_path(ruta);
         let ruta = ruta.to_owned();
         let yo = Rc::downgrade(self);
         glib::MainContext::default().spawn_local(async move {
-            let img = match archivo.read_future(glib::Priority::DEFAULT).await {
-                Ok(flujo) => gdk_pixbuf::Pixbuf::from_stream_at_scale_future(&flujo, pw, ph, true)
-                    .await
-                    .map_err(|e| eprintln!("morgan: vista previa: {e}"))
-                    .ok()
-                    .map(|pb| pixeles::de_pixbuf(&pb)),
-                Err(e) => {
-                    eprintln!("morgan: vista previa: {e}");
-                    None
-                }
-            };
+            let leer = ruta.clone();
+            let img = gio::spawn_blocking(move || {
+                pixeles::archivo_en(&leer, pw.max(1) as u32, ph.max(1) as u32)
+            })
+            .await
+            .ok()
+            .flatten();
             let Some(yo) = yo.upgrade() else { return };
             yo.pendientes.borrow_mut().remove(&ruta);
             yo.previas.borrow_mut().insert(ruta, img);
@@ -281,32 +272,23 @@ fn vista_previa(img: Option<&Imagen>) -> Option<(PathBuf, u32, u32)> {
     let Some(Imagen::Archivo(ruta)) = img else {
         return None;
     };
-    let (_, ancho, alto) = gdk_pixbuf::Pixbuf::file_info(ruta)?;
-    modelo::es_vista_previa(ancho, alto).then(|| (ruta.clone(), ancho as u32, alto as u32))
+    let (ancho, alto) = pixeles::medidas(ruta)?;
+    modelo::es_vista_previa(ancho as i32, alto as i32).then(|| (ruta.clone(), ancho, alto))
 }
 
 /// Los píxeles que mandó la app (`image-data`), achicados para entrar en `lado`.
 fn de_datos(px: &modelo::Pixeles, lado: i32) -> Option<ImageData> {
-    let bytes = glib::Bytes::from(&px.datos);
-    let pb = gdk_pixbuf::Pixbuf::from_bytes(
-        &bytes,
-        gdk_pixbuf::Colorspace::Rgb,
-        px.alfa,
-        8,
-        px.ancho,
-        px.alto,
-        px.fila,
-    );
-    let (w, h) = (pb.width().max(1), pb.height().max(1));
-    let k = f64::from(lado) / f64::from(w.max(h));
-    let pb = if k < 1.0 {
-        pb.scale_simple(
-            ((f64::from(w) * k).round() as i32).max(1),
-            ((f64::from(h) * k).round() as i32).max(1),
-            gdk_pixbuf::InterpType::Bilinear,
-        )?
-    } else {
-        pb
-    };
-    Some(pixeles::de_pixbuf(&pb))
+    let (w, h) = (u32::try_from(px.ancho).ok()?, u32::try_from(px.alto).ok()?);
+    let (fila, canales) = (usize::try_from(px.fila).ok()?, if px.alfa { 4 } else { 3 });
+    let mut rgba = Vec::with_capacity(w as usize * h as usize * 4);
+    for y in 0..h as usize {
+        let f = px.datos.get(y * fila..)?;
+        for x in 0..w as usize {
+            let p = f.get(x * canales..x * canales + canales)?;
+            rgba.extend_from_slice(&[p[0], p[1], p[2], if px.alfa { p[3] } else { 255 }]);
+        }
+    }
+    let i = image::RgbaImage::from_raw(w, h, rgba)?;
+    let lado = lado.max(1) as u32;
+    Some(pixeles::achicar(i, lado, lado))
 }

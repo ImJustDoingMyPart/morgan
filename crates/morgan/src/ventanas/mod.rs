@@ -495,7 +495,6 @@ impl Vista {
         // Un solo gris: el viewport de cada franja. Las ventanas van encima; lo que está
         // fuera de pantalla queda sobre el fondo de la banda.
         let a_px = |x: i32| f64::from(MARGEN_GLOW) + f64::from(x - min) * m.escala;
-        let display = gtk::prelude::WidgetExt::display(&window);
         let fondo_guardado = v.fondo_guardado();
         let mut celdas: Vec<Option<Celda>> = (0..lienzo.ventanas.len()).map(|_| None).collect();
         let mut pantallas = Vec::new();
@@ -531,7 +530,7 @@ impl Vista {
                 let yv = y + f64::from(vent.rect.y) * m.escala;
                 let xv = a_px(vent.rect.x);
                 let rect = [xv as f32, yv as f32, w as f32, h as f32];
-                let celda = Celda::new(&display, icono.as_ref(), rect);
+                let celda = Celda::new(icono.as_ref(), rect);
                 celda.caja.set_size_request(w, h);
                 if !vent.capturable() {
                     celda.caja.add_css_class("fuera");
@@ -832,7 +831,7 @@ impl Vista {
 }
 
 impl Celda {
-    fn new(display: &gdk::Display, icono: Option<&gio::Icon>, rect: [f32; 4]) -> Self {
+    fn new(icono: Option<&gio::Icon>, rect: [f32; 4]) -> Self {
         let caja = gtk::Overlay::new();
         caja.add_css_class("ventana");
         let interior = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -843,7 +842,7 @@ impl Celda {
         paginas.set_transition_duration(crate::animaciones::ms(180));
         paginas.set_hexpand(true);
         paginas.set_vexpand(true);
-        let sin_foto = crate::icono::imagen(display, icono, 48);
+        let sin_foto = imagen_app(icono, 48);
         sin_foto.set_halign(gtk::Align::Center);
         sin_foto.set_valign(gtk::Align::Center);
         sin_foto.add_css_class("sin-foto");
@@ -858,7 +857,7 @@ impl Celda {
         paginas.set_visible_child(&sin_foto);
         interior.append(&paginas);
         caja.set_child(Some(&interior));
-        let insignia = crate::icono::imagen(display, icono, 20);
+        let insignia = imagen_app(icono, 20);
         insignia.set_halign(gtk::Align::Start);
         insignia.set_valign(gtk::Align::End);
         insignia.add_css_class("insignia");
@@ -905,4 +904,23 @@ fn icono_de(display: &gdk::Display, clase: &str) -> Option<gio::Icon> {
     // Si el tema no lo tiene, el genérico (y no el de "imagen rota").
     let es_tema = icono.downcast_ref::<gio::ThemedIcon>().is_some();
     (!es_tema || gtk::IconTheme::for_display(display).has_gicon(&icono)).then_some(icono)
+}
+
+/// El ícono de una app (`icono.rs`) como imagen de GTK, mientras el lienzo siga con GTK.
+fn imagen_app(icono: Option<&gio::Icon>, tam: i32) -> gtk::Image {
+    let escala = crate::pixeles::escala();
+    let img = crate::icono::de_gicon(icono, tam as u32, escala as u32).map(|i| {
+        let bytes = glib::Bytes::from(i.data.data());
+        let textura = gdk::MemoryTexture::new(
+            i.width as i32,
+            i.height as i32,
+            gdk::MemoryFormat::R8g8b8a8Premultiplied,
+            &bytes,
+            i.width as usize * 4,
+        );
+        gtk::Image::from_paintable(Some(&textura))
+    });
+    let img = img.unwrap_or_default();
+    img.set_pixel_size(tam);
+    img
 }

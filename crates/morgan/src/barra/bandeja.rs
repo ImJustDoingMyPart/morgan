@@ -1,6 +1,5 @@
-//! La bandeja del lado de GTK: los íconos se buscan y se dibujan acá (el tema, los archivos y
-//! los pixmaps que mandan las apps, con el mismo GTK que los mostraba), y le llegan a la barra
-//! como píxeles. Los menús siguen siendo de GTK (`menu_bandeja.rs`).
+//! La bandeja del lado de los servicios: los íconos se buscan y se pasan a píxeles acá (el tema,
+//! los archivos y los pixmaps que mandan las apps, con `icono.rs`), y le llegan a la barra.
 //!
 //! El ícono forzado por `Id` se aplica en cada relectura: no se pierde cuando la app cambia de
 //! ícono en caliente.
@@ -10,9 +9,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use gtk::prelude::*;
-use gtk::{gdk, gio, glib, gsk};
-use morgan_motor::color::Paleta;
+use gtk::glib;
+use morgan_motor::color::{Color, Paleta};
 use morgan_motor::vello::peniko::ImageData;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
@@ -24,24 +22,23 @@ use crate::centro::Centro;
 use crate::centro::vista::{Menu as VistaMenu, NodoMenu};
 use crate::tema::Tema;
 
-const TAMANO: i32 = 14;
+const TAMANO: u32 = 14;
 
 pub struct Contexto {
     centro: Centro,
     bandeja: Bandeja,
-    tema: gtk::IconTheme,
+    /// El tema propio de la bandeja, si está; si no, el del sistema.
+    tema: Option<crate::icono::TemaPropio>,
     iconos: BTreeMap<String, String>,
     hilo: Sender<Orden>,
     /// El color de los íconos simbólicos: el del texto.
-    color: Cell<gdk::RGBA>,
-    pintor: RefCell<Option<gsk::Renderer>>,
+    color: Cell<Color>,
     /// La clave del ícono con su menú abierto.
     menu: RefCell<Option<String>>,
 }
 
-fn color_de(css: &str) -> gdk::RGBA {
-    let [r, g, b, a] = Paleta::desde_css(css).on_surface;
-    gdk::RGBA::new(r, g, b, a)
+fn color_de(css: &str) -> Color {
+    Paleta::desde_css(css).on_surface
 }
 
 impl Contexto {
@@ -59,7 +56,6 @@ impl Contexto {
             iconos,
             hilo,
             color: Cell::new(color_de(&tema.actual().0)),
-            pintor: RefCell::default(),
             menu: RefCell::default(),
         });
         let debil = Rc::downgrade(&ctx);
@@ -74,22 +70,13 @@ impl Contexto {
 
     /// Son pocos y cambian poco: se rehacen todos.
     pub fn enviar(&self) {
-        let Some(display) = gdk::Display::default() else {
-            return;
-        };
-        let monitores = display.monitors();
-        let escala = (0..monitores.n_items())
-            .filter_map(|i| monitores.item(i)?.downcast::<gdk::Monitor>().ok())
-            .map(|m| m.scale_factor())
-            .max()
-            .unwrap_or(1)
-            .max(1);
+        let escala = crate::pixeles::escala().max(1) as u32;
         let iconos = self
             .bandeja
             .items()
             .into_iter()
             .map(|item| Icono {
-                imagen: self.imagen(&item, &display, escala),
+                imagen: self.imagen(&item, escala),
                 clave: item.clave,
                 tooltip: item.tooltip,
             })
@@ -97,28 +84,9 @@ impl Contexto {
         let _ = self.hilo.send(Orden::Bandeja(iconos));
     }
 
-    fn imagen(&self, item: &Item, display: &gdk::Display, escala: i32) -> Option<ImageData> {
-        let p = paintable(item, self, escala).or_else(|| {
-            let p = gtk::IconTheme::for_display(display).lookup_icon(
-                "image-missing",
-                &[],
-                TAMANO,
-                escala,
-                gtk::TextDirection::Ltr,
-                gtk::IconLookupFlags::empty(),
-            );
-            Some(p.upcast())
-        })?;
-        let mut pintor = self.pintor.borrow_mut();
-        if pintor.is_none() {
-            let r = gsk::CairoRenderer::new();
-            if let Err(e) = r.realize_for_display(display) {
-                eprintln!("morgan: bandeja: {e}");
-                return None;
-            }
-            *pintor = Some(r.upcast());
-        }
-        crate::pixeles::pixeles(&p, TAMANO * escala, &self.color.get(), pintor.as_ref()?)
+    fn imagen(&self, item: &Item, escala: u32) -> Option<ImageData> {
+        imagen(item, self, escala)
+            .or_else(|| crate::icono::de_nombre("image-missing", TAMANO, escala, self.color.get()))
     }
 
     pub fn click(self: &Rc<Self>, clave: &str, boton: u32, salida: &str, derecha: i32) {
@@ -215,28 +183,24 @@ fn nodos(hijos: &[Nodo]) -> Vec<Vec<NodoMenu>> {
         .collect()
 }
 
-fn tema_bandeja() -> gtk::IconTheme {
+/// El tema «Bandeja» de `~/.local/share/morgan/bandeja`, si alguien lo armó: pisa los íconos
+/// de algunas apps (y hereda del sistema para el resto).
+fn tema_bandeja() -> Option<crate::icono::TemaPropio> {
     let datos = glib::user_data_dir();
-    if !datos.join("morgan/bandeja/Bandeja/index.theme").is_file()
-        && let Some(d) = gtk::gdk::Display::default()
-    {
-        return gtk::IconTheme::for_display(&d);
-    }
-    let mut rutas: Vec<PathBuf> = vec![datos.join("morgan/bandeja"), datos.join("icons")];
-    rutas.extend(
-        glib::system_data_dirs()
-            .into_iter()
-            .map(|d| d.join("icons")),
-    );
-    rutas.push(PathBuf::from("/usr/share/pixmaps"));
-    let tema = gtk::IconTheme::new();
-    let rutas: Vec<&std::path::Path> = rutas.iter().map(PathBuf::as_path).collect();
-    tema.set_search_path(&rutas);
-    tema.set_theme_name(Some("Bandeja"));
-    tema
+    let propia = datos.join("morgan/bandeja");
+    propia
+        .join("Bandeja/index.theme")
+        .is_file()
+        .then(|| crate::icono::TemaPropio::nuevo("Bandeja", &[propia]))
 }
 
-fn paintable(item: &Item, ctx: &Contexto, escala: i32) -> Option<gdk::Paintable> {
+fn imagen(item: &Item, ctx: &Contexto, escala: u32) -> Option<ImageData> {
+    let lado = TAMANO * escala;
+    let color = ctx.color.get();
+    let dibujar = |ruta: &std::path::Path| {
+        let tinte = crate::icono::es_simbolico(ruta).then_some(color);
+        crate::icono::dibujar(ruta, lado, tinte)
+    };
     let nombre: &str = if let Some(i) = ctx.iconos.get(&item.id) {
         i.as_str()
     } else if item.atencion && !item.icono_atencion.is_empty() {
@@ -246,44 +210,33 @@ fn paintable(item: &Item, ctx: &Contexto, escala: i32) -> Option<gdk::Paintable>
     };
     if !nombre.is_empty() {
         if nombre.starts_with('/') {
-            return archivo(std::path::Path::new(nombre), escala);
+            return dibujar(std::path::Path::new(nombre));
         }
-        if ctx.tema.has_icon(nombre) {
-            let p = ctx.tema.lookup_icon(
-                nombre,
-                &[],
-                TAMANO,
-                escala,
-                gtk::TextDirection::Ltr,
-                gtk::IconLookupFlags::empty(),
-            );
-            return Some(p.upcast());
+        let ruta = match &ctx.tema {
+            Some(t) => t.buscar(nombre, TAMANO, escala),
+            None => crate::icono::buscar(nombre, TAMANO, escala),
+        };
+        if let Some(r) = ruta
+            && let Some(i) = dibujar(&r)
+        {
+            return Some(i);
         }
         if !item.ruta_tema.is_empty() {
             for ext in ["png", "svg"] {
                 let ruta = PathBuf::from(&item.ruta_tema).join(format!("{nombre}.{ext}"));
-                if let Some(a) = archivo(&ruta, escala) {
-                    return Some(a);
+                if ruta.is_file()
+                    && let Some(i) = dibujar(&ruta)
+                {
+                    return Some(i);
                 }
             }
         }
     }
     let (w, h, rgba) = item.pixmap.as_ref()?;
-    let bytes = glib::Bytes::from(rgba);
-    let textura = gdk::MemoryTexture::new(
-        *w,
-        *h,
-        gdk::MemoryFormat::R8g8b8a8,
-        &bytes,
-        usize::try_from(*w).ok()? * 4,
-    );
-    Some(textura.upcast())
-}
-
-fn archivo(ruta: &std::path::Path, escala: i32) -> Option<gdk::Paintable> {
-    if !ruta.exists() {
-        return None;
-    }
-    let p = gtk::IconPaintable::for_file(&gio::File::for_path(ruta), TAMANO, escala);
-    Some(p.upcast())
+    let i = image::RgbaImage::from_raw(
+        u32::try_from(*w).ok()?,
+        u32::try_from(*h).ok()?,
+        rgba.clone(),
+    )?;
+    Some(crate::icono::de_rgba(&i, lado))
 }

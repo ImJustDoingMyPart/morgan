@@ -540,10 +540,8 @@ impl Centro {
     }
 
     fn mandar_iconos(&self) {
-        let mut p = crate::pixeles::Pintor::default();
-        let escala = crate::pixeles::escala();
-        let blanco = crate::pixeles::color([1.0, 1.0, 1.0, 1.0]);
-        let mut icono = |n: &str| p.icono(n, 16, escala, &blanco);
+        let escala = crate::pixeles::escala() as u32;
+        let icono = |n: &str| crate::icono::de_nombre(n, 16, escala, [1.0; 4]);
         let iconos = vista::Iconos {
             play: icono("media-playback-start-symbolic"),
             pausa: icono("media-playback-pause-symbolic"),

@@ -35,3 +35,5 @@ libc.workspace = true
 rrule.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
+resvg.workspace = true
+image.workspace = true
