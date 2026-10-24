@@ -246,6 +246,7 @@ impl Hilo {
                 // Un campo nuevo toma el foco.
                 let nuevo = campo_de(&c).filter(|g| campo_de_lista(&self.ui, l) != Some(*g));
                 self.ui.datos.listas.insert(l, c);
+                self.ui.soltar_deslices(l);
                 if let Some(g) = nuevo
                     && self.panel.is_some()
                 {

@@ -513,6 +513,21 @@ impl Ui {
         }
     }
 
+    /// Llegó otra lista `l`. Lo corrido de sus filas es por lugar, no por fila: la que se fue
+    /// queda quieta afuera hasta que llega la lista nueva, y ahí dejaría corrida a la que
+    /// ocupe su lugar (un bloque vacío). Esa se olvida; un arrastre, una que vuelve o una que
+    /// todavía sale (y al llegar hace su acción) siguen: la lista llega con cada escaneo.
+    pub fn soltar_deslices(&mut self, l: ListaId) {
+        let ahora = Instant::now();
+        let arrastrada = self.arrastre.map(|a| a.objetivo);
+        self.deslices.retain(|o, d| {
+            let quieta_afuera = !d.anda(ahora) && d.al_final.is_none() && d.dx(ahora) != 0.0;
+            !(matches!(o, Objetivo::Opcion(x, _) if *x == l)
+                && quieta_afuera
+                && arrastrada != Some(*o))
+        });
+    }
+
     /// Lo que termina solo con el tiempo: una fila que terminó de irse, limpiar.
     pub fn al_cuadro(&mut self, ahora: Instant) -> Vec<Pedido> {
         let mut pedidos = Vec::new();
@@ -746,5 +761,32 @@ impl Ui {
         self.revelados_acciones.retain(|i, _| ids.contains(i));
         let _ = clave;
         let _ = Duration::ZERO;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use morgan_motor::color::Paleta;
+    use morgan_motor::forma::Borde;
+
+    #[test]
+    fn la_que_se_fue_no_deja_un_bloque_en_la_lista_nueva() {
+        let mut ui = Ui::new(Paleta::desde_css(""), 1.0, Borde::Sombra);
+        let fuera = Objetivo::Opcion(ListaId::Red, 2);
+        let saliendo = Objetivo::Opcion(ListaId::Red, 3);
+        let otra = Objetivo::Opcion(ListaId::Bluetooth, 2);
+        ui.deslices.insert(fuera, Desliz::quieto(300.0));
+        let mut d = Desliz::quieto(300.0);
+        d.al_final = Some(Lado::Derecha);
+        ui.deslices.insert(saliendo, d);
+        ui.deslices.insert(otra, Desliz::quieto(300.0));
+        ui.soltar_deslices(ListaId::Red);
+        assert!(!ui.deslices.contains_key(&fuera));
+        assert!(
+            ui.deslices.contains_key(&saliendo),
+            "todavía tiene que olvidar"
+        );
+        assert!(ui.deslices.contains_key(&otra));
     }
 }
