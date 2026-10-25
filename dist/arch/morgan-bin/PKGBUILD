@@ -20,6 +20,10 @@ depends=(
     'hyprland>=0.56'
     'libpulse'
     'glib2'
+    'libxkbcommon'
+    'fontconfig'
+    # El motor dibuja con wgpu, que carga Vulkan al arrancar.
+    'vulkan-icd-loader'
     'pam'
     'systemd'
     'curl'

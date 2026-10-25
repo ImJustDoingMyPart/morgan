@@ -83,7 +83,8 @@ revisar_dependencias() {
     command -v cargo >/dev/null || error "falta cargo (rust)"
     command -v pkg-config >/dev/null || error "falta pkg-config"
     local m faltan=()
-    for m in "glib-2.0 >= 2.84" gio-2.0 gio-unix-2.0 libpulse libpulse-mainloop-glib pam; do
+    for m in "glib-2.0 >= 2.84" gio-2.0 gio-unix-2.0 libpulse libpulse-mainloop-glib pam \
+        xkbcommon fontconfig libudev; do
         pkg-config --exists "$m" || faltan+=("$m")
     done
     ((${#faltan[@]} == 0)) || error "faltan bibliotecas para compilar: ${faltan[*]}"
