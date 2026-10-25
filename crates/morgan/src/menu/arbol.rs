@@ -462,6 +462,8 @@ pub struct Opcion {
     pub que: Que,
     pub fuente: Option<String>,
     pub cursor: Option<Arc<[Muestra]>>,
+    /// Texto corto a la derecha, atenuado; solo lo dibuja el desplegable, que no muestra `sub`.
+    pub nota: String,
 }
 
 pub fn opcion(titulo: &str, sub: &str, que: Que) -> Opcion {
@@ -472,12 +474,18 @@ pub fn opcion(titulo: &str, sub: &str, que: Que) -> Opcion {
         que,
         fuente: None,
         cursor: None,
+        nota: String::new(),
     }
 }
 
 impl Opcion {
     pub fn activa(mut self, v: bool) -> Self {
         self.activa = v;
+        self
+    }
+
+    pub fn nota(mut self, n: &str) -> Self {
+        self.nota = n.into();
         self
     }
 }
@@ -1358,7 +1366,7 @@ pub fn sonido(
             } else {
                 tr!("del Default")
             };
-            opcion(idioma::t(titulo), de, Que::Sonar((*id).into()))
+            opcion(idioma::t(titulo), "", Que::Sonar((*id).into())).nota(de)
         })
         .chain([opcion(
             tr!("Señal de prueba"),
@@ -1609,10 +1617,10 @@ mod tests {
         // Cada uno dice si lo trae el tema puesto o lo rellena el Default.
         let de = |id: &str| {
             let i = MUESTRAS.iter().position(|(m, _)| *m == id).unwrap();
-            escuchar[i].sub.as_str()
+            escuchar[i].nota.as_str()
         };
         assert_eq!((de("complete"), de("device-added")), ("propio", "del Default"));
-        assert_eq!(escuchar[MUESTRAS.len()].sub, "");
+        assert_eq!(escuchar[MUESTRAS.len()].nota, "");
     }
 
     fn lista(secciones: &[Seccion], s: usize, f: usize) -> &[Opcion] {

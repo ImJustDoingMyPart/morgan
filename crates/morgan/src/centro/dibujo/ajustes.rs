@@ -986,10 +986,14 @@ impl AjustesUi {
             let x = 4.0;
             let w = ancho - 8.0;
             let w_tilde = tilde.as_ref().map_or(0.0, |t| self.ancho(t) + 10.0);
+            let nota = (!o.nota.is_empty()).then(|| self.rotulos.recortada(&o.nota, 12.0, w / 2.0));
+            let w_nota = nota.as_ref().map_or(0.0, |n| self.ancho(n) + 10.0);
             let tx = x + OPCION_X + TRAS_GLIFO;
-            let lt =
-                self.rotulos
-                    .recortada(&o.titulo, 14.0, (x + w - OPCION_X - w_tilde - tx).max(0.0));
+            let lt = self.rotulos.recortada(
+                &o.titulo,
+                14.0,
+                (x + w - OPCION_X - w_tilde - w_nota - tx).max(0.0),
+            );
             let a = self
                 .alto(&lt)
                 .max(tilde.as_ref().map_or(0.0, |t| self.alto(t)));
@@ -1008,6 +1012,15 @@ impl AjustesUi {
                 y: sy + OPCION_Y,
                 color: p.on_surface,
             });
+            if let Some(n) = nota {
+                let (nw, na) = (self.ancho(&n), self.alto(&n));
+                sub.trazos.push(Trazo::Texto {
+                    l: n,
+                    x: r.x1 - OPCION_X - w_tilde - nw,
+                    y: sy + OPCION_Y + ((a - na) / 2.0).floor(),
+                    color: op(&p.on_surface, 0.5),
+                });
+            }
             if let Some(t) = tilde {
                 let tw = self.ancho(&t);
                 let c = Rect::new(
