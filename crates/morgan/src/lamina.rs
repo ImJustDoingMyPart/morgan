@@ -7,6 +7,18 @@ use smithay_client_toolkit::compositor::FrameCallbackData;
 use wayland_client::protocol::{wl_callback, wl_surface};
 use wayland_client::{Dispatch, QueueHandle};
 
+/// Con `MORGAN_CUADROS`, cada cuadro presentado se anota con su hilo y su instante
+/// (`dev/traba` los cuenta).
+static CUADROS: std::sync::LazyLock<bool> =
+    std::sync::LazyLock::new(|| std::env::var_os("MORGAN_CUADROS").is_some());
+
+/// Microsegundos desde la época: el mismo reloj en todos los hilos y en los registros.
+pub fn ahora_us() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_micros())
+}
+
 pub struct Lamina {
     /// Antes que la superficie: lo de wgpu se suelta antes de que se destruya.
     pub lienzo: Option<Lienzo>,
@@ -47,6 +59,10 @@ impl Lamina {
         }) {
             self.esperando = true;
             self.sucio = false;
+            if *CUADROS {
+                let hilo = std::thread::current();
+                eprintln!("morgan: cuadro {} {}", hilo.name().unwrap_or("?"), ahora_us());
+            }
         }
     }
 

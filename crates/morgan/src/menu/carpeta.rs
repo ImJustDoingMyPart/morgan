@@ -13,6 +13,11 @@ const RUTA: &str = "/org/freedesktop/portal/desktop";
 
 /// La carpeta elegida; `None` si se canceló o el portal no está.
 pub async fn elegir(titulo: &str, etiqueta: &str, inicial: &Path) -> Option<PathBuf> {
+    // En el anidado, el portal del bus de prueba abre el selector en la sesión de afuera.
+    if std::env::var_os("MORGAN_SIN_PORTAL").is_some() {
+        eprintln!("morgan: selector de carpetas: sin portal (MORGAN_SIN_PORTAL)");
+        return None;
+    }
     match pedir(titulo, etiqueta, inicial).await {
         Ok(r) => r,
         Err(e) => {

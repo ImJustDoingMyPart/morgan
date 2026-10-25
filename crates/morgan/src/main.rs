@@ -575,6 +575,18 @@ async fn dispatch(request: &Request, s: &Servicios) -> Response {
             pedir_ventanas(s, *soltar);
             return Response::Done;
         }
+        // Dormir acá traba el bucle entero, que es lo que se quiere probar.
+        Request::Trabar { ms } => {
+            if std::env::var_os("MORGAN_DEV").is_none() {
+                return Response::Error {
+                    message: "solo en desarrollo (MORGAN_DEV)".into(),
+                };
+            }
+            let desde = lamina::ahora_us();
+            std::thread::sleep(std::time::Duration::from_millis(u64::from(*ms)));
+            eprintln!("morgan: traba {desde} {}", lamina::ahora_us());
+            return Response::Done;
+        }
         Request::Sesion => {
             if s.centro.abierto() {
                 s.centro.cerrar();

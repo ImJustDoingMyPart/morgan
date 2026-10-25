@@ -132,9 +132,10 @@ morgan)
     # ~/.config del anidado son symlinks al real). Sin matugen falla antes de tocar nada.
     printf '#!/bin/sh\necho "matugen $*" >>"%s/comandos.log"\nexit 1\n' "$estado" >"$falsos/matugen"
     chmod +x "$falsos/matugen"
-    # GDK_DEBUG=no-portals: el portal del bus del anidado arranca con el WAYLAND_DISPLAY de
-    # afuera, y el selector de «Examinar…» se abría en la sesión real. Sin portal, GTK usa
-    # su diálogo propio, en el anidado.
+    # MORGAN_SIN_PORTAL: el portal del bus del anidado arranca con el WAYLAND_DISPLAY de
+    # afuera, y el selector de «Examinar…» se abriría en la sesión real; sin portal, morgan
+    # no abre ninguno. MORGAN_DEV acepta `morganctl dev block` (`dev/traba`); MORGAN_CUADROS
+    # anota cada cuadro presentado.
     # Configuración propia: el menú escribe config.toml. El resto de ~/.config se ve igual
     # (symlinks), y theme.css es el real, para que el tema siga en vivo.
     conf="$estado/config"
@@ -149,7 +150,7 @@ morgan)
     # MORGAN_SIN_LOGIND: el bus del sistema del anidado es el real; sin esto, un tiempo de
     # idle bloquearía la sesión de verdad. Bloquear lanza el morgan-lock de target/debug.
     # GSETTINGS_BACKEND=memory: el tema de sonidos que se elija no llega al dconf real.
-    hc eval "hl.exec_cmd([[env PATH='$falsos:$raiz/target/debug:$PATH' MORGAN_SIN_LOGIND=1 MORGAN_APARIENCIA_SECO=1 GDK_DEBUG=no-portals ${MORGAN_TRAZA:+MORGAN_TRAZA=1} ${MORGAN_IDIOMA:+MORGAN_IDIOMA=$MORGAN_IDIOMA} GSETTINGS_BACKEND=memory MORGAN_HYPR_CFG='$estado/hypr-morgan.lua' XDG_STATE_HOME='$estado/state' XDG_CACHE_HOME='$estado/cache' XDG_CONFIG_HOME='$conf' ${MORGAN_BIN:-$raiz/target/debug/morgan} >>'$estado/morgan.log' 2>&1]])" >/dev/null
+    hc eval "hl.exec_cmd([[env PATH='$falsos:$raiz/target/debug:$PATH' MORGAN_SIN_LOGIND=1 MORGAN_APARIENCIA_SECO=1 MORGAN_SIN_PORTAL=1 MORGAN_DEV=1 ${MORGAN_CUADROS:+MORGAN_CUADROS=1} ${MORGAN_TRAZA:+MORGAN_TRAZA=1} ${MORGAN_IDIOMA:+MORGAN_IDIOMA=$MORGAN_IDIOMA} GSETTINGS_BACKEND=memory MORGAN_HYPR_CFG='$estado/hypr-morgan.lua' XDG_STATE_HOME='$estado/state' XDG_CACHE_HOME='$estado/cache' XDG_CONFIG_HOME='$conf' ${MORGAN_BIN:-$raiz/target/debug/morgan} >>'$estado/morgan.log' 2>&1]])" >/dev/null
     for _ in $(seq 50); do
         sleep 0.1
         WAYLAND_DISPLAY=$display "$raiz/target/debug/morganctl" ping >/dev/null 2>&1 && exit 0

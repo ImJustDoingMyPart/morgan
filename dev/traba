@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Lo que se dibuja no espera al hilo principal (la idea de pleamar, su `compare/`): con la
+# banda de fondos abierta en el anidado, se traba el hilo principal a propósito y mientras
+# tanto se aprieta → varias veces. Las teclas las atiende el hilo del centro y cada una anima
+# 220 ms: si el dibujo no depende del principal, los cuadros siguen saliendo sin huecos.
+#
+#   dev/traba [ms]      traba el hilo principal ms milisegundos (800 si no se dice)
+#
+# Necesita el anidado corriendo (`dev/anidado arrancar`); reinicia adentro el morgan de
+# target/debug con MORGAN_CUADROS. Sale con error si la animación se cortó.
+set -euo pipefail
+
+raiz=$(cd "$(dirname "$0")/.." && pwd)
+estado="${XDG_RUNTIME_DIR:?}/morgan-dev"
+log="$estado/morgan.log"
+traba=${1:-800}
+ctl="$raiz/target/debug/morganctl"
+
+MORGAN_CUADROS=1 "$raiz/dev/anidado" morgan
+# Directo contra el anidado, no con `dev/anidado ejecutar` (que vuelve antes de que el comando
+# termine): `dev block` contesta recién cuando se destraba.
+display=$(cat "$estado/display")
+e() { WAYLAND_DISPLAY=$display "$@"; }
+e "$ctl" wallpapers open >/dev/null
+# Que la banda ya esté en pantalla y quieta.
+sleep 2.5
+desde=$(wc -l <"$log")
+
+e "$ctl" dev block "$traba" >/dev/null &
+bloqueo=$!
+sleep 0.1
+for _ in 1 2 3 4 5; do
+    e wtype -k Right
+    sleep 0.12
+done
+wait "$bloqueo"
+sleep 0.3
+e "$ctl" wallpapers close >/dev/null
+
+tramo=$(mktemp)
+trap 'rm -f "$tramo"' EXIT
+tail -n +"$((desde + 1))" "$log" >"$tramo"
+
+python3 -I - "$tramo" "$traba" <<'PY'
+import sys
+
+lineas = open(sys.argv[1]).read().splitlines()
+traba = int(sys.argv[2])
+ventana = None
+cuadros = []
+for l in lineas:
+    p = l.split()
+    if len(p) == 4 and p[:2] == ["morgan:", "traba"]:
+        ventana = (int(p[2]), int(p[3]))
+    elif len(p) == 4 and p[:2] == ["morgan:", "cuadro"] and p[2] == "morgan-centro":
+        cuadros.append(int(p[3]))
+if ventana is None:
+    sys.exit("traba: morgan no anotó la traba (¿corre con MORGAN_DEV?)")
+a, b = ventana
+dentro = sorted(t for t in cuadros if a <= t <= b)
+duro = (b - a) / 1000
+if len(dentro) < 2:
+    sys.exit(f"traba: {duro:.0f} ms trabado y {len(dentro)} cuadros del hilo del centro: "
+             "la animación esperó al hilo principal")
+huecos = [(y - x) / 1000 for x, y in zip(dentro, dentro[1:])]
+mayor = max(huecos)
+tramo = (dentro[-1] - dentro[0]) / 1000
+print(f"traba: {duro:.0f} ms trabado; el hilo del centro sacó {len(dentro)} cuadros en "
+      f"{tramo:.0f} ms, el hueco más largo de {mayor:.1f} ms")
+# A 60 Hz un cuadro es de 16,7 ms: más de 50 ms sin cuadro, con la animación andando, se ve.
+if mayor > 50:
+    sys.exit("traba: la animación se cortó")
+PY

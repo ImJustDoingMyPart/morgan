@@ -88,6 +88,11 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         soltar: bool,
     },
+    /// Desarrollo: traba el hilo principal `ms` milisegundos, para probar que lo que se dibuja
+    /// no lo espera (`dev/traba`). morgan lo rechaza si no corre con `MORGAN_DEV`.
+    Trabar {
+        ms: u32,
+    },
     Captura {
         ruta: String,
     },
@@ -272,6 +277,9 @@ impl Nombres for AccionReproductor {
     const QUE: &str = "player action";
 }
 
+/// Lo más que se deja trabar el hilo principal a propósito.
+pub const TRABA_MAX: u32 = 5000;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Response {
@@ -387,6 +395,9 @@ impl Request {
             ["session"] => Request::Sesion,
             ["windows"] => Request::Ventanas { soltar: false },
             ["windows", "release"] => Request::Ventanas { soltar: true },
+            ["dev", "block", ms] => Request::Trabar {
+                ms: ms.parse().map_err(|_| format!("not a number of ms: {ms}"))?,
+            },
             ["menu", accion] => Request::Menu {
                 accion: AccionSuperficie::parse(accion)?,
                 nivel: NivelMenu::Raiz,
@@ -412,6 +423,11 @@ impl Request {
 
     /// Lo corren los dos extremos: el socket acepta cualquier cliente, no solo `morganctl`.
     pub fn validar(&self) -> Result<(), String> {
+        if let Request::Trabar { ms } = self
+            && *ms > TRABA_MAX
+        {
+            return Err(format!("block too long: {ms} ms (at most {TRABA_MAX})"));
+        }
         if let Request::Osd { contenido, ms, .. } = self {
             if let Some(ms) = ms
                 && !OSD_MS_RANGO.contains(ms)
@@ -980,5 +996,14 @@ mod tests {
         let err = bind(&path).unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::AddrInUse);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn trabar_es_de_desarrollo_y_con_tope() {
+        let r = Request::from_args(&["dev", "block", "800"]).unwrap();
+        assert_eq!(r, Request::Trabar { ms: 800 });
+        assert!(r.validar().is_ok());
+        assert!(Request::Trabar { ms: TRABA_MAX + 1 }.validar().is_err());
+        assert!(Request::from_args(&["dev", "block", "mucho"]).is_err());
     }
 }
