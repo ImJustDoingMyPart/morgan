@@ -1340,16 +1340,31 @@ pub fn sonido(
         .map(|t| {
             opcion(
                 &t.nombre,
-                &trf!("{} de {} propios", t.propios, total),
+                &trf!("{} de {} propios", t.propios.len(), total),
                 Que::ElegirTemaSonido(t.carpeta.clone(), t.demo.into()),
             )
             .activa(t.carpeta == puesto)
         })
         .collect();
+    let propios = temas
+        .iter()
+        .find(|t| t.carpeta == puesto)
+        .map_or(&[][..], |t| &t.propios[..]);
     let escuchar = MUESTRAS
         .iter()
-        .chain([&("audio-test-signal", tr!("Señal de prueba"))])
-        .map(|(id, titulo)| opcion(idioma::t(titulo), "", Que::Sonar((*id).into())))
+        .map(|(id, titulo)| {
+            let de = if propios.contains(id) {
+                tr!("propio")
+            } else {
+                tr!("del Default")
+            };
+            opcion(idioma::t(titulo), de, Que::Sonar((*id).into()))
+        })
+        .chain([opcion(
+            tr!("Señal de prueba"),
+            "",
+            Que::Sonar("audio-test-signal".into()),
+        )])
         .collect();
     let tema = vec![
         Fila::Galeria {
@@ -1555,11 +1570,11 @@ pub fn plural(n: usize, sing: &str, plur: &str) -> String {
 mod tests {
     use super::*;
 
-    fn tema_prueba(carpeta: &str, propios: usize) -> TemaSonido {
+    fn tema_prueba(carpeta: &str, propios: &[&'static str]) -> TemaSonido {
         TemaSonido {
             carpeta: carpeta.into(),
             nombre: carpeta.to_uppercase(),
-            propios,
+            propios: propios.to_vec(),
             demo: "service-login",
         }
     }
@@ -1568,9 +1583,9 @@ mod tests {
     fn el_tema_de_sonidos_puesto_y_lo_que_trae() {
         let c = Config::default();
         let temas = [
-            tema_prueba("COSMIC", 0),
-            tema_prueba("freedesktop", MUESTRAS.len()),
-            tema_prueba("ocean", 7),
+            tema_prueba("COSMIC", &[]),
+            tema_prueba("freedesktop", &MUESTRAS.iter().map(|(id, _)| *id).collect::<Vec<_>>()),
+            tema_prueba("ocean", &["service-login", "complete"]),
         ];
         let p = sonido(&c, &temas, "ocean", &[]);
         let Fila::Galeria { opciones, .. } = &p[2].filas[0] else {
@@ -1580,7 +1595,7 @@ mod tests {
         let subs: Vec<_> = opciones.iter().map(|o| o.sub.as_str()).collect();
         assert_eq!(
             subs,
-            ["0 de 10 propios", "10 de 10 propios", "7 de 10 propios"]
+            ["0 de 10 propios", "10 de 10 propios", "2 de 10 propios"]
         );
         assert_eq!(
             opciones[2].que,
@@ -1591,6 +1606,13 @@ mod tests {
         assert_eq!(escuchar.len(), MUESTRAS.len() + 1);
         assert!(activas(escuchar).is_empty());
         assert_eq!(escuchar[0].que, Que::Sonar("message-new-instant".into()));
+        // Cada uno dice si lo trae el tema puesto o lo rellena el Default.
+        let de = |id: &str| {
+            let i = MUESTRAS.iter().position(|(m, _)| *m == id).unwrap();
+            escuchar[i].sub.as_str()
+        };
+        assert_eq!((de("complete"), de("device-added")), ("propio", "del Default"));
+        assert_eq!(escuchar[MUESTRAS.len()].sub, "");
     }
 
     fn lista(secciones: &[Seccion], s: usize, f: usize) -> &[Opcion] {
@@ -1646,7 +1668,7 @@ mod tests {
                     &Default::default(),
                     "/home/r/Imágenes",
                 ),
-                (None, Categoria::Sonido) => sonido(&c, &[tema_prueba("ocean", 7)], "ocean", &[]),
+                (None, Categoria::Sonido) => sonido(&c, &[tema_prueba("ocean", &[])], "ocean", &[]),
                 (None, Categoria::Sistema) => {
                     let mut filas =
                         vec![super::super::sistema::equipo(&[("Kernel", "7.2".into())])];

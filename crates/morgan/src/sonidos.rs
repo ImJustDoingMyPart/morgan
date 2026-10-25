@@ -135,7 +135,8 @@ fn nombres(id: &str) -> impl Iterator<Item = &str> {
 pub struct TemaSonido {
     pub carpeta: String,
     pub nombre: String,
-    pub propios: usize,
+    /// Los de `MUESTRAS` que trae, alias incluidos; el resto suena de `TEMA_BASE`.
+    pub propios: Vec<&'static str>,
     pub demo: &'static str,
 }
 
@@ -241,7 +242,7 @@ pub fn leer_tema(dir: &Path) -> Option<TemaSonido> {
     let nombre = nombre_tema(&std::fs::read_to_string(dir.join("index.theme")).ok()?)?;
     let raices: Vec<_> = std::iter::once(raiz).chain(bases()).collect();
     let trae = |id: &str| buscar_en(&raices, &carpeta, id).is_some();
-    let propios = MUESTRAS.iter().filter(|(id, _)| trae(id)).count();
+    let propios: Vec<_> = MUESTRAS.iter().map(|(id, _)| *id).filter(|id| trae(id)).collect();
     let demo = DEMO
         .iter()
         .chain(MUESTRAS.iter().map(|(id, _)| id))
@@ -300,27 +301,48 @@ pub fn poner_tema(carpeta: &str) {
 
 /// Con el archivo resuelto acá, alias incluidos, se le pasa ese; si el tema no trae nada,
 /// canberra pone el de `TEMA_BASE`.
-pub fn sonar(id: &str, tema: Option<&str>) {
+fn argumentos(id: &str, tema: Option<&str>) -> Vec<String> {
     let tema = tema.map_or_else(tema_puesto, str::to_owned);
     let raices: Vec<_> = bases().collect();
-    if let Some(f) = buscar_en(&raices, &tema, id) {
-        crate::comando::lanzar(&[
-            "canberra-gtk-play",
-            "-f",
-            &f.to_string_lossy(),
-            "-d",
-            "morgan",
-        ]);
-        return;
+    let mut a: Vec<String> = match buscar_en(&raices, &tema, id) {
+        Some(f) => vec!["-f".into(), f.to_string_lossy().into_owned()],
+        None => vec![
+            "-i".into(),
+            id.into(),
+            format!("--property=canberra.xdg-theme.name={tema}"),
+        ],
+    };
+    a.splice(0..0, ["canberra-gtk-play".into(), "-d".into(), "morgan".into()]);
+    a
+}
+
+pub fn sonar(id: &str, tema: Option<&str>) {
+    let a = argumentos(id, tema);
+    crate::comando::lanzar(&a.iter().map(String::as_str).collect::<Vec<_>>());
+}
+
+thread_local! {
+    static PRUEBA: RefCell<Option<gio::Subprocess>> = const { RefCell::new(None) };
+}
+
+/// La prueba del menú: corta la anterior, que si era larga seguía sonando debajo. Sin caché
+/// (`-c never`), porque una muestra cacheada la reproduce el servidor y matar a
+/// canberra no la para.
+pub fn probar(id: &str, tema: Option<&str>) {
+    let mut a = argumentos(id, tema);
+    a.extend(["-c".into(), "never".into()]);
+    let argv: Vec<&std::ffi::OsStr> = a.iter().map(std::ffi::OsStr::new).collect();
+    let nuevo = match gio::Subprocess::newv(&argv, gio::SubprocessFlags::NONE) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("morgan: canberra-gtk-play: {e}");
+            return;
+        }
+    };
+    nuevo.wait_async(gio::Cancellable::NONE, |_| {});
+    if let Some(viejo) = PRUEBA.with(|p| p.replace(Some(nuevo))) {
+        viejo.force_exit();
     }
-    crate::comando::lanzar(&[
-        "canberra-gtk-play",
-        "-i",
-        id,
-        "-d",
-        "morgan",
-        &format!("--property=canberra.xdg-theme.name={tema}"),
-    ]);
 }
 
 const NM_CONECTADO: u32 = 70;
@@ -548,7 +570,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(t.carpeta, "prueba");
         assert_eq!(t.nombre, "Prueba");
-        assert_eq!(t.propios, 2);
+        assert_eq!(t.propios, ["device-added", "complete"]);
         assert_eq!(t.demo, "device-added");
     }
 

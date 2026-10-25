@@ -686,7 +686,7 @@ impl Menu {
                 return;
             }
             Que::Sonar(id) => {
-                sonidos::sonar(id, None);
+                sonidos::probar(id, None);
                 self.hecho(lugar, true);
                 return;
             }
@@ -933,7 +933,7 @@ impl Menu {
             }
             Que::ElegirTemaSonido(carpeta, demo) => {
                 sonidos::poner_tema(&carpeta);
-                sonidos::sonar(&demo, Some(&carpeta));
+                sonidos::probar(&demo, Some(&carpeta));
                 Ok(())
             }
             Que::BorrarRecientes => lectura::borrar_recientes(),

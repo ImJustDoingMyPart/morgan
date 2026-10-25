@@ -228,6 +228,8 @@
 "GPU Screen Recorder; el replay no cuenta" = "GPU Screen Recorder; replays don't count"
 "{} de {} propios" = "{} of {} its own"
 "Señal de prueba" = "Test signal"
+"propio" = "its own"
+"del Default" = "from Default"
 "Escuchar" = "Listen"
 "cada sonido de morgan con el tema puesto; lo que no trae propio, suena del Default" = "each morgan sound with the current theme; what it lacks plays from Default"
 
