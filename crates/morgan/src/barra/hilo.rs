@@ -316,14 +316,19 @@ impl Hilo {
             }
         }
         self.version += 1;
-        self.ensuciar();
+        // Lo de la barra: el calendario tiene sus datos y el globo se rehace solo.
+        self.ensuciar_barras();
         self.objetivos();
     }
 
-    fn ensuciar(&mut self) {
+    fn ensuciar_barras(&mut self) {
         for b in &mut self.barras {
             b.lamina.sucio = true;
         }
+    }
+
+    fn ensuciar(&mut self) {
+        self.ensuciar_barras();
         if let Some(c) = &mut self.calendario {
             c.lamina.sucio = true;
         }
@@ -558,7 +563,7 @@ impl Hilo {
             encima: None,
         });
         self.objetivos();
-        self.ensuciar();
+        self.ensuciar_barras();
     }
 
     /// `propio`: lo cerró el calendario (Escape, un click afuera) y GTK no lo sabe.
@@ -577,7 +582,7 @@ impl Hilo {
             self.avisar(Evento::CalendarioCerrado);
         }
         self.objetivos();
-        self.ensuciar();
+        self.ensuciar_barras();
     }
 
     fn tecla_calendario(&mut self, ev: KeyEvent) {

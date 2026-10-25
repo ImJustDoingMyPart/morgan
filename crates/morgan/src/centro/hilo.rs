@@ -165,6 +165,82 @@ struct MenuSup {
     ui: MenuUi,
 }
 
+/// Las capas del hilo, para saber cuál cambió.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Capa {
+    Todas,
+    Ninguna,
+    Panel,
+    Menu,
+    Toasts,
+    Launcher,
+    Ajustes,
+    Calculadora,
+    Fondos,
+    Ventanas,
+}
+
+#[cfg(test)]
+mod pruebas_capa {
+    use super::*;
+
+    #[test]
+    fn cada_orden_ensucia_su_capa() {
+        assert_eq!(Capa::de(&Orden::Limpiar), Capa::Panel);
+        assert_eq!(Capa::de(&Orden::Toasts(Vec::new())), Capa::Toasts);
+        assert_eq!(Capa::de(&Orden::FondosCerrar), Capa::Fondos);
+        assert_eq!(Capa::de(&Orden::VentanasMostrar), Capa::Ventanas);
+        assert_eq!(Capa::de(&Orden::CalculadoraAbrir), Capa::Calculadora);
+        assert_eq!(Capa::de(&Orden::LauncherCerrar), Capa::Launcher);
+        assert_eq!(Capa::de(&Orden::AjustesGrabando(true)), Capa::Ajustes);
+        assert_eq!(Capa::de(&Orden::Menu(None)), Capa::Menu);
+    }
+}
+
+impl Capa {
+    /// Sin comodín: una orden nueva tiene que decir qué capa toca.
+    fn de(o: &Orden) -> Capa {
+        match o {
+            Orden::Tema(..) => Capa::Todas,
+            Orden::Abrir { .. }
+            | Orden::Cerrar
+            | Orden::Tarjetas(_)
+            | Orden::Lista(..)
+            | Orden::Niveles(_)
+            | Orden::Reproductor(_)
+            | Orden::Iconos(_)
+            | Orden::Avisos(_)
+            | Orden::Enfocar(..)
+            | Orden::Limpiar => Capa::Panel,
+            Orden::Menu(_) => Capa::Menu,
+            Orden::Toasts(_) => Capa::Toasts,
+            Orden::LauncherAbrir { .. } | Orden::LauncherLista(_) | Orden::LauncherCerrar => {
+                Capa::Launcher
+            }
+            Orden::AjustesAbrir
+            | Orden::AjustesCerrar
+            | Orden::AjustesIndice(_)
+            | Orden::AjustesPagina(_)
+            | Orden::AjustesIr { .. }
+            | Orden::AjustesHecho { .. }
+            | Orden::AjustesGrabando(_) => Capa::Ajustes,
+            // Antes de la primera apertura: no hay nada que dibujar.
+            Orden::AjustesPrecalentar(_) => Capa::Ninguna,
+            Orden::CalculadoraAbrir | Orden::CalculadoraCerrar | Orden::Calculadora(_) => {
+                Capa::Calculadora
+            }
+            Orden::FondosAbrir(_) | Orden::FondosCerrar => Capa::Fondos,
+            Orden::VentanasAbrir(_)
+            | Orden::VentanasMostrar
+            | Orden::VentanasReciente
+            | Orden::VentanasConfirmar
+            | Orden::VentanasFoto(..)
+            | Orden::VentanasFondo(_)
+            | Orden::VentanasCerrar => Capa::Ventanas,
+        }
+    }
+}
+
 /// La columna de los toasts, mientras hay alguno: en la salida enfocada, arriba de todo.
 struct ToastsSup {
     lamina: Lamina,
@@ -360,8 +436,29 @@ impl Hilo {
         }
     }
 
+    /// Solo la capa cuyo estado cambió vuelve a dibujarse (la idea de amane, `RELACIONADOS.md`):
+    /// una notificación nueva no rehace el launcher abierto.
+    fn ensuciar_capa(&mut self, c: Capa) {
+        let lamina = match c {
+            Capa::Todas => return self.ensuciar(),
+            Capa::Ninguna => None,
+            Capa::Panel => self.panel.as_mut().map(|p| &mut p.lamina),
+            Capa::Menu => self.menu.as_mut().map(|m| &mut m.lamina),
+            Capa::Toasts => self.toasts.as_mut().map(|t| &mut t.lamina),
+            Capa::Launcher => self.launcher.as_mut().map(|l| &mut l.lamina),
+            Capa::Ajustes => self.ajustes.as_mut().map(|a| &mut a.lamina),
+            Capa::Calculadora => self.calculadora.as_mut().map(|c| &mut c.lamina),
+            Capa::Fondos => self.fondos.as_mut().map(|f| &mut f.lamina),
+            Capa::Ventanas => self.ventanas.as_mut().map(|v| &mut v.lamina),
+        };
+        if let Some(l) = lamina {
+            l.sucio = true;
+        }
+    }
+
     fn orden(&mut self, o: Orden) {
         let ahora = Instant::now();
+        let capa = Capa::de(&o);
         match o {
             Orden::Tema(p, o, b) => {
                 (self.ui.paleta, self.ui.opacidad, self.ui.borde) = (p, o, b);
@@ -477,7 +574,7 @@ impl Hilo {
                 }
             }
         }
-        self.ensuciar();
+        self.ensuciar_capa(capa);
     }
 
     fn poner_toasts(&mut self, v: Vec<Aviso>) {
@@ -810,7 +907,7 @@ impl Hilo {
             }
             None => {}
         }
-        self.ensuciar();
+        self.ensuciar_capa(Capa::Menu);
     }
 
     fn abrir(&mut self, sesion: bool) {
@@ -851,7 +948,7 @@ impl Hilo {
         self.reloj = self
             .bucle
             .insert_source(timer, |_, _, h| {
-                h.ensuciar();
+                h.ensuciar_capa(Capa::Panel);
                 TimeoutAction::ToDuration(Duration::from_secs(60))
             })
             .ok();
@@ -886,7 +983,7 @@ impl Hilo {
                 Pedido::Pegar(l) => self.pegar(move |h, t| h.ui.pegar(l, t)),
             }
         }
-        self.ensuciar();
+        self.ensuciar_capa(Capa::Panel);
     }
 
     /// Lo que hay en el portapapeles, con `wl-paste` (sin esperar: lo trae un hilo).
@@ -943,7 +1040,7 @@ impl Hilo {
                         && h.cava.is_some()
                     {
                         h.ui.ecualizador.1 = n;
-                        h.ensuciar();
+                        h.ensuciar_capa(Capa::Panel);
                     }
                 });
                 self.cava = Some(Cava { proceso });
@@ -971,7 +1068,15 @@ impl Hilo {
         let timer = Timer::from_deadline(cuando);
         if let Ok(t) = self.bucle.insert_source(timer, |_, _, h| {
             h.parpadeo = None;
-            h.ensuciar();
+            // El campo con el foco es del launcher, del menú o del centro, en ese orden.
+            let capa = if h.launcher.is_some() {
+                Capa::Launcher
+            } else if h.ajustes.is_some() {
+                Capa::Ajustes
+            } else {
+                Capa::Panel
+            };
+            h.ensuciar_capa(capa);
             TimeoutAction::Drop
         }) {
             self.parpadeo = Some((cuando, t));
