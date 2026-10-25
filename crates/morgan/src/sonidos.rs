@@ -76,6 +76,61 @@ const DEMO: &[&str] = &[
 /// canberra cae a él con lo que a otro le falta.
 pub const TEMA_BASE: &str = "freedesktop";
 
+/// Otros nombres con que los temas traen cada sonido de morgan, en orden de preferencia. Van
+/// por nombre y no por tema, así que sirven para cualquier tema que se instale. Sin
+/// equivalente en el tema, suena el de `TEMA_BASE`: los de red no tienen alias porque ningún
+/// tema trae algo parecido que no sea de mensajería.
+const ALIAS: &[(&str, &[&str])] = &[
+    (
+        "message-new-instant",
+        &[
+            "message",
+            "message-new-email",
+            "message-highlight",
+            "dialog-information",
+        ],
+    ),
+    (
+        "dialog-warning",
+        &[
+            "dialog-error",
+            "dialog-error-serious",
+            "message-attention",
+            "bell",
+        ],
+    ),
+    ("audio-volume-change", &["button-pressed"]),
+    ("device-added", &["power-plug"]),
+    ("device-removed", &["power-unplug"]),
+    (
+        "network-connectivity-lost",
+        &[
+            "network-connectivity-error",
+            "message-connectivity-lost",
+            "message-connectivity-error",
+        ],
+    ),
+    ("service-logout", &["desktop-screen-lock", "desktop-logout"]),
+    ("service-login", &["desktop-login", "system-ready"]),
+    (
+        "complete",
+        &[
+            "completion-success",
+            "outcome-success",
+            "screen-capture-complete",
+            "complete-copy",
+        ],
+    ),
+];
+
+fn nombres(id: &str) -> impl Iterator<Item = &str> {
+    let alias = ALIAS
+        .iter()
+        .find(|(i, _)| *i == id)
+        .map_or(&[][..], |(_, a)| a);
+    std::iter::once(id).chain(alias.iter().copied())
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct TemaSonido {
     pub carpeta: String,
@@ -84,59 +139,127 @@ pub struct TemaSonido {
     pub demo: &'static str,
 }
 
-pub fn nombre_tema(index: &str) -> Option<String> {
+/// La sección `[Sound Theme]` de un `index.theme`.
+#[derive(Debug, Default, PartialEq)]
+struct Index {
+    nombre: String,
+    directorios: Vec<String>,
+    hereda: Vec<String>,
+}
+
+/// La especificación separa con comas; COSMIC, con espacios.
+fn lista(v: &str) -> Vec<String> {
+    v.split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+fn leer_index(index: &str) -> Option<Index> {
     let mut en_tema = false;
-    let mut nombre = None;
+    let mut i = Index::default();
     for l in index.lines().map(str::trim) {
         if l.starts_with('[') {
             en_tema = l == "[Sound Theme]";
         } else if en_tema {
             match l.split_once('=').map(|(k, v)| (k.trim(), v.trim())) {
-                Some(("Name", v)) if !v.is_empty() => nombre = Some(v.to_owned()),
+                Some(("Name", v)) => i.nombre = v.to_owned(),
+                Some(("Directories", v)) => i.directorios = lista(v),
+                Some(("Inherits", v)) => i.hereda = lista(v),
                 Some(("Hidden", "true")) => return None,
                 _ => {}
             }
         }
     }
-    nombre
+    (!i.nombre.is_empty()).then_some(i)
 }
 
-fn trae(dir: &Path, id: &str) -> bool {
-    let en = |d: &Path| {
+pub fn nombre_tema(index: &str) -> Option<String> {
+    leer_index(index).map(|i| i.nombre)
+}
+
+/// Si una carpeta se repite, vale la primera, como en canberra.
+fn bases() -> impl Iterator<Item = std::path::PathBuf> {
+    std::iter::once(glib::user_data_dir())
+        .chain(glib::system_data_dirs())
+        .map(|b| b.join("sounds"))
+}
+
+/// Las carpetas donde un tema guarda sus sonidos: las de `Directories`, que pueden estar a
+/// varios niveles (COSMIC usa `stereo/notification`); sin esa clave, la raíz y su primer nivel.
+fn carpetas(dir: &Path, i: &Index) -> Vec<std::path::PathBuf> {
+    if !i.directorios.is_empty() {
+        return i.directorios.iter().map(|d| dir.join(d)).collect();
+    }
+    let hijas = std::fs::read_dir(dir).into_iter().flatten().flatten();
+    std::iter::once(dir.to_owned())
+        .chain(
+            hijas
+                .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+                .map(|e| e.path()),
+        )
+        .collect()
+}
+
+fn en_carpetas(carpetas: &[std::path::PathBuf], id: &str) -> Option<std::path::PathBuf> {
+    carpetas.iter().find_map(|d| {
         ["oga", "ogg", "wav"]
             .iter()
-            .any(|ext| d.join(format!("{id}.{ext}")).is_file())
-    };
-    en(dir)
-        || std::fs::read_dir(dir).is_ok_and(|r| {
-            r.flatten()
-                .any(|e| e.file_type().is_ok_and(|t| t.is_dir()) && en(&e.path()))
-        })
+            .map(|ext| d.join(format!("{id}.{ext}")))
+            .find(|f| f.is_file())
+    })
+}
+
+/// El archivo del tema para `id`, con sus alias y los temas que hereda, salvo `TEMA_BASE`:
+/// ese lo pone canberra, y heredarlo no lo vuelve propio.
+fn buscar_en(raices: &[std::path::PathBuf], carpeta: &str, id: &str) -> Option<std::path::PathBuf> {
+    let mut vistos: Vec<String> = Vec::new();
+    let mut pendientes = vec![carpeta.to_owned()];
+    while let Some(t) = pendientes.pop() {
+        if vistos.contains(&t) || (t == TEMA_BASE && !vistos.is_empty()) {
+            continue;
+        }
+        vistos.push(t.clone());
+        let Some((dir, i)) = raices.iter().map(|r| r.join(&t)).find_map(|dir| {
+            let i = leer_index(&std::fs::read_to_string(dir.join("index.theme")).ok()?)?;
+            Some((dir, i))
+        }) else {
+            continue;
+        };
+        let cs = carpetas(&dir, &i);
+        if let Some(f) = nombres(id).find_map(|n| en_carpetas(&cs, n)) {
+            return Some(f);
+        }
+        pendientes.extend(i.hereda.into_iter().rev());
+    }
+    None
 }
 
 pub fn leer_tema(dir: &Path) -> Option<TemaSonido> {
+    let raiz = dir.parent()?.to_owned();
+    let carpeta = dir.file_name()?.to_string_lossy().into_owned();
     let nombre = nombre_tema(&std::fs::read_to_string(dir.join("index.theme")).ok()?)?;
-    let propios = MUESTRAS.iter().filter(|(id, _)| trae(dir, id)).count();
+    let raices: Vec<_> = std::iter::once(raiz).chain(bases()).collect();
+    let trae = |id: &str| buscar_en(&raices, &carpeta, id).is_some();
+    let propios = MUESTRAS.iter().filter(|(id, _)| trae(id)).count();
     let demo = DEMO
         .iter()
         .chain(MUESTRAS.iter().map(|(id, _)| id))
-        .find(|id| trae(dir, id))
+        .find(|id| trae(id))
         .copied()
         .unwrap_or(DEMO[0]);
     Some(TemaSonido {
-        carpeta: dir.file_name()?.to_string_lossy().into_owned(),
+        carpeta,
         nombre,
         propios,
         demo,
     })
 }
 
-/// Si una carpeta se repite, vale la primera, como en canberra.
 pub fn temas() -> Vec<TemaSonido> {
     let mut v: Vec<TemaSonido> = Vec::new();
-    let bases = std::iter::once(glib::user_data_dir()).chain(glib::system_data_dirs());
-    for base in bases {
-        let Ok(r) = std::fs::read_dir(base.join("sounds")) else {
+    for base in bases() {
+        let Ok(r) = std::fs::read_dir(base) else {
             continue;
         };
         for e in r.flatten() {
@@ -175,8 +298,21 @@ pub fn poner_tema(carpeta: &str) {
     gio::Settings::sync();
 }
 
+/// Con el archivo resuelto acá, alias incluidos, se le pasa ese; si el tema no trae nada,
+/// canberra pone el de `TEMA_BASE`.
 pub fn sonar(id: &str, tema: Option<&str>) {
     let tema = tema.map_or_else(tema_puesto, str::to_owned);
+    let raices: Vec<_> = bases().collect();
+    if let Some(f) = buscar_en(&raices, &tema, id) {
+        crate::comando::lanzar(&[
+            "canberra-gtk-play",
+            "-f",
+            &f.to_string_lossy(),
+            "-d",
+            "morgan",
+        ]);
+        return;
+    }
     crate::comando::lanzar(&[
         "canberra-gtk-play",
         "-i",
@@ -414,6 +550,82 @@ mod tests {
         assert_eq!(t.nombre, "Prueba");
         assert_eq!(t.propios, 2);
         assert_eq!(t.demo, "device-added");
+    }
+
+    fn tema_de_prueba(raiz: &Path, carpeta: &str, index: &str, archivos: &[&str]) {
+        let dir = raiz.join(carpeta);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("index.theme"), index).unwrap();
+        for a in archivos {
+            let f = dir.join(a);
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, "").unwrap();
+        }
+    }
+
+    #[test]
+    fn busca_en_sus_directorios_con_alias_y_herencia() {
+        let raiz = std::env::temp_dir().join(format!("morgan-buscar-{}", std::process::id()));
+        // Como COSMIC: los sonidos a dos niveles, declarados en Directories.
+        tema_de_prueba(
+            &raiz,
+            "hondo",
+            "[Sound Theme]\nName=Hondo\nDirectories=stereo/action stereo/notification\nInherits=padre,freedesktop\n",
+            &[
+                "stereo/notification/device-added.oga",
+                "stereo/action/desktop-screen-lock.oga",
+            ],
+        );
+        tema_de_prueba(
+            &raiz,
+            "padre",
+            "[Sound Theme]\nName=Padre\n",
+            &["stereo/complete.ogg"],
+        );
+        tema_de_prueba(
+            &raiz,
+            "freedesktop",
+            "[Sound Theme]\nName=Default\n",
+            &["stereo/dialog-warning.oga"],
+        );
+        let raices = [raiz.clone()];
+        let b = |id| {
+            buscar_en(&raices, "hondo", id).map(|f| {
+                f.strip_prefix(&raiz)
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+        };
+        let (agregado, bloqueo, completo, aviso) = (
+            b("device-added"),
+            b("service-logout"),
+            b("complete"),
+            b("dialog-warning"),
+        );
+        let base = buscar_en(&raices, "freedesktop", "dialog-warning");
+        std::fs::remove_dir_all(&raiz).unwrap();
+        assert_eq!(
+            agregado.as_deref(),
+            Some("hondo/stereo/notification/device-added.oga")
+        );
+        assert_eq!(
+            bloqueo.as_deref(),
+            Some("hondo/stereo/action/desktop-screen-lock.oga")
+        );
+        assert_eq!(completo.as_deref(), Some("padre/stereo/complete.ogg"));
+        // Lo de freedesktop lo pone canberra: heredarlo no lo vuelve propio.
+        assert_eq!(aviso, None);
+        assert!(base.is_some());
+    }
+
+    #[test]
+    fn el_nombre_exacto_le_gana_al_alias() {
+        assert_eq!(nombres("complete").next(), Some("complete"));
+        assert_eq!(nombres("sin-alias").collect::<Vec<_>>(), ["sin-alias"]);
+        for (id, _) in MUESTRAS {
+            assert!(!nombres(id).skip(1).any(|n| n == *id), "{id}");
+        }
     }
 
     #[test]
