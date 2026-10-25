@@ -196,7 +196,7 @@ yay -S morgan-git     # or: yay -S morgan-bin
 ```
 
 `morgan-bin` follows releases, so it can be behind `main`; the
-[changelog](CHANGELOG.md) says what isn't released yet.
+[changelog](CHANGELOG.md) says what each version brings.
 
 Or from source, into `~/.local` (it checks dependencies and tells you what's missing):
 

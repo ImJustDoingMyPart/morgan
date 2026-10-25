@@ -16,7 +16,7 @@ jobs:
     container: archlinux:base-devel
     steps:
       - name: Dependencias
-        run: pacman -Syu --noconfirm --needed git rust libxkbcommon fontconfig libpulse pam hyprland-protocols github-cli
+        run: pacman -Syu --noconfirm --needed git rust glib2 wayland libxkbcommon fontconfig libpulse pam hyprland-protocols github-cli
 
       - uses: actions/checkout@v4
 

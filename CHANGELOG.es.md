@@ -2,7 +2,7 @@
 
 [English](CHANGELOG.md) · **Español**
 
-## Sin publicar
+## 0.2.0 · 2026-10-25
 
 ### Adiós a GTK4
 

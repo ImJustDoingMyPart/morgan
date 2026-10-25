@@ -201,7 +201,7 @@ yay -S morgan-git     # o: yay -S morgan-bin
 ```
 
 `morgan-bin` sigue las versiones publicadas, así que puede ir atrás de `main`; el
-[registro de cambios](CHANGELOG.es.md) dice qué falta publicar.
+[registro de cambios](CHANGELOG.es.md) dice qué trae cada versión.
 
 O desde el código, en `~/.local` (revisa las dependencias y dice qué falta):
 
