@@ -144,7 +144,7 @@ impl Notificaciones {
     }
 
     fn recibir(&self, mut n: Notificacion) -> u32 {
-        let reemplaza = n.id != 0 && self.inner.lista.borrow().iter().any(|x| x.id == n.id);
+        let reemplaza = modelo::reemplaza(&self.inner.lista.borrow(), &n);
         if !reemplaza {
             n.id = self.proximo_id();
         }

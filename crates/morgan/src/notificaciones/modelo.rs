@@ -133,6 +133,12 @@ pub fn sonido(
     }
 }
 
+/// Un `replaces_id` vale solo sobre una notificación de la misma app: otra no puede pisarla
+/// adivinando el número (lo mismo hace `wayle-notification`).
+pub fn reemplaza(lista: &[Notificacion], n: &Notificacion) -> bool {
+    n.id != 0 && lista.iter().any(|x| x.id == n.id && x.app == n.app)
+}
+
 /// Llega con id propio y no como reemplazo, porque el emisor guarda ese id para sus acciones.
 pub fn desplazadas(lista: &[Notificacion], n: &Notificacion) -> Vec<u32> {
     lista
@@ -627,5 +633,14 @@ mod tests {
         // Un reemplazo por id no se desplaza a sí mismo.
         assert_eq!(desplazadas(&lista, &con(3, "kitty", "Claude Code")), [1]);
         assert!(desplazadas(&lista, &con(9, "kitty", "Codex")).is_empty());
+    }
+
+    #[test]
+    fn solo_la_misma_app_reemplaza() {
+        let lista = vec![prueba(7, "kitty")];
+        assert!(reemplaza(&lista, &prueba(7, "kitty")));
+        assert!(!reemplaza(&lista, &prueba(7, "firefox")));
+        assert!(!reemplaza(&lista, &prueba(8, "kitty")));
+        assert!(!reemplaza(&lista, &prueba(0, "kitty")));
     }
 }
