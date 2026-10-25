@@ -301,7 +301,6 @@
 "Nombre" = "Name"
 "el de fábrica es {}" = "the factory one is {}"
 "ponele uno que se reconozca: «TV», «el de la izquierda»" = "give it one you'll recognize: “TV”, “the left one”"
-"Arrastralo para ubicarlo" = "Drag it to place it"
 "a la derecha de {}" = "right of {}"
 "a la izquierda de {}" = "left of {}"
 "arriba de {}" = "above {}"
@@ -435,3 +434,16 @@
 
 # polkit/mod.rs
 "No se pudo hablar con polkit" = "Couldn't talk to polkit"
+
+# calculadora/mod.rs
+"copiado" = "copied"
+
+# centro/dibujo/ajustes.rs
+"¿Seguro? Tocá de nuevo para borrar" = "Sure? Tap again to delete"
+"No se pudo: el detalle está en el journal" = "Couldn't do it: the details are in the journal"
+"Leyendo…" = "Reading…"
+
+# menu/mod.rs: grabar un atajo
+"Apretá la combinación · Escape cancela" = "Press the combination · Escape cancels"
+"un bind sin descripción" = "a bind without a description"
+"Ya la usa {}: Enter la reasigna, Escape cancela" = "{} already uses it: Enter reassigns it, Escape cancels"

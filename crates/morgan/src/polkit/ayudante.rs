@@ -17,6 +17,12 @@ use super::secreto::Secreto;
 
 pub const SOCKET: &str = "/run/polkit/agent-helper.socket";
 
+// Los prefijos del protocolo del ayudante.
+const PEDIR_OCULTO: &str = "PAM_PROMPT_ECHO_OFF "; // no-tr
+const PEDIR_VISIBLE: &str = "PAM_PROMPT_ECHO_ON "; // no-tr
+const ERROR: &str = "PAM_ERROR_MSG "; // no-tr
+const INFO: &str = "PAM_TEXT_INFO "; // no-tr
+
 /// Una línea del ayudante.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Linea {
@@ -36,23 +42,19 @@ pub enum Linea {
 pub fn leer(linea: &str) -> Linea {
     let s = descomprimir(linea.strip_suffix('\n').unwrap_or(linea));
     let resto = |p: &str| s.strip_prefix(p).map(str::to_owned);
-    if let Some(t) = resto("PAM_PROMPT_ECHO_OFF ") {
-        // no-tr
+    if let Some(t) = resto(PEDIR_OCULTO) {
         Linea::Pedir {
             texto: t,
             eco: false,
         }
-    } else if let Some(t) = resto("PAM_PROMPT_ECHO_ON ") {
-        // no-tr
+    } else if let Some(t) = resto(PEDIR_VISIBLE) {
         Linea::Pedir {
             texto: t,
             eco: true,
         }
-    } else if let Some(t) = resto("PAM_ERROR_MSG ") {
-        // no-tr
+    } else if let Some(t) = resto(ERROR) {
         Linea::Error(t)
-    } else if let Some(t) = resto("PAM_TEXT_INFO ") {
-        // no-tr
+    } else if let Some(t) = resto(INFO) {
         Linea::Info(t)
     } else if s.starts_with("SUCCESS") {
         Linea::Exito
