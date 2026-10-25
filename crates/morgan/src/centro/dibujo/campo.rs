@@ -42,6 +42,14 @@ impl Default for Entrada {
 }
 
 impl Entrada {
+    /// Vacío, con lugar para `n` bytes: una clave que entra no se realoca (ni deja copias).
+    pub fn con_reserva(n: usize) -> Self {
+        Entrada {
+            texto: String::with_capacity(n),
+            ..Entrada::default()
+        }
+    }
+
     /// Un campo nuevo (otra red, otro pedido) arranca vacío.
     pub fn preparar(&mut self, generacion: u64) {
         if generacion != self.generacion {
@@ -146,7 +154,7 @@ impl Entrada {
     }
 
     /// Lo que se ve: la clave tapada, o el texto.
-    fn visible(&self, clave: bool) -> (String, usize) {
+    pub(super) fn visible(&self, clave: bool) -> (String, usize) {
         if clave && !self.ver {
             let n = self.texto[..self.cursor].chars().count();
             ("•".repeat(self.texto.chars().count()), n * '•'.len_utf8())

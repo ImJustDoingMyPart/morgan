@@ -49,12 +49,13 @@ use super::dibujo::fondos::{FondosUi, Mini};
 use super::dibujo::ventanas::VentanasUi;
 use super::dibujo::launcher::{self, LauncherUi};
 use super::dibujo::menu::{MenuUi, Salida};
+use super::dibujo::permiso::{self, PermisoUi};
 use super::dibujo::toasts::{self, ToastsUi};
 use super::dibujo::toque::{IZQUIERDO, Pedido};
 use super::dibujo::{Objetivo, Ui};
 use super::ecualizador;
 use super::vista::{
-    Aviso, Contenido, Evento, EventoAjustes, EventoCalculadora, EventoFondos, EventoVentanas, VistaCalculadora, VistaFondos, VistaVentanas, EventoLauncher, Grupo, Iconos, IndiceAjustes, ListaId,
+    Aviso, Contenido, Evento, EventoAjustes, EventoCalculadora, EventoFondos, EventoPermiso, EventoVentanas, VistaCalculadora, VistaFondos, VistaPermiso, VistaVentanas, EventoLauncher, Grupo, Iconos, IndiceAjustes, ListaId,
     ListaLauncher, Lugar, Menu, Nivel, PaginaAjustes, Reproductor, Tarjeta,
 };
 use crate::lamina::Lamina;
@@ -113,6 +114,10 @@ pub enum Orden {
     CalculadoraAbrir,
     CalculadoraCerrar,
     Calculadora(VistaCalculadora),
+    /// El pedido de clave de polkit: abrirlo (o pasar a otro), lo que cambió y cerrarlo.
+    PermisoAbrir(VistaPermiso),
+    Permiso(VistaPermiso),
+    PermisoCerrar,
     /// La banda de fondos: abrirla (con las imágenes de la carpeta) y cerrarla.
     FondosAbrir(Box<VistaFondos>),
     FondosCerrar,
@@ -176,6 +181,7 @@ enum Capa {
     Launcher,
     Ajustes,
     Calculadora,
+    Permiso,
     Fondos,
     Ventanas,
 }
@@ -191,6 +197,7 @@ mod pruebas_capa {
         assert_eq!(Capa::de(&Orden::FondosCerrar), Capa::Fondos);
         assert_eq!(Capa::de(&Orden::VentanasMostrar), Capa::Ventanas);
         assert_eq!(Capa::de(&Orden::CalculadoraAbrir), Capa::Calculadora);
+        assert_eq!(Capa::de(&Orden::PermisoCerrar), Capa::Permiso);
         assert_eq!(Capa::de(&Orden::LauncherCerrar), Capa::Launcher);
         assert_eq!(Capa::de(&Orden::AjustesGrabando(true)), Capa::Ajustes);
         assert_eq!(Capa::de(&Orden::Menu(None)), Capa::Menu);
@@ -229,6 +236,7 @@ impl Capa {
             Orden::CalculadoraAbrir | Orden::CalculadoraCerrar | Orden::Calculadora(_) => {
                 Capa::Calculadora
             }
+            Orden::PermisoAbrir(_) | Orden::Permiso(_) | Orden::PermisoCerrar => Capa::Permiso,
             Orden::FondosAbrir(_) | Orden::FondosCerrar => Capa::Fondos,
             Orden::VentanasAbrir(_)
             | Orden::VentanasMostrar
@@ -300,6 +308,8 @@ struct Hilo {
     ajustes_ui: AjustesUi,
     calculadora: Option<LauncherSup>,
     calculadora_ui: CalculadoraUi,
+    permiso: Option<LauncherSup>,
+    permiso_ui: PermisoUi,
     fondos: Option<LauncherSup>,
     fondos_ui: FondosUi,
     ventanas: Option<LauncherSup>,
@@ -383,6 +393,8 @@ fn correr(
         ajustes_ui: AjustesUi::new(paleta, opacidad, borde),
         calculadora: None,
         calculadora_ui: CalculadoraUi::new(paleta, opacidad, borde),
+        permiso: None,
+        permiso_ui: PermisoUi::new(paleta, opacidad, borde),
         fondos: None,
         fondos_ui: FondosUi::new(paleta, opacidad, borde),
         ventanas: None,
@@ -428,6 +440,9 @@ impl Hilo {
         if let Some(c) = &mut self.calculadora {
             c.lamina.sucio = true;
         }
+        if let Some(c) = &mut self.permiso {
+            c.lamina.sucio = true;
+        }
         if let Some(f) = &mut self.fondos {
             f.lamina.sucio = true;
         }
@@ -448,6 +463,7 @@ impl Hilo {
             Capa::Launcher => self.launcher.as_mut().map(|l| &mut l.lamina),
             Capa::Ajustes => self.ajustes.as_mut().map(|a| &mut a.lamina),
             Capa::Calculadora => self.calculadora.as_mut().map(|c| &mut c.lamina),
+            Capa::Permiso => self.permiso.as_mut().map(|c| &mut c.lamina),
             Capa::Fondos => self.fondos.as_mut().map(|f| &mut f.lamina),
             Capa::Ventanas => self.ventanas.as_mut().map(|v| &mut v.lamina),
         };
@@ -472,6 +488,8 @@ impl Hilo {
                 let a = &mut self.ajustes_ui;
                 (a.paleta, a.opacidad, a.borde) = (p, o, b);
                 let c = &mut self.calculadora_ui;
+                (c.paleta, c.opacidad, c.borde) = (p, o, b);
+                let c = &mut self.permiso_ui;
                 (c.paleta, c.opacidad, c.borde) = (p, o, b);
                 let f = &mut self.fondos_ui;
                 (f.paleta, f.opacidad, f.borde) = (p, o, b);
@@ -549,6 +567,9 @@ impl Hilo {
             Orden::CalculadoraAbrir => self.abrir_calculadora(),
             Orden::CalculadoraCerrar => self.calculadora = None,
             Orden::Calculadora(v) => self.calculadora_ui.poner(v),
+            Orden::PermisoAbrir(v) => self.abrir_permiso(v),
+            Orden::Permiso(v) => self.permiso_ui.poner(v),
+            Orden::PermisoCerrar => self.cerrar_permiso(),
             Orden::FondosAbrir(v) => self.abrir_fondos(*v),
             Orden::FondosCerrar => self.cerrar_fondos(),
             Orden::VentanasAbrir(v) => {
@@ -655,6 +676,49 @@ impl Hilo {
             capa,
             inicio: None,
         });
+    }
+
+    /// Arriba de todo y con el teclado: lo pide otro programa, con lo que esté abierto.
+    fn abrir_permiso(&mut self, v: VistaPermiso) {
+        self.permiso_ui.poner(v);
+        if self.permiso.is_some() {
+            return;
+        }
+        let wl = self.compositor.create_surface(&self.qh);
+        let capa = self.capas.create_layer_surface(
+            &self.qh,
+            wl,
+            Layer::Overlay,
+            Some("morgan-polkit"),
+            None,
+        );
+        capa.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
+        capa.set_exclusive_zone(-1);
+        capa.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        capa.commit();
+        self.permiso = Some(LauncherSup {
+            lamina: Lamina::new((0, 0)),
+            capa,
+            inicio: None,
+        });
+    }
+
+    fn cerrar_permiso(&mut self) {
+        self.permiso = None;
+        self.permiso_ui.cerrar();
+    }
+
+    fn pedidos_permiso(&mut self, pedidos: Vec<permiso::Pedido>) {
+        for p in pedidos {
+            match p {
+                permiso::Pedido::Gtk(e) => self.avisar(Evento::Permiso(e)),
+                permiso::Pedido::Pegar => self.pegar(|h, t| {
+                    h.permiso_ui.pegar(t);
+                    h.ensuciar_capa(Capa::Permiso);
+                }),
+            }
+        }
+        self.ensuciar_capa(Capa::Permiso);
     }
 
     fn abrir_fondos(&mut self, v: VistaFondos) {
@@ -1051,7 +1115,9 @@ impl Hilo {
 
     /// El cursor del campo con el foco parpadea: se despierta en cada cambio.
     fn programar_parpadeo(&mut self, ahora: Instant) {
-        let proximo = if self.launcher.is_some() {
+        let proximo = if self.permiso.is_some() {
+            self.permiso_ui.proximo_parpadeo(ahora)
+        } else if self.launcher.is_some() {
             self.launcher_ui.proximo_parpadeo(ahora)
         } else if self.ajustes.is_some() {
             self.ajustes_ui.proximo_parpadeo(ahora)
@@ -1068,8 +1134,11 @@ impl Hilo {
         let timer = Timer::from_deadline(cuando);
         if let Ok(t) = self.bucle.insert_source(timer, |_, _, h| {
             h.parpadeo = None;
-            // El campo con el foco es del launcher, del menú o del centro, en ese orden.
-            let capa = if h.launcher.is_some() {
+            // El campo con el foco es del pedido de polkit, del launcher, del menú o del
+            // centro, en ese orden.
+            let capa = if h.permiso.is_some() {
+                Capa::Permiso
+            } else if h.launcher.is_some() {
                 Capa::Launcher
             } else if h.ajustes.is_some() {
                 Capa::Ajustes
@@ -1095,6 +1164,7 @@ impl Hilo {
         self.pintar_launcher(ahora);
         self.pintar_ajustes(ahora);
         self.pintar_calculadora(ahora);
+        self.pintar_permiso(ahora);
         self.pintar_fondos(ahora);
         self.pintar_ventanas(ahora);
         let Some(p) = &mut self.panel else {
@@ -1205,6 +1275,29 @@ impl Hilo {
             .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
     }
 
+    /// Baja desde su borde de abajo al abrir, como el launcher.
+    fn pintar_permiso(&mut self, ahora: Instant) {
+        let Some(c) = &mut self.permiso else { return };
+        let ui = &mut self.permiso_ui;
+        let anda = ui.anda(ahora)
+            || c.inicio
+                .is_none_or(|t| ahora.saturating_duration_since(t) < crate::bajada::duracion());
+        if !c.lamina.lista() || !(c.lamina.sucio || anda) {
+            return;
+        }
+        ui.tam = c.lamina.tam;
+        let escala = c.lamina.escala;
+        ui.armar(escala as f32, ahora);
+        let inicio = *c.inicio.get_or_insert(ahora);
+        let micros = ahora.saturating_duration_since(inicio).as_micros() as i64;
+        let bajada = crate::bajada::desplazamiento(micros, ui.panel().y1 as f32);
+        ui.pintar(&mut self.escena, f64::from(escala), f64::from(bajada));
+        let wl = c.capa.wl_surface().clone();
+        c.lamina
+            .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
+        self.programar_parpadeo(ahora);
+    }
+
     /// Sin bajada: Hyprland la sube desde el borde (`slide bottom`).
     fn pintar_fondos(&mut self, ahora: Instant) {
         let Some(f) = &mut self.fondos else { return };
@@ -1310,6 +1403,32 @@ impl Hilo {
             }
         };
         self.eventos_fondos(v);
+        if self.forma_puesta != Some(Shape::Default)
+            && let Some(f) = &self.forma
+        {
+            f.set_shape(self.serial_puntero, Shape::Default);
+            self.forma_puesta = Some(Shape::Default);
+        }
+    }
+
+    fn puntero_permiso(&mut self, e: &PointerEvent) {
+        let (x, y) = e.position;
+        let v = match e.kind {
+            PointerEventKind::Enter { serial } => {
+                self.serial_puntero = serial;
+                self.forma_puesta = None;
+                Vec::new()
+            }
+            PointerEventKind::Press { .. } => {
+                self.permiso_ui.apretar(x, y);
+                Vec::new()
+            }
+            PointerEventKind::Release { button, .. } if button == IZQUIERDO => {
+                self.permiso_ui.soltar(x, y)
+            }
+            _ => Vec::new(),
+        };
+        self.pedidos_permiso(v.into_iter().map(permiso::Pedido::Gtk).collect());
         if self.forma_puesta != Some(Shape::Default)
             && let Some(f) = &self.forma
         {
@@ -1650,6 +1769,14 @@ impl Hilo {
     }
 
     fn tecla(&mut self, ev: KeyEvent) {
+        // El pedido de polkit pasa por encima de todo: el teclado es suyo.
+        if self.permiso.is_some() {
+            let pedidos = self
+                .permiso_ui
+                .tecla(ev.keysym, ev.utf8.as_deref(), self.mods.ctrl);
+            self.pedidos_permiso(pedidos);
+            return;
+        }
         // El menú es lo último que se abrió: el teclado es suyo.
         if let Some(m) = &mut self.menu {
             let s = m.ui.tecla(ev.keysym, self.mods.shift);
@@ -1789,6 +1916,14 @@ impl LayerShellHandler for Hilo {
             self.eventos_calculadora(vec![EventoCalculadora::Cerrada]);
         }
         if self
+            .permiso
+            .as_ref()
+            .is_some_and(|c| c.capa.wl_surface() == capa.wl_surface())
+        {
+            self.cerrar_permiso();
+            self.avisar(Evento::Permiso(EventoPermiso::Cancelado));
+        }
+        if self
             .ajustes
             .as_ref()
             .is_some_and(|a| a.capa.wl_surface() == capa.wl_surface())
@@ -1843,6 +1978,7 @@ impl LayerShellHandler for Hilo {
             .filter(|l| l.capa.wl_surface() == wl)
             .or(self.launcher.as_mut().filter(|l| l.capa.wl_surface() == wl))
             .or(self.calculadora.as_mut().filter(|l| l.capa.wl_surface() == wl))
+            .or(self.permiso.as_mut().filter(|l| l.capa.wl_surface() == wl))
             .or(self.fondos.as_mut().filter(|l| l.capa.wl_surface() == wl))
             .or(self.ventanas.as_mut().filter(|l| l.capa.wl_surface() == wl))
         {
@@ -1961,6 +2097,9 @@ impl Hilo {
             return Some(&mut a.lamina);
         }
         if let Some(c) = self.calculadora.as_mut().filter(|c| c.capa.wl_surface() == wl) {
+            return Some(&mut c.lamina);
+        }
+        if let Some(c) = self.permiso.as_mut().filter(|c| c.capa.wl_surface() == wl) {
             return Some(&mut c.lamina);
         }
         if let Some(f) = self.fondos.as_mut().filter(|f| f.capa.wl_surface() == wl) {
@@ -2177,6 +2316,12 @@ impl PointerHandler for Hilo {
                 .is_some_and(|c| c.capa.wl_surface() == &e.surface)
             {
                 self.puntero_calculadora(e);
+            } else if self
+                .permiso
+                .as_ref()
+                .is_some_and(|c| c.capa.wl_surface() == &e.surface)
+            {
+                self.puntero_permiso(e);
             } else if self
                 .ventanas
                 .as_ref()

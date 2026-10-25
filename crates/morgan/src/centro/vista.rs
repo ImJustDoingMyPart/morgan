@@ -396,6 +396,37 @@ pub struct VistaCalculadora {
     pub cinta: Vec<(String, String)>,
 }
 
+/// Un pedido de polkit (`polkit/mod.rs`): quién se autentica, para qué y cómo va. Una
+/// `generacion` nueva vacía el campo.
+#[derive(Clone, Debug, Default)]
+pub struct VistaPermiso {
+    pub usuario: String,
+    /// El de polkit, en el idioma de la sesión («Se requiere autenticación para…»).
+    pub mensaje: String,
+    /// El comando de pkexec, o el programa que lo pide.
+    pub detalle: Option<String>,
+    /// El texto del campo vacío: «Contraseña», o lo que pide PAM.
+    pub placeholder: String,
+    /// Lo escrito se ve: PAM pidió algo que no es una clave.
+    pub eco: bool,
+    pub generacion: u64,
+    /// Verificando: el campo late y no se escribe.
+    pub ocupado: bool,
+    /// Los fallos de este pedido: uno nuevo hace temblar el campo.
+    pub fallos: u64,
+    /// Debajo del mensaje; con `true`, en `error` y después del temblor.
+    pub aviso: Option<(String, bool)>,
+}
+
+/// Lo que se hizo en el pedido de polkit.
+#[derive(Debug)]
+pub enum EventoPermiso {
+    /// Enter, con lo escrito: sale del campo pisado.
+    Enviar(crate::polkit::secreto::Secreto),
+    /// Escape o un click afuera.
+    Cancelado,
+}
+
 /// Lo que la banda de fondos necesita para abrirse: la carpeta y sus imágenes. Las miniaturas,
 /// la elegida, lo escrito y el desplazamiento los lleva el hilo del centro.
 pub struct VistaFondos {
@@ -484,6 +515,7 @@ pub enum Evento {
     Launcher(EventoLauncher),
     Ajustes(EventoAjustes),
     Calculadora(EventoCalculadora),
+    Permiso(EventoPermiso),
     Fondos(EventoFondos),
     Ventanas(EventoVentanas),
 }

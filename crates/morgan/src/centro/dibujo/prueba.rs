@@ -292,7 +292,11 @@ fn captura_del_launcher() {
     let mut filas = vec![
         fila("Archivos", None, vec![]),
         fila("Configure lsfg-vk", None, vec![(4, 6)]),
-        fila("Editor de imágenes Pinta", Some("Editor de imágenes"), vec![]),
+        fila(
+            "Editor de imágenes Pinta",
+            Some("Editor de imágenes"),
+            vec![],
+        ),
         fila("MAKO Renderer Configuration", None, vec![(18, 20)]),
         fila("Obsidian", None, vec![]),
         fila("ONLYOFFICE", Some("Document Editor"), vec![(6, 8)]),
@@ -345,6 +349,87 @@ fn captura_del_launcher() {
         ));
         let px = leer(&gpu.device, &gpu.cola, &tex, w, h).expect("leer");
         let (cx, cy, cw, ch) = (930usize, 510usize, 700usize, 420usize);
+        let mut ppm = format!("P6\n{cw} {ch}\n255\n").into_bytes();
+        for y in cy..cy + ch {
+            for x in cx..cx + cw {
+                let i = (y * w as usize + x) * 4;
+                ppm.extend_from_slice(&px[i..i + 3]);
+            }
+        }
+        std::fs::write(std::path::Path::new(&dir).join(nombre), ppm).expect("escribir");
+    }
+}
+
+/// El pedido de clave de polkit: escribiendo, verificando y después de un fallo (con el
+/// aviso ya a la vista).
+#[test]
+#[ignore]
+fn captura_del_permiso() {
+    use super::permiso::PermisoUi;
+    use crate::centro::vista::VistaPermiso;
+    use smithay_client_toolkit::seat::keyboard::Keysym;
+
+    let Some(dir) = std::env::var_os("MORGAN_CENTRO_CAPTURA") else {
+        panic!("MORGAN_CENTRO_CAPTURA");
+    };
+    let css = std::env::var_os("HOME")
+        .map(|h| std::path::PathBuf::from(h).join(".config/morgan/theme.css"))
+        .and_then(|d| std::fs::read_to_string(d).ok())
+        .unwrap_or_default();
+    let base = VistaPermiso {
+        usuario: "roberto".into(),
+        mensaje: "Se requiere autenticación para ejecutar «/usr/bin/btrfs-assistant-bin» como el superusuario".into(),
+        detalle: Some("/usr/bin/btrfs-assistant-bin".into()),
+        placeholder: "Contraseña".into(),
+        generacion: 1,
+        ..VistaPermiso::default()
+    };
+    let casos = [
+        ("permiso.ppm", base.clone(), 3, 2.0),
+        (
+            "permiso-verificando.ppm",
+            VistaPermiso {
+                ocupado: true,
+                ..base.clone()
+            },
+            0,
+            0.5,
+        ),
+        (
+            "permiso-fallo.ppm",
+            VistaPermiso {
+                generacion: 2,
+                fallos: 1,
+                aviso: Some(("Contraseña incorrecta".into(), true)),
+                ..base.clone()
+            },
+            0,
+            1.5,
+        ),
+        ("permiso-vacio.ppm", base.clone(), 0, 0.0),
+    ];
+    for (nombre, vista, letras, despues) in casos {
+        let mut ui = PermisoUi::new(Paleta::desde_css(&css), 0.85, Borde::Sombra);
+        let t0 = Instant::now();
+        ui.poner(vista);
+        for _ in 0..letras {
+            ui.tecla(Keysym::a, Some("a"), false);
+        }
+        let (w, h) = (2560u32, 1440u32);
+        ui.tam = (w, h);
+        ui.armar(1.0, t0 + Duration::from_secs_f64(despues));
+        let mut s = Scene::new();
+        ui.pintar(&mut s, 1.0, 0.0);
+        let mut gpu = Gpu::sin_display("morgan");
+        let tex = gpu.textura(w, h, wgpu::TextureUsages::COPY_SRC);
+        assert!(gpu.dibujar(
+            &s,
+            &tex.create_view(&Default::default()),
+            (w, h),
+            peniko::Color::from_rgb8(30, 34, 38),
+        ));
+        let px = leer(&gpu.device, &gpu.cola, &tex, w, h).expect("leer");
+        let (cx, cy, cw, ch) = (930usize, 580usize, 700usize, 280usize);
         let mut ppm = format!("P6\n{cw} {ch}\n255\n").into_bytes();
         for y in cy..cy + ch {
             for x in cx..cx + cw {

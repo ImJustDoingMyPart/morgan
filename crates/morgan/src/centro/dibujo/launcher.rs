@@ -10,7 +10,7 @@
 
 use std::time::{Duration, Instant};
 
-use morgan_motor::color::{Paleta, con_alfa, mezclar};
+use morgan_motor::color::{Color, Paleta, con_alfa, mezclar};
 use morgan_motor::forma::{Borde, panel};
 use morgan_motor::texto;
 use morgan_motor::vello::Scene;
@@ -23,21 +23,21 @@ use super::trazo::{self, Degrade, Trazo};
 use crate::centro::vista::{EventoLauncher, IconoFila, ListaLauncher, TipoFila, Turno};
 
 /// De borde a borde del anillo.
-const ANCHO: f64 = 600.0;
+pub(super) const ANCHO: f64 = 600.0;
 /// El lugar del brillo, alrededor de la caja.
-const MARGEN: f64 = 8.0;
-const BORDE_Y_RELLENO: f64 = 16.0;
-const CONTENIDO: f64 = ANCHO - 2.0 * BORDE_Y_RELLENO;
+pub(super) const MARGEN: f64 = 8.0;
+pub(super) const BORDE_Y_RELLENO: f64 = 16.0;
+pub(super) const CONTENIDO: f64 = ANCHO - 2.0 * BORDE_Y_RELLENO;
 const RADIO: f64 = 4.0;
 
 const BUSCADOR_X: f64 = 12.0;
-const BUSCADOR_Y: f64 = 8.0;
+pub(super) const BUSCADOR_Y: f64 = 8.0;
 /// Entre el prompt, el separador y lo escrito.
 const SEPARACION: f64 = 6.0;
-const BAJO_BUSCADOR: f64 = 8.0;
+pub(super) const BAJO_BUSCADOR: f64 = 8.0;
 
 pub const FILAS: usize = 6;
-const ALTO_FILA: f64 = 36.0;
+pub(super) const ALTO_FILA: f64 = 36.0;
 const ESPACIO: f64 = 4.0;
 const PASO_FILA: f64 = ALTO_FILA + ESPACIO;
 const ALTO_LISTA: f64 = FILAS as f64 * ALTO_FILA + (FILAS - 1) as f64 * ESPACIO;
@@ -65,12 +65,12 @@ const NOMBRE_RESALTADO: u8 = 1;
 const GENERICO: u8 = 2;
 const GENERICO_RESALTADO: u8 = 3;
 
-fn letra() -> f32 {
+pub(super) fn letra() -> f32 {
     texto::pt(10.0)
 }
 
 /// El `size="small"` de Pango.
-fn letra_chica() -> f32 {
+pub(super) fn letra_chica() -> f32 {
     letra() / 1.2
 }
 
@@ -284,8 +284,7 @@ impl LauncherUi {
     }
 
     fn alto_buscador(&mut self) -> f64 {
-        let l = self.rotulos.linea(&self.prompt, letra(), 400.0);
-        2.0 * BUSCADOR_Y + texto::alto_de_linea(&l) / self.escala()
+        alto_buscador(&mut self.rotulos, &self.prompt)
     }
 
     /// La lista, en coordenadas del contenido.
@@ -318,81 +317,24 @@ impl LauncherUi {
 
     fn armar_buscador(&mut self, t: &mut Vec<Trazo>, alto: f64, ahora: Instant) {
         let p = self.paleta;
-        let e = self.escala();
-        t.push(Trazo::Caja {
-            r: Rect::new(0.0, 0.0, CONTENIDO, alto),
-            radio: RADIO,
-            color: con_alfa(&p.on_surface, p.on_surface[3] * 0.06),
-        });
-        let prompt = self.rotulos.linea(&self.prompt, letra(), 400.0);
-        let mut x = BUSCADOR_X;
-        let wp = texto::caja(&prompt).0 / e;
-        t.push(Trazo::Texto {
-            l: prompt,
-            x,
-            y: BUSCADOR_Y,
-            color: p.primary,
-        });
-        x += wp + SEPARACION;
-        let sep = self.rotulos.linea("›", letra(), 400.0);
-        let ws = texto::caja(&sep).0 / e;
-        t.push(Trazo::Texto {
-            l: sep,
-            x,
-            y: BUSCADOR_Y,
-            color: p.on_surface_variant,
-        });
-        x += ws + SEPARACION;
-        let zona = Rect::new(x, BUSCADOR_Y, CONTENIDO - BUSCADOR_X, alto - BUSCADOR_Y);
-        t.push(Trazo::Recorte {
-            r: zona.inflate(1.0, 0.0),
-            radio: 0.0,
-        });
-        let encendido = self.entrada.encendido(ahora);
-        let cursor = |x: f64| Trazo::Caja {
-            r: Rect::new(x, zona.y0, x + 1.0, zona.y1),
-            radio: 0.0,
-            color: p.primary,
+        let fondo = con_alfa(&p.on_surface, p.on_surface[3] * 0.06);
+        let campo = Campo {
+            prompt: &self.prompt,
+            placeholder: &self.placeholder,
+            entrada: &self.entrada,
+            tapada: false,
+            cursor: true,
+            fondo,
         };
-        if self.entrada.texto.is_empty() {
-            let l = self.rotulos.linea(&self.placeholder, letra(), 400.0);
-            t.push(Trazo::Texto {
-                l,
-                x: zona.x0,
-                y: zona.y0,
-                color: p.on_surface_variant,
-            });
-            if encendido {
-                t.push(cursor(zona.x0));
-            }
-            self.corrido = 0.0;
-        } else {
-            let texto = self.entrada.texto.clone();
-            let c = self.entrada.cursor;
-            let lt = self.rotulos.linea(&texto, letra(), 400.0);
-            let xc = if c == 0 {
-                0.0
-            } else {
-                f64::from(self.rotulos.linea(&texto[..c], letra(), 400.0).width()) / e
-            };
-            // Que el cursor quede a la vista.
-            if xc - self.corrido > zona.width() - 1.0 {
-                self.corrido = xc - zona.width() + 1.0;
-            } else if xc < self.corrido {
-                self.corrido = xc;
-            }
-            self.corrido = self.corrido.max(0.0);
-            t.push(Trazo::Texto {
-                l: lt,
-                x: zona.x0 - self.corrido.round(),
-                y: zona.y0,
-                color: p.on_surface,
-            });
-            if encendido {
-                t.push(cursor((zona.x0 + xc - self.corrido).round()));
-            }
-        }
-        t.push(Trazo::Fin);
+        armar_buscador(
+            &mut self.rotulos,
+            &p,
+            t,
+            &campo,
+            &mut self.corrido,
+            alto,
+            ahora,
+        );
     }
 
     fn armar_lista(&mut self, t: &mut Vec<Trazo>, ab: f64, ahora: Instant) {
@@ -871,6 +813,110 @@ impl LauncherUi {
 }
 
 /// `texto` partido en lo que coincide (`resaltes`, en caracteres) y lo que no.
+pub(super) fn alto_buscador(rotulos: &mut Rotulos, prompt: &str) -> f64 {
+    let l = rotulos.linea(prompt, letra(), 400.0);
+    2.0 * BUSCADOR_Y + texto::alto_de_linea(&l) / f64::from(rotulos.escala())
+}
+
+/// Lo que muestra el buscador.
+pub(super) struct Campo<'a> {
+    pub prompt: &'a str,
+    pub placeholder: &'a str,
+    pub entrada: &'a Entrada,
+    /// La clave tapada con «•».
+    pub tapada: bool,
+    /// Con el cursor (no mientras se verifica una clave).
+    pub cursor: bool,
+    pub fondo: Color,
+}
+
+/// El buscador del launcher, que también es el campo del pedido de polkit: el prompt, el «›»
+/// y lo escrito con su cursor, en una caja de `alto` desde arriba del contenido.
+pub(super) fn armar_buscador(
+    rotulos: &mut Rotulos,
+    p: &Paleta,
+    t: &mut Vec<Trazo>,
+    c: &Campo,
+    corrido: &mut f64,
+    alto: f64,
+    ahora: Instant,
+) {
+    let e = f64::from(rotulos.escala());
+    t.push(Trazo::Caja {
+        r: Rect::new(0.0, 0.0, CONTENIDO, alto),
+        radio: RADIO,
+        color: c.fondo,
+    });
+    let prompt = rotulos.linea(c.prompt, letra(), 400.0);
+    let mut x = BUSCADOR_X;
+    let wp = texto::caja(&prompt).0 / e;
+    t.push(Trazo::Texto {
+        l: prompt,
+        x,
+        y: BUSCADOR_Y,
+        color: p.primary,
+    });
+    x += wp + SEPARACION;
+    let sep = rotulos.linea("›", letra(), 400.0);
+    let ws = texto::caja(&sep).0 / e;
+    t.push(Trazo::Texto {
+        l: sep,
+        x,
+        y: BUSCADOR_Y,
+        color: p.on_surface_variant,
+    });
+    x += ws + SEPARACION;
+    let zona = Rect::new(x, BUSCADOR_Y, CONTENIDO - BUSCADOR_X, alto - BUSCADOR_Y);
+    t.push(Trazo::Recorte {
+        r: zona.inflate(1.0, 0.0),
+        radio: 0.0,
+    });
+    let encendido = c.cursor && c.entrada.encendido(ahora);
+    let cursor = |x: f64| Trazo::Caja {
+        r: Rect::new(x, zona.y0, x + 1.0, zona.y1),
+        radio: 0.0,
+        color: p.primary,
+    };
+    if c.entrada.texto.is_empty() {
+        let l = rotulos.linea(c.placeholder, letra(), 400.0);
+        t.push(Trazo::Texto {
+            l,
+            x: zona.x0,
+            y: zona.y0,
+            color: p.on_surface_variant,
+        });
+        if encendido {
+            t.push(cursor(zona.x0));
+        }
+        *corrido = 0.0;
+    } else {
+        let (texto, i) = c.entrada.visible(c.tapada);
+        let lt = rotulos.linea(&texto, letra(), 400.0);
+        let xc = if i == 0 {
+            0.0
+        } else {
+            f64::from(rotulos.linea(&texto[..i], letra(), 400.0).width()) / e
+        };
+        // Que el cursor quede a la vista.
+        if xc - *corrido > zona.width() - 1.0 {
+            *corrido = xc - zona.width() + 1.0;
+        } else if xc < *corrido {
+            *corrido = xc;
+        }
+        *corrido = corrido.max(0.0);
+        t.push(Trazo::Texto {
+            l: lt,
+            x: zona.x0 - corrido.round(),
+            y: zona.y0,
+            color: p.on_surface,
+        });
+        if encendido {
+            t.push(cursor((zona.x0 + xc - *corrido).round()));
+        }
+    }
+    t.push(Trazo::Fin);
+}
+
 pub(super) fn tramos(
     texto: &str,
     resaltes: &[(usize, usize)],

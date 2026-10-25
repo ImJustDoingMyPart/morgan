@@ -20,6 +20,7 @@ pub mod ventanas;
 pub mod campo;
 pub mod launcher;
 pub mod menu;
+pub mod permiso;
 #[cfg(test)]
 mod prueba;
 mod rotulos;

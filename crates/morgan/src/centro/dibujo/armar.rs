@@ -975,21 +975,7 @@ impl Ui {
         let p = self.paleta;
         let mut y = y0 + 2.0;
         let (tf, latido) = self.animo_campo(l, c, ahora);
-        // El fallo, como el de la clave del bloqueo a la mitad: tiembla (420 ms) y se tiñe de
-        // `error` (el `fallo` del menú de sistema, que arranca más fuerte, como el brillo del
-        // bloqueo) y se va de a poco; el aviso aparece
-        // después del temblor.
-        let temblor = crate::animaciones::dur(Duration::from_millis(420)).as_secs_f64();
-        let dx = tf.map_or(0.0, |t| {
-            f64::from(morgan_motor::curva::sacudida((t / temblor) as f32)) * 0.5
-        });
-        let tinte = tf.map_or(0.0, |t| {
-            (-t / crate::animaciones::dur(Duration::from_millis(600)).as_secs_f64()).exp() as f32
-        });
-        let aviso_alfa = tf.map_or(1.0, |t| {
-            let d = crate::animaciones::dur(Duration::from_millis(200)).as_secs_f64();
-            ((t - temblor) / d).clamp(0.0, 1.0) as f32
-        });
+        let (dx, tinte, aviso_alfa) = fallo_de_campo(tf);
         if let Some(caja) = &c.caja {
             let entrada = self.campos.entry(l).or_default();
             entrada.preparar(c.generacion);
@@ -1121,11 +1107,7 @@ impl Ui {
             .filter(|t| *t < crate::animaciones::dur(Duration::from_secs(3)).as_secs_f64());
         let ocupado = c.caja.as_ref().is_some_and(|k| k.ocupado);
         let latido = if ocupado {
-            let desde = *self.latidos.entry(l).or_insert(ahora);
-            let ciclo = crate::animaciones::dur(Duration::from_secs(1)).as_secs_f64();
-            let f = (ahora.saturating_duration_since(desde).as_secs_f64() / ciclo).fract();
-            let ida = 1.0 - (2.0 * f - 1.0).abs();
-            1.0 - 0.45 * morgan_motor::curva::ease_in_out(ida as f32)
+            latido(*self.latidos.entry(l).or_insert(ahora), ahora)
         } else {
             self.latidos.remove(&l);
             1.0
@@ -1135,6 +1117,34 @@ impl Ui {
         }
         (tf, latido)
     }
+}
+
+/// El fallo de un campo, `tf` segundos después, como el de la clave del bloqueo a la mitad:
+/// tiembla (420 ms) y se tiñe de `error` (el `fallo` del menú de sistema, que arranca más
+/// fuerte, como el brillo del bloqueo) y se va de a poco; el aviso aparece después del
+/// temblor. Da el corrimiento, el tinte y la opacidad del aviso.
+pub(super) fn fallo_de_campo(tf: Option<f64>) -> (f64, f32, f32) {
+    let temblor = crate::animaciones::dur(Duration::from_millis(420)).as_secs_f64();
+    let dx = tf.map_or(0.0, |t| {
+        f64::from(morgan_motor::curva::sacudida((t / temblor) as f32)) * 0.5
+    });
+    let tinte = tf.map_or(0.0, |t| {
+        (-t / crate::animaciones::dur(Duration::from_millis(600)).as_secs_f64()).exp() as f32
+    });
+    let aviso_alfa = tf.map_or(1.0, |t| {
+        let d = crate::animaciones::dur(Duration::from_millis(200)).as_secs_f64();
+        ((t - temblor) / d).clamp(0.0, 1.0) as f32
+    });
+    (dx, tinte, aviso_alfa)
+}
+
+/// La opacidad de lo que se está probando, latiendo desde `desde` (el `grabando` del menú de
+/// sistema: 1 → 0,55 → 1 en 1 s).
+pub(super) fn latido(desde: Instant, ahora: Instant) -> f32 {
+    let ciclo = crate::animaciones::dur(Duration::from_secs(1)).as_secs_f64();
+    let f = (ahora.saturating_duration_since(desde).as_secs_f64() / ciclo).fract();
+    let ida = 1.0 - (2.0 * f - 1.0).abs();
+    1.0 - 0.45 * morgan_motor::curva::ease_in_out(ida as f32)
 }
 
 /// El tamaño de la letra que no fija la hoja: la de GTK (11 pt) en píxeles.

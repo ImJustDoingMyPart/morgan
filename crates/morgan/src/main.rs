@@ -40,6 +40,7 @@ mod mpris;
 mod notificaciones;
 mod osd;
 mod pixeles;
+mod polkit;
 mod pila;
 mod privacidad;
 mod red;
@@ -187,12 +188,14 @@ fn main() -> ExitCode {
         let tele = config.barra.tele.clone();
         let calendario = calendario::Calendario::new(hilo_barra.clone(), &agenda, &config.clima);
         let calculadora = calculadora::Calculadora::new(&centro);
+        let polkit = polkit::Polkit::new(&centro);
         let audio = Audio::new(&config.sonido);
         let sonidos = sonidos::Sonidos::new(&config.sonido);
         let servicios = Rc::new(Servicios {
             osd,
             calendario: calendario.clone(),
             calculadora,
+            polkit,
             idle: idle.clone(),
             luz: luz.clone(),
             brillo,
@@ -335,6 +338,9 @@ struct Servicios {
     centro: Centro,
     calendario: calendario::Calendario,
     calculadora: calculadora::Calculadora,
+    /// Vive con morgan: el agente de polkit le contesta a polkitd.
+    #[allow(dead_code)]
+    polkit: polkit::Polkit,
     launcher: Launcher,
     menu: Menu,
     audio: Audio,

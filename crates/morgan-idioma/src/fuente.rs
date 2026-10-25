@@ -11,6 +11,10 @@ const TRADUCIDOS: &[&str] = &[
     "morgan/src/launcher/binds.rs",
     "morgan/src/centro/mod.rs",
     "morgan/src/setup.rs",
+    "morgan/src/polkit/mod.rs",
+    "morgan/src/polkit/ayudante.rs",
+    "morgan/src/polkit/secreto.rs",
+    "morgan/src/centro/dibujo/permiso.rs",
 ];
 
 /// Lo que va dentro de estas macros no se traduce: es para el journal o para quien programa.

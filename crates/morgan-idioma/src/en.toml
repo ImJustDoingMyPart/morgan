@@ -432,3 +432,6 @@
 "Nuevo modo" = "New mode"
 "una tecla entra y adentro las teclas hacen otras cosas; Escape sale" = "a key enters it, and inside, keys do other things; Escape leaves"
 "el nombre del modo, como Ventanas" = "the mode's name, like Windows"
+
+# polkit/mod.rs
+"No se pudo hablar con polkit" = "Couldn't talk to polkit"
