@@ -20,8 +20,10 @@ pub async fn bus() -> zbus::Result<Connection> {
         return Ok(c);
     }
     let c = Connection::system().await?;
-    BUS.with_borrow_mut(|b| *b = Some(c.clone()));
-    Ok(c)
+    // Varios pedidos a la vez al arrancar abren una conexión cada uno: gana la primera
+    // guardada y las demás se sueltan. Antes ganaba la última, y lo publicado por una que
+    // perdía (el agente de polkit) se iba con ella al soltarse.
+    Ok(BUS.with_borrow_mut(|b| b.get_or_insert(c).clone()))
 }
 
 pub type Releer = Box<dyn FnMut() -> Pin<Box<dyn Future<Output = ()>>>>;

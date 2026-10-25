@@ -109,9 +109,12 @@ impl Polkit {
         let (gtx, grx) = async_channel::unbounded();
         let weak = Rc::downgrade(&p.inner);
         glib::MainContext::default().spawn_local(async move {
-            if let Err(e) = registrar(gtx).await {
-                eprintln!("morgan: polkit: no se registró el agente: {e}");
-                return;
+            match registrar(gtx).await {
+                Ok(id) => eprintln!("morgan: polkit: agente registrado en la sesión {id}"),
+                Err(e) => {
+                    eprintln!("morgan: polkit: no se registró el agente: {e}");
+                    return;
+                }
             }
             while let Ok(d) = grx.recv().await {
                 let Some(inner) = weak.upgrade() else { return };
@@ -302,7 +305,7 @@ fn sin_dos_puntos(s: &str) -> String {
     s.trim().trim_end_matches(':').trim_end().to_owned()
 }
 
-async fn registrar(pedidos: async_channel::Sender<DelAgente>) -> zbus::Result<()> {
+async fn registrar(pedidos: async_channel::Sender<DelAgente>) -> zbus::Result<String> {
     let conn = crate::sistema::bus().await?;
     conn.object_server().at(RUTA, Agente { pedidos }).await?;
     // morgan corre en una unidad de usuario: `session/auto` es la sesión gráfica.
@@ -317,7 +320,7 @@ async fn registrar(pedidos: async_channel::Sender<DelAgente>) -> zbus::Result<()
     .await?;
     let sujeto = (
         "unix-session",
-        HashMap::from([("session-id", Value::from(id))]),
+        HashMap::from([("session-id", Value::from(id.clone()))]),
     );
     Proxy::new(
         &conn,
@@ -327,7 +330,8 @@ async fn registrar(pedidos: async_channel::Sender<DelAgente>) -> zbus::Result<()
     )
     .await?
     .call::<_, _, ()>("RegisterAuthenticationAgent", &(sujeto, locale(), RUTA))
-    .await
+    .await?;
+    Ok(id)
 }
 
 /// El idioma de los mensajes que traduce polkitd: el de morgan.
