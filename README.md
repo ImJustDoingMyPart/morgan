@@ -56,7 +56,17 @@ here is what you want, welcome.
 - **Themes**: nine built-in palettes (morgan, Catppuccin, Dracula, Everforest, Gruvbox, Kanagawa,
   Nord, Rosé Pine, Tokyo Night…) or colors taken from your wallpaper, applied to morgan and,
   if you choose, to Hyprland, GTK, kitty, btop and more.
+- **Password prompts** for administrator actions: morgan is your polkit agent, so it
+  replaces hyprpolkitagent.
 - **English and Spanish**, following your locale.
+
+## Drawn by its own engine
+
+Since October 2026 morgan doesn't use GTK. Every surface (bar, control center, notifications,
+launcher, system menu, OSD, lock screen) is drawn by morgan itself, with
+[vello](https://github.com/linebender/vello) on the GPU. That's what lets animations run on
+a thread of their own, so a busy moment never makes a panel stutter, and lets every panel
+measure what it holds. What changed is in the [changelog](CHANGELOG.md).
 
 ## The control center
 
@@ -101,6 +111,8 @@ holds, never past the edge of the screen, and scrolls inside when it has to.
 - **Hyprland 0.56 or newer, with its config in Lua** (`~/.config/hypr/hyprland.lua`).
   morgan does not work with a `hyprland.conf`.
 - glib 2.84 or newer.
+- A GPU with a working Vulkan driver (Mesa's `vulkan-radeon` or `vulkan-intel`, or NVIDIA's):
+  morgan draws everything on the GPU.
 
 ## What morgan is built around
 
@@ -160,11 +172,12 @@ with your session**:
 
 | If you use… | What to do |
 |---|---|
-| Another shell: **Noctalia, DankMaterialShell, Caelestia, HyprPanel**, or any Quickshell, AGS or eww setup | Remove the line that starts it from your Hyprland config, or disable its systemd unit (`systemctl --user disable --now <unit>`). |
+| Another shell: **Noctalia (v4 or v5), DankMaterialShell, Caelestia, HyprPanel**, or any Quickshell, AGS or eww setup | Remove the line that starts it from your Hyprland config, or disable its systemd unit (`systemctl --user disable --now <unit>`). |
 | A bar: **Waybar** | Same. |
 | A notification daemon: **swaync, mako, dunst** | Same. Only one program can own notifications. |
 | An OSD: **SwayOSD** | Same. |
 | A locker or idle daemon: **hyprlock, hypridle, swaylock, swayidle** | Same. morgan locks and handles idle, including inhibitors from browsers, video players and games. |
+| A polkit agent: **hyprpolkitagent, polkit-gnome, polkit-kde-agent** | Same. Only one program can ask for the administrator password. |
 | Night light: **wlsunset, gammastep** | Same, if you want morgan's night light (it uses hyprsunset). |
 | A wallpaper daemon: **hyprpaper, swaybg** | Same, if you want morgan's wallpaper picker (it uses awww). |
 
@@ -176,11 +189,14 @@ start morgan while another program owns notifications.
 
 ## Install
 
-From the AUR, prebuilt or built from the latest commit:
+From the AUR, built from the latest commit or prebuilt from the latest release:
 
 ```sh
-yay -S morgan-bin     # or: yay -S morgan-git
+yay -S morgan-git     # or: yay -S morgan-bin
 ```
+
+`morgan-bin` follows releases, so it can be behind `main`; the
+[changelog](CHANGELOG.md) says what isn't released yet.
 
 Or from source, into `~/.local` (it checks dependencies and tells you what's missing):
 

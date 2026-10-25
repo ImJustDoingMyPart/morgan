@@ -58,7 +58,18 @@ lo que ves acá es lo que querés, bienvenido.
 - **Temas**: nueve paletas incluidas (morgan, Catppuccin, Dracula, Everforest, Gruvbox,
   Kanagawa, Nord, Rosé Pine, Tokyo Night) o los colores del fondo de pantalla, aplicados a
   morgan y, si se elige, a Hyprland, GTK, kitty, btop y más.
+- **Pedidos de clave** para las acciones de administrador: morgan es el agente de polkit,
+  así que reemplaza a hyprpolkitagent.
 - **Inglés y castellano**, según el idioma del sistema.
+
+## Dibujado por su propio motor
+
+Desde octubre de 2026 morgan no usa GTK. Cada superficie (barra, centro de control,
+notificaciones, launcher, menú de sistema, OSD, pantalla de bloqueo) la dibuja morgan mismo,
+con [vello](https://github.com/linebender/vello) en la GPU. Eso es lo que deja que las
+animaciones corran en un hilo propio, para que un momento de trabajo nunca trabe un panel, y
+que cada panel mida lo que tiene adentro. Qué cambió está en el
+[registro de cambios](CHANGELOG.es.md).
 
 ## El centro de control
 
@@ -105,6 +116,8 @@ más allá del borde de la pantalla, y si no entra se desplaza por dentro.
 - **Hyprland 0.56 o más nuevo, con la config en Lua** (`~/.config/hypr/hyprland.lua`).
   morgan no funciona con un `hyprland.conf`.
 - glib 2.84 o más nuevo.
+- Una GPU con un driver de Vulkan que funcione (`vulkan-radeon` o `vulkan-intel` de Mesa, o el
+  de NVIDIA): morgan dibuja todo en la GPU.
 
 ## Sobre qué está hecho
 
@@ -164,11 +177,12 @@ que se bloquea dos veces.
 
 | Si se usa… | Qué hacer |
 |---|---|
-| Otro shell: **Noctalia, DankMaterialShell, Caelestia, HyprPanel**, o cualquier armado con Quickshell, AGS o eww | Sacar la línea que lo arranca de la config de Hyprland, o deshabilitar su unidad de systemd (`systemctl --user disable --now <unidad>`). |
+| Otro shell: **Noctalia (v4 o v5), DankMaterialShell, Caelestia, HyprPanel**, o cualquier armado con Quickshell, AGS o eww | Sacar la línea que lo arranca de la config de Hyprland, o deshabilitar su unidad de systemd (`systemctl --user disable --now <unidad>`). |
 | Una barra: **Waybar** | Lo mismo. |
 | Un servidor de notificaciones: **swaync, mako, dunst** | Lo mismo. Las notificaciones solo pueden ser de un programa. |
 | Un OSD: **SwayOSD** | Lo mismo. |
 | Un bloqueo o un idle: **hyprlock, hypridle, swaylock, swayidle** | Lo mismo. morgan bloquea y maneja el idle, incluidos los inhibidores de navegadores, reproductores de video y juegos. |
+| Un agente de polkit: **hyprpolkitagent, polkit-gnome, polkit-kde-agent** | Lo mismo. La clave de administrador solo la puede pedir un programa. |
 | Luz nocturna: **wlsunset, gammastep** | Lo mismo, si se quiere la luz nocturna de morgan (usa hyprsunset). |
 | Un programa de fondos: **hyprpaper, swaybg** | Lo mismo, si se quiere el selector de fondos de morgan (usa awww). |
 
@@ -180,11 +194,14 @@ mientras otro programa tenga las notificaciones.
 
 ## Instalación
 
-Desde el AUR, ya compilado o compilado desde el último commit:
+Desde el AUR, compilado desde el último commit o ya compilado desde la última versión:
 
 ```sh
-yay -S morgan-bin     # o: yay -S morgan-git
+yay -S morgan-git     # o: yay -S morgan-bin
 ```
+
+`morgan-bin` sigue las versiones publicadas, así que puede ir atrás de `main`; el
+[registro de cambios](CHANGELOG.es.md) dice qué falta publicar.
 
 O desde el código, en `~/.local` (revisa las dependencias y dice qué falta):
 
