@@ -69,6 +69,7 @@ for ns, regla in pairs({
     ["morgan-notifications"] = { animation = "fade",         ignore_alpha = 0.5 },
     ["morgan-osd"]           = { animation = "slide bottom", ignore_alpha = 0.5 },
     ["morgan-launcher"]      = { animation = "fade",         ignore_alpha = 0.5 },
+    ["morgan-polkit"]        = { animation = "fade",         ignore_alpha = 0.5 },
     ["morgan-menu"]          = { animation = "fade",         ignore_alpha = 0.5 },
     ["morgan-wallpapers"]    = { animation = "slide bottom", ignore_alpha = 0.5 },
     ["morgan-windows"]       = { animation = "fade",         ignore_alpha = 0.5 },
