@@ -1,11 +1,18 @@
 # En cada etiqueta vX.Y.Z: compila morgan en Arch y publica el release con el tarball que
 # baja el paquete morgan-bin (dist/arch/morgan-bin/PKGBUILD). El tarball es el árbol de /usr
-# y /etc que arma dist/empaquetar, dentro de morgan-X.Y.Z-x86_64/.
+# y /etc que arma dist/empaquetar, dentro de morgan-X.Y.Z-x86_64/. A mano (workflow_dispatch),
+# sobre una etiqueta que ya existe: gh workflow run release.yml -f etiqueta=vX.Y.Z
+
 name: release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      etiqueta:
+        description: 'Etiqueta ya publicada (vX.Y.Z)'
+        required: true
 
 permissions:
   contents: write
@@ -14,15 +21,20 @@ jobs:
   release:
     runs-on: ubuntu-latest
     container: archlinux:base-devel
+    env:
+      ETIQUETA: ${{ inputs.etiqueta || github.ref_name }}
     steps:
       - name: Dependencias
-        run: pacman -Syu --noconfirm --needed git rust glib2 wayland libxkbcommon fontconfig libpulse pam hyprland-protocols github-cli
+        # noto-fonts: los tests del motor miden texto, y el contenedor no trae ninguna fuente.
+        run: pacman -Syu --noconfirm --needed git rust glib2 wayland libxkbcommon fontconfig noto-fonts libpulse pam hyprland-protocols github-cli
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.ETIQUETA }}
 
       - name: La etiqueta coincide con Cargo.toml
         run: |
-          version=${GITHUB_REF_NAME#v}
+          version=${ETIQUETA#v}
           cargo_version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
           if [ "$version" != "$cargo_version" ]; then
             echo "La etiqueta dice $version y Cargo.toml, $cargo_version" >&2
@@ -49,6 +61,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          gh release create "$GITHUB_REF_NAME" --verify-tag --title "morgan $VERSION" \
+          gh release create "$ETIQUETA" --verify-tag --title "morgan $VERSION" \
             --generate-notes \
             "morgan-$VERSION-x86_64.tar.gz" "morgan-$VERSION-x86_64.tar.gz.sha256"
