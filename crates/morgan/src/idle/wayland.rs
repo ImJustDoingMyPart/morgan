@@ -1,16 +1,15 @@
 //! Una conexión Wayland propia (la de GTK no se comparte), con su fd en el main loop de glib:
 //! sin hilos ni sondeo.
 //!
-//! `get_idle_notification` respeta los inhibidores de Wayland (`idle-inhibit`: la regla
-//! `idle_inhibit` de los juegos, un video a pantalla completa). Cada tiempo es una
-//! notificación; cambiar los tiempos las destruye y crea de nuevo, y la cuenta arranca de
-//! cero.
+//! Cada tiempo es una notificación; cambiar los tiempos las destruye y crea de nuevo, y la
+//! cuenta arranca de cero.
 //!
-//! Esas notificaciones no sirven para saber si volvió el usuario: Hyprland les manda `resumed`
-//! cada vez que revisa los inhibidores (abrir, cerrar o enfocar una ventana, la pantalla
-//! completa, bloquear), haya entrada o no. Para eso están las de entrada
-//! (`get_input_idle_notification`, versión 2), que ignoran a los inhibidores y solo cuentan
-//! teclado, mouse y touchpad.
+//! Todas son de entrada (`get_input_idle_notification`, versión 2): solo las resetean
+//! teclado, mouse y touchpad, e ignoran los inhibidores de Wayland (`idle-inhibit`). Las que
+//! los respetan (`get_idle_notification`) no sirven: Hyprland 0.56 las vuelve a cero cada vez
+//! que revisa los inhibidores (`recheckIdleInhibitorStatus`: abrir, cerrar o enfocar una
+//! ventana, la pantalla completa), haya inhibidor o no, y con las pantallas apagadas el
+//! bloqueo y la suspensión no llegaban nunca. Solo con un compositor de versión 1 se usan.
 
 use std::cell::RefCell;
 use std::os::fd::{AsFd, AsRawFd};
@@ -166,8 +165,13 @@ impl Notificador {
         let nuevas = tiempos
             .iter()
             .map(|&(a, ms)| {
-                self.notifier
-                    .get_idle_notification(ms, &self.seat, &self.qh, a)
+                if self.con_entrada() {
+                    self.notifier
+                        .get_input_idle_notification(ms, &self.seat, &self.qh, a)
+                } else {
+                    self.notifier
+                        .get_idle_notification(ms, &self.seat, &self.qh, a)
+                }
             })
             .collect();
         *self.activas.borrow_mut() = nuevas;
