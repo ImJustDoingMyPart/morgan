@@ -14,6 +14,7 @@ pub mod lista;
 pub mod marquesina;
 mod resumen;
 pub mod vista;
+mod vumetro;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -26,6 +27,7 @@ use smithay_client_toolkit::reexports::calloop::channel::Sender;
 use crate::bluetooth::Bluetooth;
 use crate::comando;
 use crate::energia::Energia;
+use crate::escucha::Escucha;
 use crate::idle::Idle;
 use crate::luz::Luz;
 use crate::mezclador::Mezclador;
@@ -82,6 +84,7 @@ struct Inner {
     luz: Luz,
     brillo: crate::brillo::Brillo,
     mezclador: Mezclador,
+    escucha: Escucha,
     red: Red,
     bluetooth: Bluetooth,
     energia: Energia,
@@ -187,6 +190,7 @@ impl Centro {
             luz: s.luz,
             brillo: s.brillo,
             mezclador: Mezclador::new(),
+            escucha: Escucha::default(),
             red: Red::default(),
             bluetooth: Bluetooth::default(),
             energia: Energia::default(),
@@ -612,6 +616,13 @@ impl Centro {
         let yo = self.clone();
         i.mezclador.al_cambiar(move || yo.mostrar_audio());
         let yo = self.clone();
+        i.escucha.al_cambiar(move || {
+            yo.inner
+                .osd
+                .mostrar(&crate::escucha::aviso(yo.inner.escucha.activa()));
+            yo.mostrar_niveles();
+        });
+        let yo = self.clone();
         i.red.al_cambiar(move || yo.pintar_red());
         let yo = self.clone();
         i.bluetooth.al_cambiar(move || yo.pintar_bt());
@@ -949,6 +960,7 @@ impl Centro {
                 nombre: nombre.into(),
                 valor,
                 mudo,
+                escuchando: false,
                 glifo_accion,
                 lista,
                 mover,
@@ -984,14 +996,16 @@ impl Centro {
         match e.entrada_predeterminada() {
             Some(m) => {
                 let glifo = if m.mudo { "󰍭" } else { "󰍬" };
-                niveles.push(nivel(
+                let mut n = nivel(
                     NivelId::Microfono,
                     glifo,
                     &m.descripcion,
                     m.volumen,
                     m.mudo,
                     Some(ListaId::Microfono),
-                ));
+                );
+                n.escuchando = i.escucha.activa();
+                niveles.push(n);
             }
             None => niveles.push(nivel(
                 NivelId::Microfono,
@@ -1062,8 +1076,9 @@ impl Centro {
                 .collect();
             self.mandar(Orden::Lista(ListaId::Salida, Contenido::Opciones(ops)));
         }
+        let escuchando = i.escucha.activa();
         let clave = format!(
-            "{:?}|{:?}",
+            "{escuchando}|{:?}|{:?}",
             e.entrada_predeterminada,
             e.entradas
                 .iter()
@@ -1074,7 +1089,7 @@ impl Centro {
             i.entradas_vistas.replace(clave);
             let p = Parte::Lista(ListaId::Microfono);
             a.soltar(p);
-            let ops = e
+            let mut ops: Vec<Opcion> = e
                 .entradas
                 .iter()
                 .filter(|s| e.entrada_predeterminada.as_deref() != Some(s.nombre.as_str()))
@@ -1089,6 +1104,16 @@ impl Centro {
                     )
                 })
                 .collect();
+            // Al final, y también con un solo micrófono: la lista nunca queda vacía.
+            if e.entrada_predeterminada().is_some() {
+                let x = i.escucha.clone();
+                ops.push(Opcion::new(
+                    "󰋋",
+                    tr!("Escucharme"),
+                    Some(escuchando),
+                    a.tocar(p, move || x.alternar()),
+                ));
+            }
             self.mandar(Orden::Lista(ListaId::Microfono, Contenido::Opciones(ops)));
         }
         // Las otras salidas de cada app: la puesta ya está en el glifo.

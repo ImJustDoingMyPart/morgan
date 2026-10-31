@@ -316,6 +316,8 @@ pub struct Ui {
     pub arrastre: Option<toque::Arrastre>,
     /// Lo que se ve del ecualizador (el fundido de 600 ms) y sus niveles.
     pub ecualizador: (Transicion, Vec<f64>),
+    /// Hasta dónde llega la voz en el lleno del micrófono, de 0 a 1, mientras se escucha.
+    pub vumetro: Option<f64>,
     /// Desde cuándo anda la marquesina del título del reproductor.
     pub marquesina: Instant,
     /// Al limpiar, cada notificación sale a su turno; las de antes de tocar.
@@ -360,6 +362,7 @@ impl Ui {
             deslices: HashMap::new(),
             arrastre: None,
             ecualizador: (Transicion::new(0.0), Vec::new()),
+            vumetro: None,
             marquesina: Instant::now(),
             limpiando: None,
             scroll: 0.0,

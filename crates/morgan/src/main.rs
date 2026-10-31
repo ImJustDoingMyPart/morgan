@@ -23,6 +23,7 @@ mod cuotas;
 mod deslizable;
 mod dispositivos;
 mod energia;
+mod escucha;
 mod fondos;
 mod hypr_cfg;
 mod hyprland;

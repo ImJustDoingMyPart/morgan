@@ -68,6 +68,7 @@ fn niveles() -> Vec<Nivel> {
         nombre: "Auriculares".into(),
         valor: 64.0,
         mudo: false,
+        escuchando: false,
         glifo_accion: Some(4),
         lista: Some(ListaId::Salida),
         mover: 5,

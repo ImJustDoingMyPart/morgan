@@ -10,7 +10,7 @@
 //! El ecualizador del reproductor es cava (`ecualizador.rs`), que corre solo con el centro
 //! abierto y algo sonando; un hilo lee sus renglones y se los pasa a este.
 
-use std::io::BufRead;
+use std::io::{BufRead, Read};
 use std::time::{Duration, Instant};
 
 use morgan_motor::color::Paleta;
@@ -53,10 +53,10 @@ use super::dibujo::permiso::{self, PermisoUi};
 use super::dibujo::toasts::{self, ToastsUi};
 use super::dibujo::toque::{IZQUIERDO, Pedido};
 use super::dibujo::{Objetivo, Ui};
-use super::ecualizador;
+use super::{ecualizador, vumetro};
 use super::vista::{
     Aviso, Contenido, Evento, EventoAjustes, EventoCalculadora, EventoFondos, EventoPermiso, EventoVentanas, VistaCalculadora, VistaFondos, VistaPermiso, VistaVentanas, EventoLauncher, Grupo, Iconos, IndiceAjustes, ListaId,
-    ListaLauncher, Lugar, Menu, Nivel, PaginaAjustes, Reproductor, Tarjeta,
+    ListaLauncher, Lugar, Menu, Nivel, NivelId, PaginaAjustes, Reproductor, Tarjeta,
 };
 use crate::lamina::Lamina;
 
@@ -275,6 +275,18 @@ impl Drop for Cava {
     }
 }
 
+/// `pw-record` midiendo el micrófono mientras se escucha.
+struct Vumetro {
+    proceso: std::process::Child,
+}
+
+impl Drop for Vumetro {
+    fn drop(&mut self) {
+        let _ = self.proceso.kill();
+        let _ = self.proceso.wait();
+    }
+}
+
 struct Hilo {
     conn: Connection,
     qh: QueueHandle<Hilo>,
@@ -320,6 +332,7 @@ struct Hilo {
     /// Abrir con la sesión desplegada espera a la primera hoja para enfocar.
     enfocar_al_armar: Option<Enfoque>,
     cava: Option<Cava>,
+    vumetro: Option<Vumetro>,
     /// El reloj de las horas relativas (cada minuto) y el del cursor de un campo.
     reloj: Option<RegistrationToken>,
     parpadeo: Option<(Instant, RegistrationToken)>,
@@ -403,6 +416,7 @@ fn correr(
         minis,
         enfocar_al_armar: None,
         cava: None,
+        vumetro: None,
         reloj: None,
         parpadeo: None,
         eventos,
@@ -510,7 +524,10 @@ impl Hilo {
                     self.ui.enfocar_campo(l, g);
                 }
             }
-            Orden::Niveles(n) => self.ui.datos.niveles = n,
+            Orden::Niveles(n) => {
+                self.ui.datos.niveles = n;
+                self.vumetro();
+            }
             Orden::Reproductor(r) => {
                 let titulo = r.as_ref().map(|r| r.titulo.clone());
                 let antes = self.ui.datos.reproductor.as_ref().map(|r| r.titulo.clone());
@@ -1007,6 +1024,7 @@ impl Hilo {
         }
         self.ui.marquesina = ahora;
         self.ecualizador();
+        self.vumetro();
         // Las horas relativas siguen andando mientras se mira.
         let timer = Timer::from_duration(Duration::from_secs(60));
         self.reloj = self
@@ -1026,6 +1044,8 @@ impl Hilo {
         self.ui.cerrar();
         self.enfocar_al_armar = None;
         self.cava = None;
+        self.vumetro = None;
+        self.ui.vumetro = None;
         self.ui.ecualizador.0 = morgan_motor::curva::Transicion::new(0.0);
         self.ui.ecualizador.1.clear();
         if let Some(t) = self.reloj.take() {
@@ -1110,6 +1130,42 @@ impl Hilo {
                 self.cava = Some(Cava { proceso });
             }
             Err(e) => eprintln!("morgan: ecualizador: {e}"),
+        }
+    }
+
+    /// `pw-record` mide el micrófono con el centro abierto y la escucha encendida (y sin
+    /// silenciar: no habría nada que ver).
+    fn vumetro(&mut self) {
+        let midiendo = self.panel.is_some()
+            && self
+                .ui
+                .datos
+                .niveles
+                .iter()
+                .any(|n| n.id == NivelId::Microfono && n.escuchando && !n.mudo);
+        if !midiendo {
+            self.vumetro = None;
+            self.ui.vumetro = None;
+            return;
+        }
+        if self.vumetro.is_some() {
+            return;
+        }
+        match lanzar_vumetro() {
+            Ok((proceso, rx)) => {
+                self.ui.vumetro = Some(0.0);
+                let _ = self.bucle.insert_source(rx, |ev, _, h| {
+                    if let channel::Event::Msg(v) = ev
+                        && h.vumetro.is_some()
+                        && let Some(antes) = h.ui.vumetro
+                    {
+                        h.ui.vumetro = Some(vumetro::siguiente(antes, v));
+                        h.ensuciar_capa(Capa::Panel);
+                    }
+                });
+                self.vumetro = Some(Vumetro { proceso });
+            }
+            Err(e) => eprintln!("morgan: vúmetro: {e}"),
         }
     }
 
@@ -1884,6 +1940,41 @@ fn lanzar_cava() -> Result<(std::process::Child, channel::Channel<Vec<f64>>), St
                 if let Some(n) = ecualizador::interpretar(&linea)
                     && tx.send(n).is_err()
                 {
+                    return;
+                }
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    Ok((proceso, rx))
+}
+
+/// Lanza `pw-record` y un hilo que lee un cuadro por vez y manda su nivel.
+fn lanzar_vumetro() -> Result<(std::process::Child, channel::Channel<f64>), String> {
+    let prueba = crate::escucha::destinos()?;
+    let mut proceso = std::process::Command::new("pw-record")
+        .args(vumetro::argumentos(
+            tr!("Escucharme"),
+            prueba.as_ref().map(|(f, _)| f.as_str()),
+        ))
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("pw-record: {e}"))?;
+    let mut salida = proceso.stdout.take().ok_or("pw-record sin salida")?;
+    let (tx, rx) = channel::channel();
+    std::thread::Builder::new()
+        .name("morgan-vumetro".into())
+        .spawn(move || {
+            let mut bytes = [0u8; vumetro::POR_CUADRO * 2];
+            while salida.read_exact(&mut bytes).is_ok() {
+                let muestras: Vec<i16> = bytes
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|b| i16::from_ne_bytes(*b))
+                    .collect();
+                if tx.send(vumetro::fraccion(&muestras)).is_err() {
                     return;
                 }
             }

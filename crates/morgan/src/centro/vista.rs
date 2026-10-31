@@ -145,6 +145,9 @@ pub struct Nivel {
     /// De 0 a 100.
     pub valor: f64,
     pub mudo: bool,
+    /// El micrófono mientras se escucha (`escucha.rs`): el glifo en `tertiary` y el lleno
+    /// del slider se enciende con la voz.
+    pub escuchando: bool,
     /// El glifo silencia; sin acción no responde.
     pub glifo_accion: Option<Id>,
     /// Un click en el nombre despliega esta lista.

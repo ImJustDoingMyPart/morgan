@@ -42,6 +42,7 @@
 "Sí, apagar" = "Yes, shut down"
 "Volver" = "Back"
 "Sin micrófono" = "No microphone"
+"Escucharme" = "Hear myself"
 
 # menu/arbol.rs: categorías y secciones
 "Apariencia" = "Appearance"

@@ -442,6 +442,8 @@ impl Ui {
         let glifo = self.rotulos.linea(&n.glifo, 18.0, 400.0);
         let color_glifo = if n.mudo {
             p.error
+        } else if n.escuchando {
+            mezclar(&p.tertiary, &p.primary, self.luz(og, ahora))
         } else if n.glifo_accion.is_some() {
             mezclar(&p.on_surface, &p.primary, self.luz(og, ahora))
         } else {
@@ -523,6 +525,14 @@ impl Ui {
     /// mientras se arrastra.
     fn armar_slider(&mut self, h: &mut Hoja, n: &Nivel, canal: Rect, valor: f64, ahora: Instant) {
         let p = self.paleta;
+        // El degradé en `r`, con los colores repartidos en `de` (el lleno entero).
+        let degrade = |r: Rect, de: Rect| Trazo::Degrade {
+            r,
+            radio: RADIO,
+            a: p.primary,
+            b: p.tertiary,
+            forma: Degrade::Horizontal { de },
+        };
         let o = Objetivo::Slider(n.id);
         // Donde responde: el canal con su alto de escala.
         let zona = Rect::new(
@@ -546,14 +556,23 @@ impl Ui {
                     radio: RADIO,
                     color: op(&p.on_surface, 0.25),
                 });
-            } else {
-                h.trazos.push(Trazo::Degrade {
+            } else if let Some(voz) = self.vumetro.filter(|_| n.escuchando) {
+                // Escuchando: el lleno apagado y, encima, encendido hasta donde llega la voz.
+                h.trazos.push(Trazo::Grupo {
                     r: lleno,
-                    radio: RADIO,
-                    a: p.primary,
-                    b: p.tertiary,
-                    forma: Degrade::Horizontal { de: lleno },
+                    escala: 1.0,
+                    dx: 0.0,
+                    dy: 0.0,
+                    alfa: 0.35,
                 });
+                h.trazos.push(degrade(lleno, lleno));
+                h.trazos.push(Trazo::Fin);
+                let voz = Rect::new(lleno.x0, lleno.y0, lleno.x0 + lleno.width() * voz, lleno.y1);
+                if voz.width() > 0.0 {
+                    h.trazos.push(degrade(voz, lleno));
+                }
+            } else {
+                h.trazos.push(degrade(lleno, lleno));
             }
         }
         let encima = self.luz(o, ahora);

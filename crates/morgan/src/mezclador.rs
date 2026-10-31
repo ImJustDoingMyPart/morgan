@@ -349,7 +349,10 @@ impl Mezclador {
         let (tx_a, rx_a) = async_channel::unbounded();
         introspect.get_sink_input_info_list(move |r| match r {
             ListResult::Item(i) => {
-                if !i.has_volume {
+                // Lo que se oye de «Escucharme» sigue al micrófono: no es una app.
+                let propia = i.proplist.get_str("node.name").as_deref()
+                    == Some(&format!("output.{}", crate::escucha::NODO));
+                if !i.has_volume || propia {
                     return;
                 }
                 let prop = |k: &str| i.proplist.get_str(k).filter(|v| !v.is_empty());
