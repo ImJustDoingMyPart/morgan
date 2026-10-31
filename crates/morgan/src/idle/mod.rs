@@ -110,6 +110,13 @@ impl Idle {
             }),
         };
         let yo = idle.clone();
+        idle.inner.hyprland.al_evento(move |linea| {
+            if yo.inner.apagadas.get() && monitor_nuevo(linea) {
+                eprintln!("morgan: idle: un monitor volvió apagado; se lo apaga otra vez");
+                yo.inner.hyprland.dpms(false);
+            }
+        });
+        let yo = idle.clone();
         glib::MainContext::default().spawn_local(async move { yo.arrancar().await });
         idle
     }
@@ -391,6 +398,16 @@ impl Idle {
     }
 }
 
+/// El KTC H27E6, a los ~6 s de apagado, se desconecta y vuelve al segundo; Hyprland toma al que
+/// vuelve como monitor nuevo y lo prende. `FALLBACK` es el que Hyprland pone mientras no hay
+/// ninguno.
+fn monitor_nuevo(linea: &str) -> bool {
+    linea
+        .strip_prefix("monitoraddedv2>>")
+        .and_then(|d| d.split(',').nth(1))
+        .is_some_and(|nombre| nombre != "FALLBACK")
+}
+
 fn registrar(r: zbus::Result<()>) {
     if let Err(e) = r {
         eprintln!("morgan: idle: logind: {e}");
@@ -444,6 +461,16 @@ mod tests {
     #[test]
     fn inhibido_no_corre_ninguno() {
         assert!(tiempos(&config::Idle::default(), true).is_empty());
+    }
+
+    #[test]
+    fn monitor_que_vuelve() {
+        assert!(monitor_nuevo(
+            "monitoraddedv2>>2,DP-3,Shenzhen KTC Technology Group 27GS600 0000000000001"
+        ));
+        assert!(!monitor_nuevo("monitoraddedv2>>0,FALLBACK,"));
+        assert!(!monitor_nuevo("monitorremovedv2>>2,DP-3,KTC"));
+        assert!(!monitor_nuevo("monitoradded>>DP-3"));
     }
 
     #[test]
