@@ -175,6 +175,7 @@ impl Que {
 pub enum Cambio {
     Opacidad(f64),
     Idioma(String),
+    Esquina(bool),
     Bloqueo(CambioBloqueo),
     Retencion(u32),
     ModoApp(String, ModoApp),
@@ -325,6 +326,7 @@ impl Cambio {
         match self {
             Cambio::Opacidad(v) => c.shell.opacidad = *v,
             Cambio::Idioma(v) => c.shell.idioma = v.clone(),
+            Cambio::Esquina(v) => c.shell.esquina = *v,
             Cambio::Bloqueo(b) => b.aplicar(&mut c.bloqueo),
             Cambio::Retencion(d) => c.notificaciones.retencion_dias = *d,
             Cambio::Resumen(v) => c.juego.resumen = *v,
@@ -597,6 +599,14 @@ pub fn pagina_fija(cat: Categoria, c: &Config, apps_historial: &[String]) -> Opt
                     ),
                 ),
                 idioma_(&c.shell.idioma),
+                ajuste(
+                    tr!("Esquina activa"),
+                    tr!("el mouse en la esquina superior izquierda abre la vista de ventanas"),
+                    Control::Casilla {
+                        activa: c.shell.esquina,
+                        que: Que::Config(Cambio::Esquina(!c.shell.esquina)),
+                    },
+                ),
                 ajuste(
                     tr!("Clima"),
                     &if c.clima.latitud.is_some() && !c.clima.lugar.is_empty() {

@@ -97,9 +97,54 @@ pub fn duracion(segundos: u64) -> String {
     }
 }
 
+/// El puntero está en el punto de la esquina superior izquierda de su salida.
+pub fn en_esquina(x: f64, y: f64) -> bool {
+    x < 1.0 && y < 1.0
+}
+
+/// La esquina superior izquierda de una salida frena al puntero: no sigue hacia otra pantalla,
+/// ni a la izquierda ni arriba. Si sigue, cruzar por ahí abriría la vista sin querer.
+pub fn esquina_es_tope(
+    (x, y): (i32, i32),
+    otras: impl IntoIterator<Item = (i32, i32, i32, i32)>,
+) -> bool {
+    let adentro = |(px, py): (i32, i32), (ox, oy, w, h): (i32, i32, i32, i32)| {
+        px >= ox && px < ox + w && py >= oy && py < oy + h
+    };
+    !otras.into_iter().any(|o| {
+        [(x - 1, y), (x, y - 1), (x - 1, y - 1)]
+            .into_iter()
+            .any(|p| adentro(p, o))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn la_esquina_es_un_solo_punto() {
+        assert!(en_esquina(0.0, 0.0));
+        assert!(en_esquina(0.5, 0.5));
+        assert!(!en_esquina(1.0, 0.0));
+        assert!(!en_esquina(0.0, 1.0));
+    }
+
+    #[test]
+    fn la_esquina_es_tope_solo_si_no_hay_pantalla_al_lado() {
+        // Sola.
+        assert!(esquina_es_tope((0, 0), []));
+        // Otra pantalla a la derecha: la de la izquierda frena, la de la derecha no.
+        assert!(esquina_es_tope((0, 0), [(2560, 0, 1920, 1080)]));
+        assert!(!esquina_es_tope((2560, 0), [(0, 0, 2560, 1440)]));
+        // Otra arriba: la de arriba frena, la de abajo no.
+        assert!(esquina_es_tope((0, -1080), [(0, 0, 2560, 1440)]));
+        assert!(!esquina_es_tope((0, 0), [(0, -1080, 1920, 1080)]));
+        // Una en diagonal: el puntero podría pasar.
+        assert!(!esquina_es_tope((0, 0), [(-100, -100, 100, 100)]));
+        // A la izquierda pero más abajo: no toca la esquina.
+        assert!(esquina_es_tope((0, 0), [(-1920, 500, 1920, 1080)]));
+    }
     use crate::hyprland::Espacio;
 
     fn espacio(id: i64, monitor: &str, ventanas: u32) -> Espacio {

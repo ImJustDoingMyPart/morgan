@@ -164,6 +164,11 @@ impl Lienzo {
         self.recientes.get(1).or(self.recientes.first()).copied()
     }
 
+    /// La que tiene el foco: abierto con el mouse no hay anterior a la que saltar.
+    pub fn enfocada(&self) -> Option<usize> {
+        self.recientes.first().copied()
+    }
+
     pub fn reciente(&self, sel: usize) -> usize {
         let n = self.recientes.len();
         match self.recientes.iter().position(|&r| r == sel) {

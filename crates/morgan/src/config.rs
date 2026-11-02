@@ -517,6 +517,9 @@ pub struct Shell {
     #[serde(deserialize_with = "idioma")]
     #[serde(rename = "language")]
     pub idioma: String,
+    /// El mouse en la esquina superior izquierda abre la vista de ventanas.
+    #[serde(rename = "hot_corner")]
+    pub esquina: bool,
 }
 
 impl Default for Shell {
@@ -524,6 +527,7 @@ impl Default for Shell {
         Shell {
             opacidad: 0.85,
             idioma: "auto".into(),
+            esquina: true,
         }
     }
 }

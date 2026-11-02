@@ -454,6 +454,8 @@ pub struct VistaVentanas {
     pub salida: Option<String>,
     pub lienzo: crate::ventanas::modelo::Lienzo,
     pub sel: usize,
+    /// Se abrió con el mouse: no hay `Mod` que soltar y queda abierto hasta elegir o cerrar.
+    pub por_esquina: bool,
     /// Por cada ventana del lienzo: el ícono de su app y su última foto.
     pub iconos: Vec<ImageData>,
     pub fotos: Vec<Option<ImageData>>,

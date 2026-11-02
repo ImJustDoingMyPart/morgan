@@ -53,7 +53,7 @@ lo que ves acá es lo que querés, bienvenido.
 - **Pantalla de bloqueo e idle** (`morgan-lock`): reemplaza a hyprlock y a hypridle. Bloquea
   a través de logind, así que `loginctl lock-session` funciona, y puede bloquear antes de
   suspender.
-- **OSD** de volumen, brillo y Bloq Mayús; una **vista de ventanas** (`Super+Tab`); un
+- **OSD** de volumen, brillo y Bloq Mayús; una **vista de ventanas** (`Super+Tab` o el mouse en la esquina superior izquierda); un
   **selector de fondos**; un **calendario** que lee las URL iCal de cada uno.
 - **Temas**: nueve paletas incluidas (morgan, Catppuccin, Dracula, Everforest, Gruvbox,
   Kanagawa, Nord, Rosé Pine, Tokyo Night) o los colores del fondo de pantalla, aplicados a

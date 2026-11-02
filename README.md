@@ -51,7 +51,7 @@ here is what you want, welcome.
   size, opacity).
 - **Lock screen and idle** (`morgan-lock`): replaces hyprlock and hypridle. It locks through
   logind, so `loginctl lock-session` works, and it can lock before suspending.
-- **OSD** for volume, brightness and Caps Lock; a **window overview** (`Super+Tab`); a
+- **OSD** for volume, brightness and Caps Lock; a **window overview** (`Super+Tab` or the mouse in the top left corner); a
   **wallpaper picker**; a **calendar** that reads your iCal URLs.
 - **Themes**: nine built-in palettes (morgan, Catppuccin, Dracula, Everforest, Gruvbox, Kanagawa,
   Nord, Rosé Pine, Tokyo Night…) or colors taken from your wallpaper, applied to morgan and,

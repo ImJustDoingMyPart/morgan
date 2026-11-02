@@ -1396,10 +1396,7 @@ impl Hilo {
                 ui.mover(x, y);
                 Vec::new()
             }
-            PointerEventKind::Motion { .. } => {
-                ui.mover(x, y);
-                Vec::new()
-            }
+            PointerEventKind::Motion { .. } => ui.movido(x, y),
             PointerEventKind::Leave { .. } => {
                 ui.salir();
                 Vec::new()
@@ -1409,7 +1406,16 @@ impl Hilo {
                 Vec::new()
             }
             PointerEventKind::Release { .. } => ui.soltar(x, y),
-            PointerEventKind::Axis { .. } => Vec::new(),
+            PointerEventKind::Axis { vertical, .. } => {
+                if vertical.value120 != 0 {
+                    ui.rueda(f64::from(vertical.value120) / 120.0, true);
+                } else if vertical.discrete != 0 {
+                    ui.rueda(f64::from(vertical.discrete), true);
+                } else if vertical.absolute != 0.0 {
+                    ui.rueda(vertical.absolute, false);
+                }
+                Vec::new()
+            }
         };
         self.eventos_ventanas(v);
         if self.forma_puesta != Some(Shape::Default)

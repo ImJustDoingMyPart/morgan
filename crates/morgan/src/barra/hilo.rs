@@ -54,6 +54,7 @@ use wayland_client::protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_s
 use wayland_client::{Connection, QueueHandle};
 
 use super::dibujo::{self, ALTO, Animos, Estado, Icono, Lugar, Pintura, Que, Rotulos};
+use super::modelo;
 use crate::calendario::dibujo::{self as cal, Cal, Hoja, Objetivo};
 use crate::hyprland::Espacios;
 use crate::lamina::Lamina;
@@ -105,6 +106,8 @@ pub enum Evento {
         delta: i32,
     },
     CalendarioCerrado,
+    /// El puntero llegó a la esquina de esta salida (su conector).
+    Esquina(String),
 }
 
 /// Si no hay Wayland o la GPU no abre, el hilo termina: morgan sigue sin barra.
@@ -140,6 +143,8 @@ struct Barra {
     /// Lo que tiene el puntero encima.
     encima: Option<Que>,
     en_cajon: bool,
+    /// El puntero está en la esquina: dispara al llegar, no mientras se queda ahí.
+    en_esquina: bool,
 }
 
 struct Globo {
@@ -370,6 +375,7 @@ impl Hilo {
             revelado: Revelado::new(false),
             encima: None,
             en_cajon: false,
+            en_esquina: false,
         });
     }
 
@@ -686,8 +692,10 @@ impl Hilo {
         match e.kind {
             PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
                 self.mover(i, bajo, en_cajon);
+                self.esquina(i, e);
             }
             PointerEventKind::Leave { .. } => {
+                self.barras[i].en_esquina = false;
                 self.mover(i, None, false);
                 self.cerrar_globo();
             }
@@ -735,6 +743,36 @@ impl Hilo {
                 }
             }
         }
+    }
+
+    /// Solo un movimiento dispara. Encontrarse con el puntero ya en la esquina (al arrancar, o
+    /// cuando se va lo que la tapaba, como la vista misma al cerrarse) no es haber llegado.
+    /// Tampoco arrastrando algo que se apretó en la barra.
+    fn esquina(&mut self, i: usize, e: &PointerEvent) {
+        let ahora = modelo::en_esquina(e.position.0, e.position.1);
+        let antes = std::mem::replace(&mut self.barras[i].en_esquina, ahora);
+        if ahora
+            && !antes
+            && matches!(e.kind, PointerEventKind::Motion { .. })
+            && self.apretado.is_none()
+            && self.esquina_es_tope(i)
+        {
+            self.avisar(Evento::Esquina(self.barras[i].nombre.clone()));
+        }
+    }
+
+    fn esquina_es_tope(&self, i: usize) -> bool {
+        let salida = &self.barras[i].salida;
+        let Some(lugar) = self.salidas.info(salida).and_then(|o| o.logical_position) else {
+            return true;
+        };
+        let otras = self.salidas.outputs().filter(|o| o != salida).filter_map(|o| {
+            let info = self.salidas.info(&o)?;
+            let (x, y) = info.logical_position?;
+            let (w, h) = info.logical_size?;
+            Some((x, y, w, h))
+        });
+        modelo::esquina_es_tope(lugar, otras.collect::<Vec<_>>())
     }
 
     fn mover(&mut self, i: usize, bajo: Option<Que>, en_cajon: bool) {

@@ -8,6 +8,10 @@
 //! `Mod+flecha` de la cinta se los quedaría el compositor (los binds le ganan a una capa con
 //! teclado exclusivo).
 //!
+//! También se abre llevando el mouse a la esquina superior izquierda (la barra avisa, ver
+//! [`Ventanas::esquina`]). Ahí no hay `Mod` ni submap: se muestra enseguida, con la selección en
+//! la ventana enfocada, y queda abierto hasta un click, `Escape` o volver a la esquina.
+//!
 //! Hyprland no entrega cuadros de una ventana que no toca su monitor, así que morgan saca una
 //! foto cada vez que una ventana recibe el foco y, con `Mod` apretado [`RENOVAR`], renueva a
 //! la vez las que tocan su monitor. Las de un workspace oculto dan siempre el mismo cuadro: con
@@ -70,6 +74,8 @@ pub struct Ventanas {
 struct Inner {
     hyprland: Hyprland,
     hilo: Sender<Orden>,
+    /// `[shell] hot_corner`.
+    con_esquina: Cell<bool>,
     capturador: RefCell<Option<Rc<Capturador>>>,
     fotos: RefCell<HashMap<String, Foto>>,
     abierta: RefCell<Option<Rc<Vista>>>,
@@ -88,11 +94,12 @@ struct Inner {
 }
 
 impl Ventanas {
-    pub fn new(hyprland: Hyprland, centro: &Centro) -> Self {
+    pub fn new(hyprland: Hyprland, centro: &Centro, con_esquina: bool) -> Self {
         let v = Ventanas {
             inner: Rc::new(Inner {
                 hyprland: hyprland.clone(),
                 hilo: centro.hilo(),
+                con_esquina: Cell::new(con_esquina),
                 capturador: RefCell::default(),
                 fotos: RefCell::default(),
                 abierta: RefCell::default(),
@@ -188,10 +195,50 @@ impl Ventanas {
                 yo.enfocar(lienzo.ventanas[sel].direccion.clone(), false);
                 return;
             }
-            let vista = Vista::abrir(&yo, lienzo, sel, t0);
+            let vista = Vista::abrir(&yo, lienzo, sel, None, t0);
             traza(t0, "armado");
             i.abierta.replace(Some(vista));
         });
+    }
+
+    pub fn aplicar_config(&self, con_esquina: bool) {
+        self.inner.con_esquina.set(con_esquina);
+    }
+
+    /// El puntero llegó a la esquina de `salida`. Devuelve si se va a abrir, para que se cierre
+    /// lo demás. Abierto con `Mod+Tab` no se mete: ahí manda la tecla. Con un juego en foco,
+    /// tampoco: nada se mete con él.
+    pub fn esquina(&self, salida: String) -> bool {
+        let abierta = self.inner.abierta.borrow().clone();
+        if let Some(v) = abierta {
+            if v.por_esquina.get() {
+                self.cerrar();
+            }
+            return false;
+        }
+        let i = &self.inner;
+        if !i.con_esquina.get() || i.leyendo.get() || i.hyprland.juego_en_foco() {
+            return false;
+        }
+        let pedido = i.pedido.get() + 1;
+        i.pedido.set(pedido);
+        i.leyendo.set(true);
+        i.pasos.set(0);
+        let yo = self.clone();
+        let t0 = Instant::now();
+        glib::MainContext::default().spawn_local(async move {
+            let lienzo = yo.leer().await;
+            let i = &yo.inner;
+            i.leyendo.set(false);
+            if i.pedido.get() != pedido || yo.abierto() {
+                return;
+            }
+            let Some(lienzo) = lienzo else { return };
+            let Some(sel) = lienzo.enfocada() else { return };
+            let vista = Vista::abrir(&yo, lienzo, sel, Some(salida), t0);
+            i.abierta.replace(Some(vista));
+        });
+        true
     }
 
     pub fn soltar(&self) {
@@ -207,17 +254,22 @@ impl Ventanas {
     pub fn cerrar(&self) {
         self.inner.pedido.set(self.inner.pedido.get() + 1);
         self.inner.leyendo.set(false);
-        if self.inner.abierta.take().is_some() {
+        if let Some(v) = self.inner.abierta.take() {
             let _ = self.inner.hilo.send(Orden::VentanasCerrar);
-            self.salir_del_submap();
+            if !v.por_esquina.get() {
+                self.salir_del_submap();
+            }
         }
     }
 
     fn enfocar(&self, direccion: String, submap: bool) {
         self.inner.pedido.set(self.inner.pedido.get() + 1);
-        if self.inner.abierta.take().is_some() {
+        let abierta = self.inner.abierta.take();
+        if abierta.is_some() {
             let _ = self.inner.hilo.send(Orden::VentanasCerrar);
         }
+        // Abierto con el mouse Hyprland nunca entró al submap.
+        let submap = submap && !abierta.is_some_and(|v| v.por_esquina.get());
         let h = self.inner.hyprland.clone();
         glib::MainContext::default().spawn_local(async move {
             h.eval(&format!(
@@ -377,13 +429,23 @@ struct Foto {
 struct Vista {
     ventanas: std::rc::Weak<Inner>,
     lienzo: Lienzo,
+    /// Abierto con el mouse, hasta que un `Mod+Tab` lo pase a la tecla.
+    por_esquina: Cell<bool>,
     visible: Cell<bool>,
     renovadas: Cell<bool>,
     t0: Instant,
 }
 
 impl Vista {
-    fn abrir(v: &Ventanas, lienzo: Lienzo, sel: usize, t0: Instant) -> Rc<Self> {
+    /// `esquina`: la salida donde se abrió con el mouse.
+    fn abrir(
+        v: &Ventanas,
+        lienzo: Lienzo,
+        sel: usize,
+        esquina: Option<String>,
+        t0: Instant,
+    ) -> Rc<Self> {
+        let por_esquina = esquina.is_some();
         let i = &v.inner;
         let iconos = lienzo.ventanas.iter().map(|w| v.icono(&w.clase)).collect();
         let fotos = lienzo
@@ -393,9 +455,10 @@ impl Vista {
             .collect();
         traza(t0, "celdas");
         let _ = i.hilo.send(Orden::VentanasAbrir(Box::new(VistaVentanas {
-            salida: i.hyprland.espacios().enfocada,
+            salida: esquina.or_else(|| i.hyprland.espacios().enfocada),
             lienzo: lienzo.clone(),
             sel,
+            por_esquina,
             iconos,
             fotos,
             fondo: v.fondo_guardado(),
@@ -403,10 +466,17 @@ impl Vista {
         let vista = Rc::new(Vista {
             ventanas: Rc::downgrade(&v.inner),
             lienzo,
+            por_esquina: Cell::new(por_esquina),
             visible: Cell::new(false),
             renovadas: Cell::new(false),
             t0,
         });
+        // Con el mouse no hay toque que esperar.
+        if por_esquina {
+            let _ = i.hilo.send(Orden::VentanasMostrar);
+            vista.activar();
+            return vista;
+        }
         // La capa se pone al mostrarse y Hyprland la funde entera, blur incluido: fundirla
         // desde adentro no sirve, el blur (que solo va donde el alfa pasa de `ignore_alpha`)
         // aparecería de golpe a mitad del fundido.
@@ -436,6 +506,7 @@ impl Vista {
 
     /// Un paso más de `Mod+Tab`: el hilo del centro mueve la elegida y muestra el lienzo.
     fn reciente(self: &Rc<Self>) {
+        self.por_esquina.set(false);
         if let Some(d) = self.duenio() {
             let _ = d.inner.hilo.send(Orden::VentanasReciente);
         }

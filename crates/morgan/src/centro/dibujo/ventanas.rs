@@ -45,6 +45,8 @@ const FUNDIDO: Duration = Duration::from_millis(180);
 /// La banda sube estos px al entrar, mientras Hyprland funde la capa.
 const SUBIDA: f64 = 10.0;
 const ENTRADA: Duration = Duration::from_millis(180);
+/// Lo que hay que desplazar en un touchpad para un paso, como en la banda de fondos.
+const PASO_RUEDA: f64 = 40.0;
 
 /// La foto de una ventana: la que se ve y la anterior, de la que se funde.
 #[derive(Default)]
@@ -60,6 +62,8 @@ struct Estado {
     paginas: Vec<Pagina>,
     fondo: Option<ImageData>,
     sel: usize,
+    por_esquina: bool,
+    rueda: f64,
     /// Lo que se dibujó en el último cuadro: de ahí parten el desplazamiento y el anillo al
     /// cambiar la elegida.
     scroll_visto: Option<f64>,
@@ -145,6 +149,8 @@ impl VentanasUi {
             paginas,
             fondo: v.fondo,
             sel: v.sel,
+            por_esquina: v.por_esquina,
+            rueda: 0.0,
             scroll_visto: None,
             scroll_desde: None,
             anillo_visto: None,
@@ -203,7 +209,9 @@ impl VentanasUi {
     }
 
     pub fn reciente(&mut self) {
-        let Some(e) = &self.abierta else { return };
+        let Some(e) = &mut self.abierta else { return };
+        // `Mod+Tab` con el lienzo abierto por la esquina: desde acá se suelta `Mod` como siempre.
+        e.por_esquina = false;
         let i = e.lienzo.reciente(e.sel);
         self.seleccionar(i, true);
     }
@@ -280,8 +288,14 @@ impl VentanasUi {
         let alto_lienzo = n * (alto_franja + sep) - sep + 2.0 * MARGEN_GLOW;
         let ancho_visible = ancho_lienzo.min(w - 2.0 * COSTADO - COLUMNA - sep);
 
-        // El pie: el prompt, el ícono, el título (lo que sobra) y el detalle a la derecha.
-        let v = &l.ventanas[e.sel];
+        // El pie: el prompt, el ícono, el título (lo que sobra) y el detalle a la derecha. Con el
+        // mouse, lo que tiene el puntero: es lo que un click elegiría.
+        let del_pie = if e.por_esquina {
+            e.hover.unwrap_or(e.sel)
+        } else {
+            e.sel
+        };
+        let v = &l.ventanas[del_pie];
         let prompt = self.rotulos.linea("󰖯  Ventanas", PX, 400.0);
         let detalle = self
             .rotulos
@@ -322,7 +336,7 @@ impl VentanasUi {
         });
         let x_icono = PIE_X + wp + ENTRE_PIE;
         t.push(Trazo::Imagen {
-            img: e.iconos[e.sel].clone(),
+            img: e.iconos[del_pie].clone(),
             r: Rect::new(
                 x_icono,
                 centro_pie - ICONO_PIE / 2.0,
@@ -598,7 +612,8 @@ impl VentanasUi {
 
     /// Se soltó `Mod`: se enfoca la elegida.
     pub fn soltada(&self, k: Keysym) -> Vec<EventoVentanas> {
-        if matches!(k, Keysym::Super_L | Keysym::Super_R) {
+        let por_esquina = self.abierta.as_ref().is_some_and(|e| e.por_esquina);
+        if !por_esquina && matches!(k, Keysym::Super_L | Keysym::Super_R) {
             self.confirmar(true)
         } else {
             Vec::new()
@@ -611,6 +626,38 @@ impl VentanasUi {
         if let Some(e) = &mut self.abierta {
             e.puntero = Some((x, y));
             e.hover = e.celdas.iter().find(|(_, r)| r.contains((x, y))).map(|(i, _)| *i);
+        }
+    }
+
+    /// Un movimiento real, no la entrada de la capa: abierto con el mouse, volver a la esquina
+    /// cierra. Al abrirse el puntero ya está ahí, y eso no cuenta.
+    pub fn movido(&mut self, x: f64, y: f64) -> Vec<EventoVentanas> {
+        let antes = self.abierta.as_ref().and_then(|e| e.puntero);
+        self.mover(x, y);
+        let por_esquina = self.abierta.as_ref().is_some_and(|e| e.por_esquina);
+        if por_esquina
+            && crate::barra::modelo::en_esquina(x, y)
+            && antes.is_some_and(|(ax, ay)| !crate::barra::modelo::en_esquina(ax, ay))
+        {
+            return vec![EventoVentanas::Cerrada];
+        }
+        Vec::new()
+    }
+
+    /// La rueda recorre la cinta: con el mouse no hay otra forma de llegar a lo que no entra.
+    pub fn rueda(&mut self, paso: f64, discreto: bool) {
+        let Some(e) = &mut self.abierta else { return };
+        let pasos = if discreto {
+            paso.signum() as i64
+        } else {
+            e.rueda += paso;
+            let k = (e.rueda / PASO_RUEDA).trunc();
+            e.rueda -= k * PASO_RUEDA;
+            k as i64
+        };
+        let dir = if pasos > 0 { Dir::Derecha } else { Dir::Izquierda };
+        for _ in 0..pasos.abs() {
+            self.ir(dir);
         }
     }
 
@@ -682,6 +729,7 @@ mod tests {
             salida: None,
             lienzo,
             sel: 1,
+            por_esquina: false,
             iconos: vec![icono; 3],
             fotos: vec![None, None, None],
             fondo: None,
@@ -691,6 +739,52 @@ mod tests {
 
     fn sel(ui: &VentanasUi) -> usize {
         ui.abierta.as_ref().unwrap().sel
+    }
+
+    fn por_esquina() -> VentanasUi {
+        let mut ui = abierta();
+        ui.abierta.as_mut().unwrap().por_esquina = true;
+        ui
+    }
+
+    #[test]
+    fn con_el_mouse_soltar_el_mod_no_elige_nada() {
+        let ui = por_esquina();
+        assert!(ui.soltada(Keysym::Super_L).is_empty());
+    }
+
+    #[test]
+    fn mod_tab_con_el_lienzo_abierto_por_la_esquina_vuelve_a_soltar_el_mod() {
+        let mut ui = por_esquina();
+        ui.reciente();
+        assert!(!ui.soltada(Keysym::Super_L).is_empty());
+    }
+
+    #[test]
+    fn volver_a_la_esquina_cierra_pero_abrirse_en_ella_no() {
+        let mut ui = por_esquina();
+        // La entrada de la capa, con el puntero en la esquina, y seguir empujando.
+        ui.mover(0.0, 0.0);
+        assert!(ui.movido(0.0, 0.0).is_empty());
+        assert!(ui.movido(300.0, 300.0).is_empty());
+        assert!(matches!(ui.movido(0.0, 0.0).as_slice(), [EventoVentanas::Cerrada]));
+    }
+
+    #[test]
+    fn abierto_con_mod_la_esquina_no_cierra() {
+        let mut ui = abierta();
+        ui.mover(300.0, 300.0);
+        assert!(ui.movido(0.0, 0.0).is_empty());
+    }
+
+    #[test]
+    fn la_rueda_recorre_la_cinta() {
+        let mut ui = abierta();
+        let antes = sel(&ui);
+        ui.rueda(1.0, true);
+        assert_ne!(sel(&ui), antes);
+        ui.rueda(-1.0, true);
+        assert_eq!(sel(&ui), antes);
     }
 
     #[test]

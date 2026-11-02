@@ -12,7 +12,7 @@
 mod bandeja;
 mod dibujo;
 pub mod hilo;
-mod modelo;
+pub(crate) mod modelo;
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -44,6 +44,8 @@ pub struct Servicios {
     pub calendario: Calendario,
     pub centro: crate::centro::Centro,
     pub pedir: Rc<dyn Fn(Request)>,
+    /// El puntero llegó a la esquina de esta salida.
+    pub esquina: Rc<dyn Fn(String)>,
 }
 
 /// Lanza el hilo de la barra y el calendario, que sigue los colores de `tema`.
@@ -190,6 +192,7 @@ impl Inner {
             } => self.cajon.click(&clave, boton, &salida, derecha),
             Evento::Desplazar { clave, delta } => self.s.bandeja.desplazar(&clave, delta),
             Evento::CalendarioCerrado => self.s.calendario.cerrado(),
+            Evento::Esquina(salida) => (self.s.esquina)(salida),
         }
     }
 

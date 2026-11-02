@@ -89,6 +89,8 @@
 "Opacidad" = "Opacity"
 "fondo de las superficies · {}" = "surface background · {}"
 "Idioma" = "Language"
+"Esquina activa" = "Hot corner"
+"el mouse en la esquina superior izquierda abre la vista de ventanas" = "moving the mouse to the top left corner opens the window overview"
 "{} · se aplica al volver a entrar a la sesión" = "{} · takes effect after logging in again"
 "Automático" = "Automatic"
 "el del sistema" = "the system's"

@@ -192,6 +192,7 @@ fn main() -> ExitCode {
         let polkit = polkit::Polkit::new(&centro);
         let audio = Audio::new(&config.sonido);
         let sonidos = sonidos::Sonidos::new(&config.sonido);
+        let ventanas = ventanas::Ventanas::new(hyprland.clone(), &centro, config.shell.esquina);
         let servicios = Rc::new(Servicios {
             osd,
             calendario: calendario.clone(),
@@ -203,7 +204,7 @@ fn main() -> ExitCode {
             centro: centro.clone(),
             launcher: Launcher::new(&centro, &agenda),
             fondos: fondos.clone(),
-            ventanas: ventanas::Ventanas::new(hyprland.clone(), &centro),
+            ventanas: ventanas.clone(),
             menu: Menu::new(
                 menu::Servicios {
                     config: config.clone(),
@@ -217,6 +218,7 @@ fn main() -> ExitCode {
                     fondos: fondos.clone(),
                     calendario: calendario.clone(),
                     centro: centro.clone(),
+                    ventanas: ventanas.clone(),
                 },
             ),
             audio,
@@ -267,6 +269,7 @@ fn main() -> ExitCode {
                 osd.mostrar(&Aviso::estado("󰔂", "TV", texto, prendida, 2000));
             }
         });
+        let esquina_s = weak.clone();
         let barra = barra::Barra::new(
             hilo_barra,
             eventos_barra,
@@ -287,6 +290,11 @@ fn main() -> ExitCode {
                             eprintln!("morgan: barra: {message}");
                         }
                     });
+                }),
+                esquina: Rc::new(move |salida| {
+                    if let Some(s) = esquina_s.upgrade() {
+                        esquina_ventanas(&s, salida);
+                    }
                 }),
             },
         );
@@ -666,6 +674,17 @@ fn pedir_ventanas(s: &Servicios, soltar: bool) {
     s.calendario.cerrar();
     s.calculadora.cerrar();
     s.fondos.cerrar();
+}
+
+fn esquina_ventanas(s: &Servicios, salida: String) {
+    if s.ventanas.esquina(salida) {
+        s.centro.cerrar();
+        s.launcher.cerrar();
+        s.menu.cerrar();
+        s.calendario.cerrar();
+        s.calculadora.cerrar();
+        s.fondos.cerrar();
+    }
 }
 
 fn aviso_no_molestar(activo: bool) -> Aviso {

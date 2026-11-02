@@ -53,6 +53,7 @@ pub struct Servicios {
     pub fondos: crate::fondos::Fondos,
     pub calendario: crate::calendario::Calendario,
     pub centro: crate::centro::Centro,
+    pub ventanas: crate::ventanas::Ventanas,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -998,6 +999,7 @@ impl Menu {
         i.s.fondos.aplicar_config(&c.fondos);
         i.s.calendario.aplicar_config(&c.clima);
         i.s.centro.aplicar_config(&c.sonido);
+        i.s.ventanas.aplicar_config(c.shell.esquina);
         i.config.replace(c);
         Ok(())
     }
