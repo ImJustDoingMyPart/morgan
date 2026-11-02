@@ -29,6 +29,13 @@ const ANCHO_MAX: f64 = 420.0;
 /// Más ventanas de una app no entran en un globo.
 pub const TOPE_FILAS: usize = 10;
 
+/// El fondo deja ver más que las otras superficies: está siempre a la vista, y lo que hay atrás
+/// es el fondo de pantalla. Sobre el 0,5 de `ignore_alpha` (la regla de la capa), o se queda
+/// sin blur.
+fn opacidad_isla(opacidad: f32) -> f32 {
+    (opacidad * 0.7).max(0.55)
+}
+
 /// `arriba`: cuánto de la isla ya subió, de 0 (afuera, abajo) a 1.
 #[allow(clippy::too_many_arguments)]
 pub fn pintar_dock(
@@ -50,7 +57,7 @@ pub fn pintar_dock(
     }
     let bajar = (1.0 - arriba) * f64::from(alto);
     let tr = Affine::scale(escala) * Affine::translate((0.0, bajar));
-    tarjeta(s, tr, p, opacidad, borde, isla, Anillo::Bicolor);
+    tarjeta(s, tr, p, opacidad_isla(opacidad), borde, isla, Anillo::Bicolor);
     if let Some(x) = d.raya {
         let y0 = d.celdas[0].y0 + 8.0;
         let y1 = d.celdas[0].y1 - 8.0;
@@ -200,7 +207,7 @@ pub fn pintar_globo(
     let negro = |a| [0.0, 0.0, 0.0, a];
     sombra(s, tr, caja, GLOBO_RADIO, negro(0.5), (0.0, 2.0), 0.0, 8.0);
     sombra(s, tr, caja, GLOBO_RADIO, negro(1.0), (0.0, 0.0), 1.0, 0.0);
-    let fondo = con_alfa(&p.surface_container, p.surface_container[3] * opacidad.max(0.9));
+    let fondo = con_alfa(&p.surface_container, p.surface_container[3] * opacidad);
     s.fill(
         Fill::NonZero,
         tr,

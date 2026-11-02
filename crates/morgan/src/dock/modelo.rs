@@ -305,6 +305,19 @@ impl Contador {
     }
 }
 
+/// Un booleano de `j/getoption`. Si no se entiende, apagado: el valor de fábrica.
+pub fn opcion_activa(json: &str) -> bool {
+    #[derive(Deserialize)]
+    struct O {
+        #[serde(default, alias = "int")]
+        bool: Option<serde_json::Value>,
+    }
+    serde_json::from_str::<O>(json)
+        .ok()
+        .and_then(|o| o.bool)
+        .is_some_and(|v| v == serde_json::json!(true) || v == serde_json::json!(1))
+}
+
 /// Las `n` más usadas que siguen instaladas. `app` dice el nombre de una, o que ya no está. A
 /// igual uso, por id: el orden no depende de nada más.
 pub fn mas_usadas(
@@ -534,6 +547,13 @@ mod tests {
         assert!(c.nuevas(&v).is_empty());
         v.remove(0);
         assert!(c.nuevas(&v).is_empty(), "cerrar no suma");
+    }
+
+    #[test]
+    fn lee_el_booleano_de_una_opcion() {
+        assert!(opcion_activa(r#"{"option":"x","bool":true,"set":true}"#));
+        assert!(!opcion_activa(r#"{"option":"x","bool":false,"set":false}"#));
+        assert!(!opcion_activa("no es json"));
     }
 
     #[test]

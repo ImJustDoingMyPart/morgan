@@ -290,11 +290,19 @@ impl Dock {
         }
     }
 
+    /// Enfocar una ventana lleva el puntero a su centro: acá el mouse se queda en el dock, así
+    /// que `no_warps` vale solo durante el pedido y vuelve a lo que el usuario tenga puesto.
     fn enfocar(&self, direccion: String) {
         let h = self.inner.hyprland.clone();
         glib::MainContext::default().spawn_local(async move {
+            let antes = h
+                .consultar("j/getoption cursor:no_warps")
+                .await
+                .is_some_and(|o| modelo::opcion_activa(&o));
             h.eval(&format!(
-                "hl.dispatch(hl.dsp.focus({{ window = \"address:{direccion}\" }}))"
+                "hl.config({{ cursor = {{ no_warps = true }} }}) \
+                 hl.dispatch(hl.dsp.focus({{ window = \"address:{direccion}\" }})) \
+                 hl.config({{ cursor = {{ no_warps = {antes} }} }})"
             ))
             .await;
         });
