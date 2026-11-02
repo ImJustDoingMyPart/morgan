@@ -37,6 +37,9 @@ use smithay_client_toolkit::seat::keyboard::{
 };
 use smithay_client_toolkit::seat::pointer::cursor_shape::CursorShapeManager;
 use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind, PointerHandler};
+use smithay_client_toolkit::seat::relative_pointer::{
+    RelativeMotionEvent, RelativePointerHandler, RelativePointerState,
+};
 use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState};
 use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shell::wlr_layer::{
@@ -54,6 +57,7 @@ use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_han
 use wayland_client::globals::registry_queue_init;
 use wayland_client::protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface};
 use wayland_client::{Connection, QueueHandle};
+use wayland_protocols::wp::relative_pointer::zv1::client::zwp_relative_pointer_v1::ZwpRelativePointerV1;
 
 use super::dibujo::{self, ALTO, Animos, Estado, Icono, Lugar, Pintura, Que, Rotulos};
 use super::modelo;
@@ -148,8 +152,8 @@ struct Barra {
 }
 
 /// Un píxel transparente en la esquina superior izquierda de cada salida. Es de cada salida y no
-/// de la barra: la esquina sirve igual con la barra oculta, y un movimiento rápido que aterriza
-/// justo ahí sin pasar por la barra también cuenta. Va en `Top`, así que una ventana a pantalla
+/// de la barra: la esquina sirve igual con la barra oculta. Teniendo el puntero, recibe cuánto
+/// sigue empujando contra el borde (`modelo::Empuje`). Va en `Top`, así que una ventana a pantalla
 /// completa la tapa. Tiene que crearse después de la barra para quedar encima.
 struct Esquina {
     capa: LayerSurface,
@@ -187,6 +191,11 @@ struct Hilo {
     capas: LayerShell,
     shm: Shm,
     esquinas: Vec<Esquina>,
+    /// La esquina que tiene el puntero, y cuánto lleva empujando.
+    en_esquina: Option<(usize, modelo::Empuje)>,
+    relativos: RelativePointerState,
+    /// Vive mientras el hilo: soltarlo corta el movimiento relativo.
+    relativo: Option<ZwpRelativePointerV1>,
     xdg: Option<WmBase>,
     salidas: OutputState,
     asientos: SeatState,
@@ -249,6 +258,9 @@ fn correr(
         capas,
         shm,
         esquinas: Vec::new(),
+        en_esquina: None,
+        relativos: RelativePointerState::bind(&globales, &qh),
+        relativo: None,
         xdg: globales
             .bind::<XdgWmBase, _, _>(&qh, 5..=6, GlobalData)
             .ok()
@@ -795,8 +807,7 @@ impl Hilo {
         });
     }
 
-    /// El puntero llegó al píxel. Si en realidad ya estaba ahí, tapado, lo filtra quien sabe qué
-    /// se destapó (`Ventanas::esquina`).
+    /// El puntero se estrelló contra el píxel.
     fn esquina(&self, i: usize) {
         let salida = &self.esquinas[i].salida;
         if !self.esquina_es_tope(salida) {
@@ -996,6 +1007,7 @@ fn boton_gtk(b: u32) -> u32 {
 
 impl LayerShellHandler for Hilo {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, capa: &LayerSurface) {
+        self.en_esquina = None;
         self.esquinas
             .retain(|e| e.capa.wl_surface() != capa.wl_surface());
         self.barras
@@ -1189,6 +1201,7 @@ impl OutputHandler for Hilo {
         {
             self.globo = None;
         }
+        self.en_esquina = None;
         self.esquinas.retain(|e| e.salida != salida);
         self.barras.retain(|b| b.salida != salida);
     }
@@ -1212,6 +1225,12 @@ impl SeatHandler for Hilo {
             self.puntero = self.asientos.get_pointer(qh, &seat).ok();
             if let (Some(m), Some(p)) = (&self.cursor, &self.puntero) {
                 self.forma = Some(m.get_shape_device(p, qh));
+            }
+            if let Some(p) = &self.puntero {
+                self.relativo = self.relativos.get_relative_pointer(p, qh).ok();
+                if self.relativo.is_none() {
+                    eprintln!("morgan: barra: sin movimiento relativo, la esquina no responde");
+                }
             }
         }
         if c == Capability::Keyboard && self.teclado.is_none() {
@@ -1336,8 +1355,12 @@ impl PointerHandler for Hilo {
                 f.set_shape(serial, Shape::Default);
             }
             if let Some(i) = self.esquinas.iter().position(|c| c.capa.wl_surface() == &e.surface) {
-                if matches!(e.kind, PointerEventKind::Enter { .. }) {
-                    self.esquina(i);
+                match e.kind {
+                    PointerEventKind::Enter { .. } => {
+                        self.en_esquina = Some((i, modelo::Empuje::default()));
+                    }
+                    PointerEventKind::Leave { .. } => self.en_esquina = None,
+                    _ => {}
                 }
             } else if let Some(i) = self.barra(&e.surface) {
                 self.puntero_barra(i, e);
@@ -1348,6 +1371,25 @@ impl PointerHandler for Hilo {
             {
                 self.puntero_calendario(e);
             }
+        }
+    }
+}
+
+impl RelativePointerHandler for Hilo {
+    fn relative_pointer_motion(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &ZwpRelativePointerV1,
+        _: &wl_pointer::WlPointer,
+        evento: RelativeMotionEvent,
+    ) {
+        let Some((i, empuje)) = &mut self.en_esquina else {
+            return;
+        };
+        let i = *i;
+        if empuje.sumar(evento.delta, evento.utime) {
+            self.esquina(i);
         }
     }
 }

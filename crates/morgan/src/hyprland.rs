@@ -388,17 +388,6 @@ pub fn relevante(linea: &str, ultima: &mut Option<String>) -> bool {
     EVENTOS.contains(&nombre)
 }
 
-/// Hyprland le vuelve a avisar a la esquina que el puntero está ahí sin que se haya movido: se
-/// abrió o cerró una capa (al abrirse una con teclado reacomoda el foco), una ventana salió de
-/// pantalla completa, cambió el workspace o apareció un monitor.
-pub fn destapa_la_esquina(linea: &str) -> bool {
-    linea.split_once(">>").is_some_and(|(nombre, datos)| match nombre {
-        "openlayer" | "closelayer" | "workspacev2" | "monitoraddedv2" => true,
-        "fullscreen" => datos.trim() == "0",
-        _ => false,
-    })
-}
-
 pub fn de_screencast(linea: &str) -> Option<bool> {
     let datos = linea.strip_prefix("screencast>>")?;
     match datos.split(',').next()? {
@@ -640,17 +629,6 @@ mod tests {
         assert!(relevante("activewindowv2>>99", &mut ultima));
         // Sin ventana enfocada la dirección viene vacía: también es un cambio.
         assert!(relevante("activewindowv2>>", &mut ultima));
-    }
-
-    #[test]
-    fn lo_que_puede_destapar_la_esquina() {
-        assert!(destapa_la_esquina("closelayer>>morgan-launcher"));
-        assert!(destapa_la_esquina("fullscreen>>0"));
-        assert!(destapa_la_esquina("workspacev2>>2,2"));
-        assert!(destapa_la_esquina("monitoraddedv2>>1,DP-3,desc"));
-        assert!(!destapa_la_esquina("fullscreen>>1"));
-        assert!(destapa_la_esquina("openlayer>>morgan-launcher"));
-        assert!(!destapa_la_esquina("activewindowv2>>5572"));
     }
 
     #[test]

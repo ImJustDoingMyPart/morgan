@@ -676,17 +676,15 @@ fn pedir_ventanas(s: &Servicios, soltar: bool) {
     s.fondos.cerrar();
 }
 
-fn esquina_ventanas(s: &Rc<Servicios>, salida: String) {
-    let debil = Rc::downgrade(s);
-    s.ventanas.esquina(salida, move || {
-        let Some(s) = debil.upgrade() else { return };
+fn esquina_ventanas(s: &Servicios, salida: String) {
+    if s.ventanas.esquina(salida) {
         s.centro.cerrar();
         s.launcher.cerrar();
         s.menu.cerrar();
         s.calendario.cerrar();
         s.calculadora.cerrar();
         s.fondos.cerrar();
-    });
+    }
 }
 
 fn aviso_no_molestar(activo: bool) -> Aviso {

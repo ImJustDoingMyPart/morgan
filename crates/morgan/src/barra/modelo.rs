@@ -102,6 +102,38 @@ pub fn en_esquina(x: f64, y: f64) -> bool {
     x < 1.0 && y < 1.0
 }
 
+/// Cuánto hay que seguir empujando contra la esquina, en píxeles, para que cuente como
+/// estrellarse: GNOME pide 100 en su esquina; acá más, porque Roberto la quiere bien a propósito.
+const EMPUJE_MINIMO: f64 = 150.0;
+/// Una pausa más larga que esta, en microsegundos, deja de ser el mismo golpe.
+const PAUSA_EMPUJE_US: u64 = 200_000;
+
+/// Llegar a la esquina no alcanza: el puntero ya no puede avanzar, pero el mouse sigue moviéndose
+/// y eso se ve en el movimiento relativo. Encontrarse parado ahí no empuja, así que tampoco hace
+/// falta saber qué destapó la esquina.
+#[derive(Debug, Default)]
+pub struct Empuje {
+    suma: f64,
+    ultimo_us: Option<u64>,
+    disparado: bool,
+}
+
+impl Empuje {
+    /// Devuelve `true` una sola vez por golpe: para volver a disparar hay que irse y volver.
+    pub fn sumar(&mut self, (dx, dy): (f64, f64), us: u64) -> bool {
+        if self.ultimo_us.is_some_and(|u| us.saturating_sub(u) > PAUSA_EMPUJE_US) {
+            self.suma = 0.0;
+        }
+        self.ultimo_us = Some(us);
+        self.suma += (-dx).max(-dy).max(0.0);
+        if self.disparado || self.suma < EMPUJE_MINIMO {
+            return false;
+        }
+        self.disparado = true;
+        true
+    }
+}
+
 /// La esquina superior izquierda de una salida frena al puntero: no sigue hacia otra pantalla,
 /// ni a la izquierda ni arriba. Si sigue, cruzar por ahí abriría la vista sin querer.
 pub fn esquina_es_tope(
@@ -121,6 +153,35 @@ pub fn esquina_es_tope(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn solo_dispara_un_golpe_contra_la_esquina() {
+        let mut e = Empuje::default();
+        // Llegar y frenar con cuidado no alcanza.
+        assert!(!e.sumar((-30.0, -30.0), 0));
+        assert!(!e.sumar((-10.0, 0.0), 8_000));
+        // Moverse en diagonal cuenta el eje que más empuja, no los dos.
+        assert!(!e.sumar((-60.0, -60.0), 16_000));
+        // Un golpe de verdad, una sola vez.
+        assert!(e.sumar((-80.0, -5.0), 24_000));
+        assert!(!e.sumar((-300.0, 0.0), 32_000));
+    }
+
+    #[test]
+    fn empujar_de_a_poco_con_pausas_no_es_un_golpe() {
+        let mut e = Empuje::default();
+        for i in 0..10 {
+            assert!(!e.sumar((-100.0, 0.0), i * 300_000), "cada pausa empieza de cero");
+        }
+    }
+
+    #[test]
+    fn alejarse_no_descuenta_ni_suma() {
+        let mut e = Empuje::default();
+        assert!(!e.sumar((500.0, 500.0), 0));
+        assert!(!e.sumar((-149.0, 0.0), 1_000));
+        assert!(e.sumar((-1.0, 0.0), 2_000));
+    }
 
     #[test]
     fn la_esquina_es_un_solo_punto() {

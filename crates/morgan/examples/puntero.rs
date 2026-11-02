@@ -6,6 +6,7 @@
 //!   puntero click X Y [derecho|medio]
 //!   puntero arrastrar X0 Y0 X1 Y1 [MS]
 //!   puntero rueda X Y PASOS
+//!   puntero empujar X Y DX DY VECES [MS]   desde X Y, VECES movimientos relativos de DX DY
 //!
 //! Las coordenadas son de la salida (la única del anidado); el tamaño sale de `wl_output`.
 
@@ -124,6 +125,16 @@ fn main() {
     };
     match args.first().map(String::as_str) {
         Some("mover") => mover(num(1), num(2)),
+        Some("empujar") => {
+            mover(num(1), num(2));
+            let ms_entre = args.get(6).and_then(|s| s.parse().ok()).unwrap_or(8);
+            esperar(ms_entre);
+            for _ in 0..num(5) as u32 {
+                p.motion(ms(), num(3), num(4));
+                p.frame();
+                esperar(ms_entre);
+            }
+        }
         Some("click") => {
             let b = match args.get(3).map(String::as_str) {
                 Some("derecho") => DERECHO,

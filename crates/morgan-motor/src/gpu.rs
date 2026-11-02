@@ -3,12 +3,18 @@
 //! vello escribe colores sin premultiplicar en una textura propia (el lienzo); se pasan a la
 //! superficie con una mezcla `ALPHA_BLENDING` sobre transparente, que los premultiplica (la
 //! superficie es `PreMultiplied`, para que lo transparente deje ver lo de atrás).
+//!
+//! Un cuadro sin imágenes, texto ni degradados le cuesta a vello 0.11 todas las imágenes que tenía
+//! guardadas: tira el atlas, pero sigue creyendo que están, y salen transparentes hasta que se
+//! vuelvan a subir (linebender/vello#1948, abierto). [`con_imagen`] evita que exista ese cuadro.
 
 use vello::wgpu::rwh::{
     DisplayHandle, HandleError, HasDisplayHandle, RawDisplayHandle, RawWindowHandle,
     WaylandDisplayHandle, WaylandWindowHandle,
 };
 use vello::wgpu::{self, util::TextureBlitter};
+use vello::kurbo::Affine;
+use vello::peniko::{Blob, ImageAlphaType, ImageBrush, ImageData, ImageFormat};
 use vello::{AaConfig, AaSupport, RenderParams, Renderer, RendererOptions, Scene};
 use wayland_client::protocol::wl_surface::WlSurface;
 use wayland_client::{Connection, Proxy};
@@ -23,6 +29,34 @@ pub struct Gpu {
     pub vello: Renderer,
     /// Por formato de superficie (casi siempre uno solo).
     copiar: Vec<(wgpu::TextureFormat, TextureBlitter)>,
+    /// Lo que se le suma a una escena sin nada que vello resuelva aparte; ver [`con_imagen`].
+    invisible: Scene,
+    con_invisible: Scene,
+}
+
+/// Una escena que no pierde el atlas de vello: la misma, más un píxel transparente si no tenía
+/// nada que resolver aparte (imágenes, texto, degradados). Sin copiar nada en el caso común.
+fn con_imagen<'a>(escena: &'a Scene, invisible: &Scene, copia: &'a mut Scene) -> &'a Scene {
+    if !escena.encoding().resources.patches.is_empty() {
+        return escena;
+    }
+    copia.reset();
+    copia.append(escena, None);
+    copia.append(invisible, None);
+    copia
+}
+
+fn pixel_invisible() -> Scene {
+    let mut s = Scene::new();
+    let pixel = ImageData {
+        data: Blob::from(vec![0u8; 4]),
+        format: ImageFormat::Rgba8,
+        alpha_type: ImageAlphaType::AlphaPremultiplied,
+        width: 1,
+        height: 1,
+    };
+    s.draw_image(&ImageBrush::new(pixel), Affine::IDENTITY);
+    s
 }
 
 /// El display de libwayland, para wgpu (el backend GL lo necesita al crear la instancia).
@@ -98,6 +132,8 @@ impl Gpu {
             cola,
             vello,
             copiar: Vec::new(),
+            invisible: pixel_invisible(),
+            con_invisible: Scene::new(),
         }
     }
 
@@ -133,6 +169,7 @@ impl Gpu {
             height: h,
             antialiasing_method: AaConfig::Area,
         };
+        let escena = con_imagen(escena, &self.invisible, &mut self.con_invisible);
         match self
             .vello
             .render_to_texture(&self.device, &self.cola, escena, vista, &params)
@@ -345,4 +382,47 @@ pub fn leer(
     }
     buf.unmap();
     Some(px)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vello::kurbo::Rect;
+    use vello::peniko::{Color, Fill};
+
+    fn resuelve(s: &Scene) -> bool {
+        !s.encoding().resources.patches.is_empty()
+    }
+
+    #[test]
+    fn ninguna_escena_llega_a_vello_sin_algo_que_resolver() {
+        let invisible = pixel_invisible();
+        let mut copia = Scene::new();
+        assert!(resuelve(&invisible));
+
+        // Vacía, como la banda de ventanas en su primer cuadro.
+        let vacia = Scene::new();
+        assert!(resuelve(con_imagen(&vacia, &invisible, &mut copia)));
+
+        // Solo formas lisas: conserva lo suyo y suma el píxel.
+        let mut lisa = Scene::new();
+        lisa.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            Color::WHITE,
+            None,
+            &Rect::new(0.0, 0.0, 9.0, 9.0),
+        );
+        let con = con_imagen(&lisa, &invisible, &mut copia);
+        assert!(resuelve(con));
+        assert_eq!(con.encoding().n_paths, lisa.encoding().n_paths + invisible.encoding().n_paths);
+    }
+
+    #[test]
+    fn una_escena_con_imagen_pasa_sin_copiarse() {
+        let invisible = pixel_invisible();
+        let mut copia = Scene::new();
+        let con = con_imagen(&invisible, &invisible, &mut copia);
+        assert!(std::ptr::eq(con, &invisible));
+    }
 }
