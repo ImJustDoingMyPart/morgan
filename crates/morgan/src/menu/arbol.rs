@@ -176,6 +176,8 @@ pub enum Cambio {
     Opacidad(f64),
     Idioma(String),
     Esquina(bool),
+    DockMostrar(bool),
+    DockOcultar(bool),
     Bloqueo(CambioBloqueo),
     Retencion(u32),
     ModoApp(String, ModoApp),
@@ -327,6 +329,8 @@ impl Cambio {
             Cambio::Opacidad(v) => c.shell.opacidad = *v,
             Cambio::Idioma(v) => c.shell.idioma = v.clone(),
             Cambio::Esquina(v) => c.shell.esquina = *v,
+            Cambio::DockMostrar(v) => c.dock.mostrar = *v,
+            Cambio::DockOcultar(v) => c.dock.ocultar = *v,
             Cambio::Bloqueo(b) => b.aplicar(&mut c.bloqueo),
             Cambio::Retencion(d) => c.notificaciones.retencion_dias = *d,
             Cambio::Resumen(v) => c.juego.resumen = *v,
@@ -605,6 +609,22 @@ pub fn pagina_fija(cat: Categoria, c: &Config, apps_historial: &[String]) -> Opt
                     Control::Casilla {
                         activa: c.shell.esquina,
                         que: Que::Config(Cambio::Esquina(!c.shell.esquina)),
+                    },
+                ),
+                ajuste(
+                    tr!("Dock"),
+                    tr!("las apps más usadas y las abiertas, abajo; nunca sobre un juego"),
+                    Control::Casilla {
+                        activa: c.dock.mostrar,
+                        que: Que::Config(Cambio::DockMostrar(!c.dock.mostrar)),
+                    },
+                ),
+                ajuste(
+                    tr!("Ocultar el dock"),
+                    tr!("aparece al llevar el mouse al borde de abajo y no les quita lugar a las ventanas"),
+                    Control::Casilla {
+                        activa: c.dock.ocultar,
+                        que: Que::Config(Cambio::DockOcultar(!c.dock.ocultar)),
                     },
                 ),
                 ajuste(

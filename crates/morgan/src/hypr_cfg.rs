@@ -73,6 +73,8 @@ for ns, regla in pairs({
     ["morgan-menu"]          = { animation = "fade",         ignore_alpha = 0.5 },
     ["morgan-wallpapers"]    = { animation = "slide bottom", ignore_alpha = 0.5 },
     ["morgan-windows"]       = { animation = "fade",         ignore_alpha = 0.5 },
+    ["morgan-dock"]          = { animation = "slide bottom", ignore_alpha = 0.5 },
+    ["morgan-dock-globo"]    = { animation = "fade",         ignore_alpha = 0.5 },
     ["morgan-bar"]           = {},
 }) do
     hl.layer_rule({

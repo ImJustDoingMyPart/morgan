@@ -39,6 +39,8 @@ here is what you want, welcome.
 
 - **Bar** with workspaces, tray, clock (with a calendar and weather popover) and a privacy
   indicator when the microphone or screen capture is in use.
+- **Dock** with your most used and open apps, one dot per window and their titles on hover. It
+  can hide itself, and never shows up over a game.
 - **Control center**: network, Bluetooth, do not disturb, caffeine, night light, power,
   AI quotas, volume per app, microphone, brightness, the media player and your
   notifications. [More below](#the-control-center).

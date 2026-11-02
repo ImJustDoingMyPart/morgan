@@ -54,6 +54,7 @@ pub struct Servicios {
     pub calendario: crate::calendario::Calendario,
     pub centro: crate::centro::Centro,
     pub ventanas: crate::ventanas::Ventanas,
+    pub dock: crate::dock::Dock,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1000,6 +1001,7 @@ impl Menu {
         i.s.calendario.aplicar_config(&c.clima);
         i.s.centro.aplicar_config(&c.sonido);
         i.s.ventanas.aplicar_config(c.shell.esquina);
+        i.s.dock.aplicar_config(&c.dock);
         i.config.replace(c);
         Ok(())
     }

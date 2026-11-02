@@ -22,6 +22,7 @@ mod config;
 mod cuotas;
 mod deslizable;
 mod dispositivos;
+mod dock;
 mod energia;
 mod escucha;
 mod fondos;
@@ -193,6 +194,7 @@ fn main() -> ExitCode {
         let audio = Audio::new(&config.sonido);
         let sonidos = sonidos::Sonidos::new(&config.sonido);
         let ventanas = ventanas::Ventanas::new(hyprland.clone(), &centro, config.shell.esquina);
+        let dock = dock::Dock::new(hyprland.clone(), &tema, &config.dock);
         let servicios = Rc::new(Servicios {
             osd,
             calendario: calendario.clone(),
@@ -219,6 +221,7 @@ fn main() -> ExitCode {
                     calendario: calendario.clone(),
                     centro: centro.clone(),
                     ventanas: ventanas.clone(),
+                    dock,
                 },
             ),
             audio,

@@ -951,7 +951,7 @@ fn leer_historial(archivo: Option<&Path>) -> Historial {
 }
 
 /// Escribe a un temporal y lo renombra: un corte a mitad de camino no deja el archivo roto.
-fn guardar(archivo: &Path, texto: &str) {
+pub fn guardar(archivo: &Path, texto: &str) {
     let r = (|| {
         if let Some(dir) = archivo.parent() {
             std::fs::create_dir_all(dir)?;

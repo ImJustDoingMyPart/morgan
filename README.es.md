@@ -39,6 +39,8 @@ lo que ves acá es lo que querés, bienvenido.
 
 - **Barra** con los workspaces, la bandeja, el reloj (con un calendario y el clima) y un
   indicador de privacidad cuando el micrófono o una captura de pantalla están en uso.
+- **Dock** con las apps más usadas y las abiertas, un punto por ventana y sus títulos al pasar
+  el mouse. Puede ocultarse solo; nunca aparece sobre un juego.
 - **Centro de control**: red, Bluetooth, No molestar, caffeine, luz nocturna, energía,
   cuotas de IA, volumen por aplicación, micrófono, brillo, el reproductor y las
   notificaciones. [Más abajo](#el-centro-de-control).

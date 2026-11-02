@@ -589,18 +589,7 @@ fn icono_de(clase: &str) -> Option<gio::Icon> {
     if clase.is_empty() {
         return None;
     }
-    let por_nombre = [clase.to_owned(), clase.to_lowercase()]
-        .into_iter()
-        .find_map(|n| gio_unix::DesktopAppInfo::new(&format!("{n}.desktop")));
-    let app = por_nombre.or_else(|| {
-        gio::AppInfo::all().into_iter().find_map(|a| {
-            let d = a.downcast::<gio_unix::DesktopAppInfo>().ok()?;
-            d.startup_wm_class()
-                .filter(|c| c.eq_ignore_ascii_case(clase))
-                .map(|_| d)
-        })
-    });
-    let icono: gio::Icon = match app {
+    let icono: gio::Icon = match crate::aplicacion::de_clase(clase) {
         Some(a) => a.icon()?,
         None => gio::ThemedIcon::new(&clase.to_lowercase()).upcast(),
     };

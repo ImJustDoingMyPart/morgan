@@ -24,6 +24,24 @@ pub fn todas() -> Vec<(String, String)> {
     v
 }
 
+/// El `.desktop` de las ventanas de `clase`: por su nombre o por lo que declara.
+pub fn de_clase(clase: &str) -> Option<gio_unix::DesktopAppInfo> {
+    if clase.is_empty() {
+        return None;
+    }
+    let por_nombre = [clase.to_owned(), clase.to_lowercase()]
+        .into_iter()
+        .find_map(|n| gio_unix::DesktopAppInfo::new(&format!("{n}.desktop")));
+    por_nombre.or_else(|| {
+        gio::AppInfo::all().into_iter().find_map(|a| {
+            let d = a.downcast::<gio_unix::DesktopAppInfo>().ok()?;
+            d.startup_wm_class()
+                .filter(|c| c.eq_ignore_ascii_case(clase))
+                .map(|_| d)
+        })
+    })
+}
+
 pub fn buscar(id: &str) -> Option<App> {
     let d = gio_unix::DesktopAppInfo::new(id)?;
     let ruta = d.filename()?.to_string_lossy().into_owned();

@@ -24,6 +24,7 @@ pub struct Config {
     pub juego: Juego,
     #[serde(rename = "bar")]
     pub barra: Barra,
+    pub dock: Dock,
     pub idle: Idle,
     #[serde(rename = "sound")]
     pub sonido: Sonido,
@@ -677,6 +678,29 @@ fn dias<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
             de::Unexpected::Signed(v),
             &"whole days from 1 to 365",
         )),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Dock {
+    #[serde(rename = "show")]
+    pub mostrar: bool,
+    /// Se oculta solo y no les quita lugar a las ventanas.
+    #[serde(rename = "autohide")]
+    pub ocultar: bool,
+    /// Cuántas de las apps más usadas van siempre, abiertas o no.
+    #[serde(rename = "most_used")]
+    pub usadas: usize,
+}
+
+impl Default for Dock {
+    fn default() -> Self {
+        Dock {
+            mostrar: true,
+            ocultar: false,
+            usadas: 6,
+        }
     }
 }
 

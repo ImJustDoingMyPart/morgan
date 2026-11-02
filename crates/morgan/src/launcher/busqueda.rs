@@ -150,11 +150,15 @@ impl Historial {
         *n = n.saturating_add(1);
     }
 
-    /// A igual uso, por id, para que el archivo no cambie sin motivo.
+    /// A igual uso, por id, para que no cambie sin motivo.
+    pub fn ordenados(&self) -> Vec<(&str, u32)> {
+        let mut v: Vec<_> = self.usos.iter().map(|(id, n)| (id.as_str(), *n)).collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+        v
+    }
+
     pub fn texto(&self) -> String {
-        let mut v: Vec<_> = self.usos.iter().collect();
-        v.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
-        v.into_iter().map(|(id, n)| format!("{n} {id}\n")).collect()
+        self.ordenados().into_iter().map(|(id, n)| format!("{n} {id}\n")).collect()
     }
 }
 
