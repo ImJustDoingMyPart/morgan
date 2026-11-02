@@ -605,7 +605,7 @@ impl Hilo {
             }
             Orden::VentanasFoto(d, img) => self.ventanas_ui.foto(&d, img),
             Orden::VentanasFondo(img) => self.ventanas_ui.fondo(img),
-            Orden::VentanasCerrar => self.cerrar_ventanas(),
+            Orden::VentanasCerrar => self.plegar_ventanas(),
             Orden::AjustesPrecalentar(p) => {
                 if self.ajustes.is_none() {
                     self.ajustes_ui.precalentar(p);
@@ -810,11 +810,36 @@ impl Hilo {
         self.ventanas_ui.cerrar();
     }
 
-    fn eventos_ventanas(&mut self, v: Vec<EventoVentanas>) {
-        for e in v {
-            // Enfocar o cerrar: la capa se va, y con ella el estado.
-            self.avisar(Evento::Ventanas(e));
+    /// Suelta el teclado y el puntero enseguida y se queda plegándose. Sin nada dibujado no hay
+    /// qué plegar.
+    fn plegar_ventanas(&mut self) {
+        if self.ventanas_ui.plegando() {
+            return;
+        }
+        let Some(v) = &mut self.ventanas else {
+            self.ventanas_ui.cerrar();
+            return;
+        };
+        if !self.ventanas_ui.dibujada() {
             self.cerrar_ventanas();
+            return;
+        }
+        v.capa.set_keyboard_interactivity(KeyboardInteractivity::None);
+        if let Ok(r) = Region::new(&self.compositor) {
+            v.capa.wl_surface().set_input_region(Some(r.wl_region()));
+        }
+        v.capa.commit();
+        v.lamina.sucio = true;
+        self.ventanas_ui.plegar(Instant::now());
+    }
+
+    fn eventos_ventanas(&mut self, v: Vec<EventoVentanas>) {
+        if self.ventanas_ui.plegando() {
+            return;
+        }
+        for e in v {
+            self.plegar_ventanas();
+            self.avisar(Evento::Ventanas(e));
         }
         if let Some(v) = &mut self.ventanas {
             v.lamina.sucio = true;
@@ -1370,8 +1395,13 @@ impl Hilo {
             .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);
     }
 
-    /// Sin bajada propia: sube 10 px mientras Hyprland funde la capa.
+    /// Se abre y se pliega desde su línea del medio (`dibujo/ventanas.rs`), mientras Hyprland
+    /// funde la capa.
     fn pintar_ventanas(&mut self, ahora: Instant) {
+        if self.ventanas.is_some() && self.ventanas_ui.plegada(ahora) {
+            self.cerrar_ventanas();
+            return;
+        }
         let Some(v) = &mut self.ventanas else { return };
         let ui = &mut self.ventanas_ui;
         if !v.lamina.lista() || !(v.lamina.sucio || ui.anda(ahora)) {
@@ -1996,7 +2026,9 @@ impl LayerShellHandler for Hilo {
             .as_ref()
             .is_some_and(|v| v.capa.wl_surface() == capa.wl_surface())
         {
-            self.eventos_ventanas(vec![EventoVentanas::Cerrada]);
+            // La cerró el compositor: no hay nada que plegar.
+            self.avisar(Evento::Ventanas(EventoVentanas::Cerrada));
+            self.cerrar_ventanas();
         }
         if self
             .fondos

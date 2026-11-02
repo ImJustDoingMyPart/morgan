@@ -8,8 +8,8 @@
 //! `Mod+flecha` de la cinta se los quedaría el compositor (los binds le ganan a una capa con
 //! teclado exclusivo).
 //!
-//! También se abre llevando el mouse a la esquina superior izquierda (la barra avisa, ver
-//! [`Ventanas::esquina`]). Ahí no hay `Mod` ni submap: se muestra enseguida, con la selección en
+//! También se abre llevando el mouse a la esquina superior izquierda (`barra/hilo.rs` avisa, ver
+//! [`Ventanas::esquina`]; no depende de que la barra se vea). Ahí no hay `Mod` ni submap: se muestra enseguida, con la selección en
 //! la ventana enfocada, y queda abierto hasta un click, `Escape` o volver a la esquina.
 //!
 //! Hyprland no entrega cuadros de una ventana que no toca su monitor, así que morgan saca una
@@ -40,6 +40,18 @@ use captura::Capturador;
 use modelo::Lienzo;
 
 const SUBMAP: &str = "morgan-windows";
+/// Lo que esperar por si el aviso de que algo destapó la esquina viene atrás del de la esquina:
+/// llegan por caminos distintos.
+const ESPERA_ESQUINA: Duration = Duration::from_millis(50);
+/// Un puntero que aparece en la esquina hasta este tiempo después de que algo la destapara ya
+/// estaba ahí: no llegó.
+const DESTAPADA: Duration = Duration::from_millis(400);
+/// Al arrancar el puntero también puede estar ahí.
+const ARRANQUE: Duration = Duration::from_millis(1500);
+/// Hyprland rechaza el foco de una ventana mientras una capa tenga el teclado exclusivo, y tarda
+/// en enterarse de que el lienzo lo soltó. Se reintenta mirando si quedó: unos 400 ms como mucho.
+const REINTENTOS_FOCO: u32 = 25;
+const ENTRE_REINTENTOS: Duration = Duration::from_millis(16);
 /// Un toque no lo dibuja.
 const DEMORA: Duration = Duration::from_millis(150);
 /// Antes de la [`DEMORA`], para que lleguen con el lienzo. Un toque más corto no captura nada:
@@ -76,6 +88,8 @@ struct Inner {
     hilo: Sender<Orden>,
     /// `[shell] hot_corner`.
     con_esquina: Cell<bool>,
+    /// Lo último que pudo destapar la esquina.
+    destapada: Cell<Instant>,
     capturador: RefCell<Option<Rc<Capturador>>>,
     fotos: RefCell<HashMap<String, Foto>>,
     abierta: RefCell<Option<Rc<Vista>>>,
@@ -100,6 +114,7 @@ impl Ventanas {
                 hyprland: hyprland.clone(),
                 hilo: centro.hilo(),
                 con_esquina: Cell::new(con_esquina),
+                destapada: Cell::new(Instant::now() + ARRANQUE),
                 capturador: RefCell::default(),
                 fotos: RefCell::default(),
                 abierta: RefCell::default(),
@@ -140,6 +155,14 @@ impl Ventanas {
                         f.congelada = None;
                     }
                 }
+            }
+        });
+        let debil = Rc::downgrade(&v.inner);
+        hyprland.al_evento(move |linea| {
+            if crate::hyprland::destapa_la_esquina(linea)
+                && let Some(inner) = debil.upgrade()
+            {
+                inner.destapada.set(Instant::now());
             }
         });
         let debil = Rc::downgrade(&v.inner);
@@ -205,21 +228,35 @@ impl Ventanas {
         self.inner.con_esquina.set(con_esquina);
     }
 
-    /// El puntero llegó a la esquina de `salida`. Devuelve si se va a abrir, para que se cierre
-    /// lo demás. Abierto con `Mod+Tab` no se mete: ahí manda la tecla. Con un juego en foco,
-    /// tampoco: nada se mete con él.
-    pub fn esquina(&self, salida: String) -> bool {
+    /// El puntero apareció en la esquina de `salida`. Abierto con `Mod+Tab` no se mete: ahí manda
+    /// la tecla. Con un juego en foco, tampoco: nada se mete con él. `al_abrir` cierra lo demás.
+    pub fn esquina(&self, salida: String, al_abrir: impl FnOnce() + 'static) {
         let abierta = self.inner.abierta.borrow().clone();
         if let Some(v) = abierta {
             if v.por_esquina.get() {
                 self.cerrar();
             }
-            return false;
+            return;
         }
+        if !self.inner.con_esquina.get() {
+            return;
+        }
+        let yo = self.clone();
+        glib::timeout_add_local_once(ESPERA_ESQUINA, move || {
+            let i = &yo.inner;
+            if i.destapada.get().elapsed() >= DESTAPADA
+                && !yo.abierto()
+                && !i.leyendo.get()
+                && !i.hyprland.juego_en_foco()
+            {
+                yo.abrir_por_esquina(salida);
+                al_abrir();
+            }
+        });
+    }
+
+    fn abrir_por_esquina(&self, salida: String) {
         let i = &self.inner;
-        if !i.con_esquina.get() || i.leyendo.get() || i.hyprland.juego_en_foco() {
-            return false;
-        }
         let pedido = i.pedido.get() + 1;
         i.pedido.set(pedido);
         i.leyendo.set(true);
@@ -238,7 +275,6 @@ impl Ventanas {
             let vista = Vista::abrir(&yo, lienzo, sel, Some(salida), t0);
             i.abierta.replace(Some(vista));
         });
-        true
     }
 
     pub fn soltar(&self) {
@@ -255,6 +291,7 @@ impl Ventanas {
         self.inner.pedido.set(self.inner.pedido.get() + 1);
         self.inner.leyendo.set(false);
         if let Some(v) = self.inner.abierta.take() {
+            self.inner.destapada.set(Instant::now());
             let _ = self.inner.hilo.send(Orden::VentanasCerrar);
             if !v.por_esquina.get() {
                 self.salir_del_submap();
@@ -266,16 +303,29 @@ impl Ventanas {
         self.inner.pedido.set(self.inner.pedido.get() + 1);
         let abierta = self.inner.abierta.take();
         if abierta.is_some() {
+            self.inner.destapada.set(Instant::now());
             let _ = self.inner.hilo.send(Orden::VentanasCerrar);
         }
         // Abierto con el mouse Hyprland nunca entró al submap.
         let submap = submap && !abierta.is_some_and(|v| v.por_esquina.get());
         let h = self.inner.hyprland.clone();
+        let (debil, pedido) = (Rc::downgrade(&self.inner), self.inner.pedido.get());
         glib::MainContext::default().spawn_local(async move {
-            h.eval(&format!(
+            let pedir = format!(
                 "hl.dispatch(hl.dsp.focus({{ window = \"address:{direccion}\" }}))"
-            ))
-            .await;
+            );
+            for _ in 0..REINTENTOS_FOCO {
+                h.eval(&pedir).await;
+                let activa = h.consultar("j/activewindow").await;
+                if activa.is_some_and(|a| modelo::es_la_activa(&a, &direccion)) {
+                    break;
+                }
+                glib::timeout_future(ENTRE_REINTENTOS).await;
+                // Mientras tanto se pidió otra cosa: esta ya no vale.
+                if debil.upgrade().is_none_or(|i| i.pedido.get() != pedido) {
+                    break;
+                }
+            }
         });
         if submap {
             self.salir_del_submap();

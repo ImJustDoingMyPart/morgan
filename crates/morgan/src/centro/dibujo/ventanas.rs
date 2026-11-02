@@ -16,7 +16,7 @@ use morgan_motor::curva;
 use morgan_motor::forma::Borde;
 use morgan_motor::vello::Scene;
 use morgan_motor::vello::kurbo::{Affine, Rect};
-use morgan_motor::vello::peniko::ImageData;
+use morgan_motor::vello::peniko::{Fill, ImageData};
 use smithay_client_toolkit::seat::keyboard::Keysym;
 
 use super::trazo::{self, Trazo};
@@ -42,9 +42,10 @@ const ANILLO: f64 = 3.0;
 const SCROLL: Duration = Duration::from_millis(220);
 const DESLIZAR: Duration = Duration::from_millis(160);
 const FUNDIDO: Duration = Duration::from_millis(180);
-/// La banda sube estos px al entrar, mientras Hyprland funde la capa.
-const SUBIDA: f64 = 10.0;
+/// La banda se abre desde su línea del medio y se pliega hacia ella: va de lado a lado de la
+/// pantalla, así que nunca se le ve un costado que avance.
 const ENTRADA: Duration = Duration::from_millis(180);
+const SALIDA: Duration = Duration::from_millis(140);
 /// Lo que hay que desplazar en un touchpad para un paso, como en la banda de fondos.
 const PASO_RUEDA: f64 = 40.0;
 
@@ -71,6 +72,10 @@ struct Estado {
     anillo_visto: Option<[f64; 4]>,
     anillo_desde: Option<([f64; 4], Instant)>,
     inicio: Option<Instant>,
+    revelado: curva::Revelado,
+    plegando: bool,
+    /// Lo que se ve de la banda en este cuadro.
+    recorte: Rect,
     hover: Option<usize>,
     apretado: Option<usize>,
     afuera: bool,
@@ -156,6 +161,9 @@ impl VentanasUi {
             anillo_visto: None,
             anillo_desde: None,
             inicio: None,
+            revelado: curva::Revelado::new(false),
+            plegando: false,
+            recorte: Rect::ZERO,
             hover: None,
             apretado: None,
             afuera: false,
@@ -170,6 +178,29 @@ impl VentanasUi {
         if self.abierta.take().is_some() {
             self.animos = Animos::default();
         }
+    }
+
+    /// Empieza a plegarse: desde acá no responde a nada y [`Self::plegada`] avisa cuándo sacarla.
+    pub fn plegar(&mut self, ahora: Instant) {
+        if let Some(e) = &mut self.abierta {
+            e.plegando = true;
+            e.revelado.ir(false, crate::animaciones::dur(SALIDA), ahora);
+        }
+    }
+
+    pub fn plegando(&self) -> bool {
+        self.abierta.as_ref().is_some_and(|e| e.plegando)
+    }
+
+    pub fn plegada(&self, ahora: Instant) -> bool {
+        self.abierta
+            .as_ref()
+            .is_some_and(|e| e.plegando && !e.revelado.anda(ahora))
+    }
+
+    /// Ya se dibujó algo: hay qué plegar.
+    pub fn dibujada(&self) -> bool {
+        self.abierta.as_ref().is_some_and(|e| e.inicio.is_some())
     }
 
     pub fn abierta(&self) -> bool {
@@ -253,7 +284,8 @@ impl VentanasUi {
             ahora.saturating_duration_since(t0) < crate::animaciones::dur(d)
         };
         self.animos.anda(ahora)
-            || e.inicio.is_none_or(|t| en(t, ENTRADA))
+            || e.inicio.is_none()
+            || e.revelado.anda(ahora)
             || e.scroll_desde.is_some_and(|(_, t)| en(t, SCROLL))
             || e.anillo_desde.is_some_and(|(_, t)| en(t, DESLIZAR))
             || e.paginas
@@ -266,7 +298,10 @@ impl VentanasUi {
         let Some(mut e) = self.abierta.take() else { return };
         let p = self.paleta;
         let (w, h) = (f64::from(self.tam.0), f64::from(self.tam.1));
-        let inicio = *e.inicio.get_or_insert(ahora);
+        if e.inicio.is_none() {
+            e.inicio = Some(ahora);
+            e.revelado.ir(true, crate::animaciones::dur(ENTRADA), ahora);
+        }
         let l = &e.lienzo;
 
         // Tope de pantalla: el 85 % del alto, descontando el pie, los rellenos de la banda, la
@@ -307,19 +342,11 @@ impl VentanasUi {
         let alto_tarjeta = RELLENO + alto_pie + sep + alto_lienzo + RELLENO;
         let y0 = ((h - alto_tarjeta) / 2.0).floor();
         let tarjeta = Rect::new(0.0, y0, w, y0 + alto_tarjeta);
-        let subida = SUBIDA
-            * (1.0
-                - f64::from(curva::bezier(
-                    0.05,
-                    0.7,
-                    0.1,
-                    1.0,
-                    (ahora.saturating_duration_since(inicio).as_secs_f64()
-                        / crate::animaciones::dur(ENTRADA).as_secs_f64().max(1e-6))
-                    .min(1.0) as f32,
-                )));
+        let medio = (tarjeta.y0 + tarjeta.y1) / 2.0;
+        let mitad = alto_tarjeta / 2.0 * e.revelado.valor(ahora);
+        e.recorte = Rect::new(0.0, medio - mitad, w, medio + mitad);
 
-        let mut t = vec![Trazo::mover(0.0, subida)];
+        let mut t = Vec::new();
         t.push(Trazo::Caja {
             r: tarjeta,
             radio: 0.0,
@@ -587,7 +614,13 @@ impl VentanasUi {
     pub fn pintar(&self, s: &mut Scene, escala: f64) {
         s.reset();
         if let Some(e) = &self.abierta {
-            trazo::pintar(s, &e.trazos, Affine::scale(escala), escala);
+            if e.recorte.height() <= 0.0 {
+                return;
+            }
+            let tr = Affine::scale(escala);
+            s.push_clip_layer(Fill::NonZero, tr, &e.recorte);
+            trazo::pintar(s, &e.trazos, tr, escala);
+            s.pop_layer();
         }
     }
 
@@ -739,6 +772,31 @@ mod tests {
 
     fn sel(ui: &VentanasUi) -> usize {
         ui.abierta.as_ref().unwrap().sel
+    }
+
+    #[test]
+    fn se_abre_y_se_pliega_desde_el_medio_y_avisa_al_terminar() {
+        let mut ui = abierta();
+        ui.tam = (2560, 1440);
+        let t0 = Instant::now();
+        ui.armar(1.0, t0);
+        let (tarjeta, r0) = {
+            let e = ui.abierta.as_ref().unwrap();
+            (e.tarjeta, e.recorte)
+        };
+        assert_eq!(r0.height(), 0.0, "arranca cerrada");
+        assert_eq!(r0.y0, (tarjeta.y0 + tarjeta.y1) / 2.0);
+        ui.armar(1.0, t0 + Duration::from_secs(1));
+        let r1 = ui.abierta.as_ref().unwrap().recorte;
+        assert_eq!((r1.y0, r1.y1), (tarjeta.y0, tarjeta.y1), "termina con la banda entera");
+        assert_eq!((r1.x0, r1.x1), (0.0, 2560.0), "siempre de lado a lado");
+
+        let t1 = Instant::now();
+        assert!(!ui.plegada(t1));
+        ui.plegar(t1);
+        assert!(ui.plegando());
+        assert!(!ui.plegada(t1), "recién empieza");
+        assert!(ui.plegada(t1 + Duration::from_secs(1)));
     }
 
     fn por_esquina() -> VentanasUi {

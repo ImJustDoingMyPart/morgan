@@ -164,7 +164,8 @@ lanzados desde Steam prenden el modo juego solos.
 
 Para reglas de Hyprland propias, las capas de morgan son `morgan-bar`, `morgan-center`,
 `morgan-calendar`, `morgan-tray`, `morgan-notifications`, `morgan-osd`, `morgan-launcher`,
-`morgan-calculator`, `morgan-menu`, `morgan-wallpapers` y `morgan-windows`.
+`morgan-calculator`, `morgan-menu`, `morgan-wallpapers`, `morgan-windows` y `morgan-corner`
+(un píxel invisible, el de la esquina activa).
 
 ## Antes de instalar: parar lo que morgan reemplaza
 

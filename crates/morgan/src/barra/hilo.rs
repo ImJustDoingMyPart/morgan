@@ -44,13 +44,15 @@ use smithay_client_toolkit::shell::wlr_layer::{
     LayerSurfaceConfigure,
 };
 use smithay_client_toolkit::shell::xdg::XdgPositioner;
+use smithay_client_toolkit::shm::slot::{Buffer, SlotPool};
+use smithay_client_toolkit::shm::{Shm, ShmHandler};
 use smithay_client_toolkit::error::GlobalError;
 use smithay_client_toolkit::globals::{GlobalData, ProvidesBoundGlobal};
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_wm_base::XdgWmBase;
 use smithay_client_toolkit::shell::xdg::popup::{Popup, PopupConfigure, PopupHandler};
 use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
 use wayland_client::globals::registry_queue_init;
-use wayland_client::protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface};
+use wayland_client::protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface};
 use wayland_client::{Connection, QueueHandle};
 
 use super::dibujo::{self, ALTO, Animos, Estado, Icono, Lugar, Pintura, Que, Rotulos};
@@ -143,8 +145,18 @@ struct Barra {
     /// Lo que tiene el puntero encima.
     encima: Option<Que>,
     en_cajon: bool,
-    /// El puntero está en la esquina: dispara al llegar, no mientras se queda ahí.
-    en_esquina: bool,
+}
+
+/// Un píxel transparente en la esquina superior izquierda de cada salida. Es de cada salida y no
+/// de la barra: la esquina sirve igual con la barra oculta, y un movimiento rápido que aterriza
+/// justo ahí sin pasar por la barra también cuenta. Va en `Top`, así que una ventana a pantalla
+/// completa la tapa. Tiene que crearse después de la barra para quedar encima.
+struct Esquina {
+    capa: LayerSurface,
+    salida: wl_output::WlOutput,
+    /// El búfer vive mientras la capa.
+    _pool: SlotPool,
+    _buffer: Option<Buffer>,
 }
 
 struct Globo {
@@ -173,6 +185,8 @@ struct Hilo {
     registro: RegistryState,
     compositor: CompositorState,
     capas: LayerShell,
+    shm: Shm,
+    esquinas: Vec<Esquina>,
     xdg: Option<WmBase>,
     salidas: OutputState,
     asientos: SeatState,
@@ -215,6 +229,7 @@ fn correr(
     let qh = cola.handle();
     let compositor = CompositorState::bind(&globales, &qh).map_err(|e| e.to_string())?;
     let capas = LayerShell::bind(&globales, &qh).map_err(|e| e.to_string())?;
+    let shm = Shm::bind(&globales, &qh).map_err(|e| e.to_string())?;
     let mut bucle: EventLoop<Hilo> = EventLoop::try_new().map_err(|e| e.to_string())?;
     bucle
         .handle()
@@ -232,6 +247,8 @@ fn correr(
         registro: RegistryState::new(&globales),
         compositor,
         capas,
+        shm,
+        esquinas: Vec::new(),
         xdg: globales
             .bind::<XdgWmBase, _, _>(&qh, 5..=6, GlobalData)
             .ok()
@@ -347,6 +364,7 @@ impl Hilo {
         if self.barras.iter().any(|b| b.salida == salida) {
             return;
         }
+        let salida_esquina = salida.clone();
         let nombre = self
             .salidas
             .info(&salida)
@@ -375,8 +393,8 @@ impl Hilo {
             revelado: Revelado::new(false),
             encima: None,
             en_cajon: false,
-            en_esquina: false,
         });
+        self.poner_esquina(salida_esquina);
     }
 
     fn lugar(b: &Barra, estado: &Estado, ahora: Instant) -> Option<Lugar> {
@@ -692,10 +710,8 @@ impl Hilo {
         match e.kind {
             PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
                 self.mover(i, bajo, en_cajon);
-                self.esquina(i, e);
             }
             PointerEventKind::Leave { .. } => {
-                self.barras[i].en_esquina = false;
                 self.mover(i, None, false);
                 self.cerrar_globo();
             }
@@ -745,24 +761,53 @@ impl Hilo {
         }
     }
 
-    /// Solo un movimiento dispara. Encontrarse con el puntero ya en la esquina (al arrancar, o
-    /// cuando se va lo que la tapaba, como la vista misma al cerrarse) no es haber llegado.
-    /// Tampoco arrastrando algo que se apretó en la barra.
-    fn esquina(&mut self, i: usize, e: &PointerEvent) {
-        let ahora = modelo::en_esquina(e.position.0, e.position.1);
-        let antes = std::mem::replace(&mut self.barras[i].en_esquina, ahora);
-        if ahora
-            && !antes
-            && matches!(e.kind, PointerEventKind::Motion { .. })
-            && self.apretado.is_none()
-            && self.esquina_es_tope(i)
-        {
-            self.avisar(Evento::Esquina(self.barras[i].nombre.clone()));
+    fn poner_esquina(&mut self, salida: wl_output::WlOutput) {
+        let Ok(mut pool) = SlotPool::new(4, &self.shm) else {
+            eprintln!("morgan: barra: sin memoria para la esquina");
+            return;
+        };
+        let wl = self.compositor.create_surface(&self.qh);
+        let capa = self.capas.create_layer_surface(
+            &self.qh,
+            wl,
+            Layer::Top,
+            Some("morgan-corner"),
+            Some(&salida),
+        );
+        capa.set_anchor(Anchor::TOP | Anchor::LEFT);
+        capa.set_size(1, 1);
+        // Con -1 ignora la zona de la barra: va en la esquina de la salida, no debajo.
+        capa.set_exclusive_zone(-1);
+        capa.set_keyboard_interactivity(KeyboardInteractivity::None);
+        capa.commit();
+        let buffer = pool
+            .create_buffer(1, 1, 4, wl_shm::Format::Argb8888)
+            .ok()
+            .map(|(b, pixel)| {
+                pixel.fill(0);
+                b
+            });
+        self.esquinas.push(Esquina {
+            capa,
+            salida,
+            _pool: pool,
+            _buffer: buffer,
+        });
+    }
+
+    /// El puntero llegó al píxel. Si en realidad ya estaba ahí, tapado, lo filtra quien sabe qué
+    /// se destapó (`Ventanas::esquina`).
+    fn esquina(&self, i: usize) {
+        let salida = &self.esquinas[i].salida;
+        if !self.esquina_es_tope(salida) {
+            return;
+        }
+        if let Some(nombre) = self.salidas.info(salida).and_then(|o| o.name) {
+            self.avisar(Evento::Esquina(nombre));
         }
     }
 
-    fn esquina_es_tope(&self, i: usize) -> bool {
-        let salida = &self.barras[i].salida;
+    fn esquina_es_tope(&self, salida: &wl_output::WlOutput) -> bool {
         let Some(lugar) = self.salidas.info(salida).and_then(|o| o.logical_position) else {
             return true;
         };
@@ -951,6 +996,8 @@ fn boton_gtk(b: u32) -> u32 {
 
 impl LayerShellHandler for Hilo {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, capa: &LayerSurface) {
+        self.esquinas
+            .retain(|e| e.capa.wl_surface() != capa.wl_surface());
         self.barras
             .retain(|b| b.capa.wl_surface() != capa.wl_surface());
         if self
@@ -971,6 +1018,14 @@ impl LayerShellHandler for Hilo {
         _: u32,
     ) {
         let wl = capa.wl_surface();
+        if let Some(e) = self.esquinas.iter().find(|e| e.capa.wl_surface() == wl) {
+            if let Some(b) = &e._buffer {
+                let _ = b.attach_to(wl);
+            }
+            wl.damage_buffer(0, 0, 1, 1);
+            wl.commit();
+            return;
+        }
         let lamina = if let Some(b) = self.barras.iter_mut().find(|b| b.capa.wl_surface() == wl) {
             &mut b.lamina
         } else if let Some(k) = self
@@ -1134,6 +1189,7 @@ impl OutputHandler for Hilo {
         {
             self.globo = None;
         }
+        self.esquinas.retain(|e| e.salida != salida);
         self.barras.retain(|b| b.salida != salida);
     }
 }
@@ -1279,7 +1335,11 @@ impl PointerHandler for Hilo {
             {
                 f.set_shape(serial, Shape::Default);
             }
-            if let Some(i) = self.barra(&e.surface) {
+            if let Some(i) = self.esquinas.iter().position(|c| c.capa.wl_surface() == &e.surface) {
+                if matches!(e.kind, PointerEventKind::Enter { .. }) {
+                    self.esquina(i);
+                }
+            } else if let Some(i) = self.barra(&e.surface) {
                 self.puntero_barra(i, e);
             } else if self
                 .calendario
@@ -1289,6 +1349,12 @@ impl PointerHandler for Hilo {
                 self.puntero_calendario(e);
             }
         }
+    }
+}
+
+impl ShmHandler for Hilo {
+    fn shm_state(&mut self) -> &mut Shm {
+        &mut self.shm
     }
 }
 

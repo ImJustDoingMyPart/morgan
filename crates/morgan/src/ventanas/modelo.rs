@@ -159,6 +159,12 @@ pub fn leer(clientes: &str, monitores: &str) -> Result<Lienzo, serde_json::Error
     })
 }
 
+/// `j/activewindow` dice que la ventana activa es esta.
+pub fn es_la_activa(activa: &str, direccion: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(activa)
+        .is_ok_and(|v| v["address"].as_str() == Some(direccion))
+}
+
 impl Lienzo {
     pub fn inicial(&self) -> Option<usize> {
         self.recientes.get(1).or(self.recientes.first()).copied()
@@ -302,6 +308,15 @@ pub fn medidas(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reconoce_la_ventana_activa() {
+        assert!(es_la_activa(r#"{"address":"0xa","title":"x"}"#, "0xa"));
+        assert!(!es_la_activa(r#"{"address":"0xb"}"#, "0xa"));
+        // Sin ventana activa, Hyprland da un objeto vacío.
+        assert!(!es_la_activa("{}", "0xa"));
+        assert!(!es_la_activa("no es json", "0xa"));
+    }
 
     const MONITORES: &str = r#"[{"id":0,"name":"DP-1","x":0,"y":0,"width":2560,"height":1440,
         "scale":1.0,"transform":0,"focused":true,"activeWorkspace":{"id":3,"name":"3"}}]"#;

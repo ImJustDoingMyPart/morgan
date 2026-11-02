@@ -159,7 +159,8 @@ launched from Steam turn on game mode by themselves.
 
 For your own Hyprland rules, morgan's layers are `morgan-bar`, `morgan-center`,
 `morgan-calendar`, `morgan-tray`, `morgan-notifications`, `morgan-osd`, `morgan-launcher`,
-`morgan-calculator`, `morgan-menu`, `morgan-wallpapers` and `morgan-windows`.
+`morgan-calculator`, `morgan-menu`, `morgan-wallpapers`, `morgan-windows` and `morgan-corner`
+(an invisible pixel, the hot corner's).
 
 ## Before you install: stop what morgan replaces
 
