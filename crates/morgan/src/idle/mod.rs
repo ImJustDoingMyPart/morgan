@@ -112,7 +112,7 @@ impl Idle {
         let yo = idle.clone();
         idle.inner.hyprland.al_evento(move |linea| {
             if yo.inner.apagadas.get() && monitor_nuevo(linea) {
-                eprintln!("morgan: idle: un monitor volvió apagado; se lo apaga otra vez");
+                eprintln!("morgan: idle: un monitor se reconectó; se lo apaga otra vez");
                 yo.inner.hyprland.dpms(false);
             }
         });
@@ -398,9 +398,9 @@ impl Idle {
     }
 }
 
-/// El KTC H27E6, a los ~6 s de apagado, se desconecta y vuelve al segundo; Hyprland toma al que
-/// vuelve como monitor nuevo y lo prende. `FALLBACK` es el que Hyprland pone mientras no hay
-/// ninguno.
+/// Muchos monitores, al quedarse sin señal, se desconectan y vuelven a los pocos segundos.
+/// Hyprland prende al que vuelve aunque DPMS esté apagado: lo corrigió en 0.55.3 y lo perdió en
+/// 0.56.0. `FALLBACK` es el que Hyprland pone mientras no hay ninguno.
 fn monitor_nuevo(linea: &str) -> bool {
     linea
         .strip_prefix("monitoraddedv2>>")

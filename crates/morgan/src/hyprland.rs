@@ -100,6 +100,31 @@ pub struct Hyprland {
     oyentes_compartir: Oyentes,
     oyentes_foco: OyentesFoco,
     oyentes_evento: OyentesFoco,
+    dpms: UltimoGana<bool>,
+}
+
+/// Cada [`pedir`] va en su hilo, así que dos seguidos pueden llegar al revés: un "apagar" que
+/// llega después de un "prender" deja la pantalla negra y sin nada que la despierte. Va uno por
+/// vez, y de los que esperan solo importa el último.
+#[derive(Clone, Default)]
+struct UltimoGana<T> {
+    pendiente: Rc<Cell<Option<T>>>,
+    enviando: Rc<Cell<bool>>,
+}
+
+impl<T> UltimoGana<T> {
+    /// `true` si no hay nadie enviando y hay que llamar a [`Self::vaciar`].
+    fn anotar(&self, valor: T) -> bool {
+        self.pendiente.set(Some(valor));
+        !self.enviando.replace(true)
+    }
+
+    async fn vaciar<F: Future>(&self, enviar: impl Fn(T) -> F) {
+        while let Some(valor) = self.pendiente.take() {
+            enviar(valor).await;
+        }
+        self.enviando.set(false);
+    }
 }
 
 impl Hyprland {
@@ -205,14 +230,24 @@ impl Hyprland {
         let Some(dir) = self.dir.clone() else {
             return;
         };
-        let accion = if prender { "enable" } else { "disable" };
+        if !self.dpms.anotar(prender) {
+            return;
+        }
+        let cola = self.dpms.clone();
         glib::MainContext::default().spawn_local(async move {
-            let lua = format!("eval hl.dispatch(hl.dsp.dpms({{ action = \"{accion}\" }}))");
-            match pedir(&dir, &lua).await {
-                Ok(r) if r.trim() == "ok" || r.trim().is_empty() => {}
-                Ok(r) => eprintln!("morgan: dpms {accion}: {}", r.trim()),
-                Err(e) => eprintln!("morgan: dpms {accion}: {e}"),
-            }
+            cola.vaciar(|prender| {
+                let dir = dir.clone();
+                async move {
+                    let accion = if prender { "enable" } else { "disable" };
+                    let lua = format!("eval hl.dispatch(hl.dsp.dpms({{ action = \"{accion}\" }}))");
+                    match pedir(&dir, &lua).await {
+                        Ok(r) if r.trim() == "ok" || r.trim().is_empty() => {}
+                        Ok(r) => eprintln!("morgan: dpms {accion}: {}", r.trim()),
+                        Err(e) => eprintln!("morgan: dpms {accion}: {e}"),
+                    }
+                }
+            })
+            .await;
         });
     }
 
@@ -498,6 +533,27 @@ pub fn leer_proc(pid: u32) -> Option<(u32, Vec<u8>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dpms_en_orden_y_gana_el_ultimo() {
+        let cola = UltimoGana::default();
+        let vistos = RefCell::new(Vec::new());
+        assert!(cola.anotar(false));
+        futures_lite::future::block_on(cola.vaciar(|v| {
+            vistos.borrow_mut().push(v);
+            if vistos.borrow().len() == 1 {
+                // Mientras se envía el primero: no arranca otro envío y el del medio se pisa.
+                assert!(!cola.anotar(false));
+                assert!(!cola.anotar(true));
+            }
+            async {}
+        }));
+        assert_eq!(*vistos.borrow(), [false, true]);
+        assert!(
+            cola.anotar(true),
+            "al terminar, el siguiente vuelve a enviar"
+        );
+    }
 
     #[test]
     fn juego_por_la_ventana_y_no_por_el_workspace() {
