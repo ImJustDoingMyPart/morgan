@@ -45,9 +45,6 @@ const FLECHA: &str = "󰅁";
 
 /// Lo que ocupa la sombra alrededor del globo, de cada lado.
 pub const GLOBO_SOMBRA: f64 = SOMBRA;
-/// Sin regla de blur propia (es un popup de la barra): casi opaco, o no se lee lo de atrás.
-const GLOBO_OPACIDAD: f32 = 0.95;
-
 /// La imagen va a 14 px lógicos, sea del tamaño que sea (se arma para la escala más alta).
 #[derive(Clone)]
 pub struct Icono {
@@ -560,13 +557,13 @@ pub fn globo_tam(l: &Layout<u8>, escala: f32) -> (u32, u32) {
     ((w + 2.0 * GLOBO_SOMBRA) as u32, (h + 2.0 * GLOBO_SOMBRA) as u32)
 }
 
-pub fn pintar_globo(s: &mut Scene, l: &Layout<u8>, p: &Paleta, escala: f64) {
+pub fn pintar_globo(s: &mut Scene, l: &Layout<u8>, p: &Paleta, opacidad: f32, escala: f64) {
     s.reset();
     let tr = Affine::scale(escala);
     let (w, h) = globo_caja(l, escala as f32);
     let m = GLOBO_SOMBRA;
     let r = Rect::new(m, m, m + w, m + h);
-    marco(s, tr, escala, p, GLOBO_OPACIDAD, r);
+    marco(s, tr, escala, p, opacidad, r);
     let (x, y) = (
         (r.x0 + GLOBO_X) * escala,
         (r.y0 + BORDE_Y_RELLENO + FILA_Y) * escala,

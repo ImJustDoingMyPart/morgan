@@ -501,6 +501,7 @@ impl Hilo {
                 &mut self.escena,
                 &g.texto,
                 &self.paleta,
+                self.opacidad,
                 f64::from(g.lamina.escala),
             );
             let wl = g.popup.wl_surface().clone();

@@ -75,13 +75,14 @@ for ns, regla in pairs({
     ["morgan-windows"]       = { animation = "fade",         ignore_alpha = 0.5 },
     ["morgan-dock"]          = { animation = "slide bottom", ignore_alpha = 0.5 },
     ["morgan-dock-globo"]    = { animation = "fade",         ignore_alpha = 0.5 },
-    ["morgan-bar"]           = {},
+    ["morgan-bar"]           = { ignore_alpha = 0.5 },
 }) do
     hl.layer_rule({
         name         = ns,
         match        = { namespace = "^" .. ns .. "$" },
         animation    = regla.animation,
         blur         = true,
+        blur_popups  = true,
         xray         = false,
         ignore_alpha = regla.ignore_alpha,
     })
