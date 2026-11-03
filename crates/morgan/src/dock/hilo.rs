@@ -125,6 +125,24 @@ struct Globo {
     clave: String,
     rotulos: Rotulos,
     encima: Option<usize>,
+    tintes: Vec<Transicion>,
+}
+
+impl Globo {
+    fn poner_encima(&mut self, fila: Option<usize>) {
+        if fila == self.encima {
+            return;
+        }
+        let ahora = Instant::now();
+        if let Some(t) = self.encima.and_then(|i| self.tintes.get_mut(i)) {
+            t.ir(0.0, TINTE, ahora);
+        }
+        if let Some(t) = fila.and_then(|i| self.tintes.get_mut(i)) {
+            t.ir(1.0, TINTE, ahora);
+        }
+        self.encima = fila;
+        self.lamina.sucio = true;
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -341,6 +359,7 @@ impl Hilo {
                             g.capa.commit();
                             g.lamina.tam = tam;
                         }
+                        g.tintes.resize(r.cuantas(), Transicion::new(0.0));
                         g.rotulos = r;
                         g.lamina.sucio = true;
                     }
@@ -412,6 +431,7 @@ impl Hilo {
         let escala = v.lamina.escala.max(1);
         let rotulos = Rotulos::armar(&mut self.textos, pieza, &self.nota, escala as f32);
         let tam = rotulos.tam;
+        let tintes = vec![Transicion::new(0.0); rotulos.cuantas()];
         let ancho_salida = i32::try_from(v.lamina.tam.0).unwrap_or(i32::MAX);
         let izquierda = (c.center().x as i32 - tam.0 as i32 / 2)
             .clamp(0, (ancho_salida - tam.0 as i32).max(0));
@@ -443,6 +463,7 @@ impl Hilo {
             clave,
             rotulos,
             encima: None,
+            tintes,
         });
         let _ = self.conn.flush();
     }
@@ -534,15 +555,17 @@ impl Hilo {
             && g.lamina.sucio
             && g.lamina.lista()
         {
+            let tintes: Vec<f32> = g.tintes.iter().map(|t| t.valor(ahora)).collect();
             dibujo::pintar_globo(
                 escena,
                 &g.rotulos,
-                g.encima,
+                &tintes,
                 paleta,
                 *opacidad,
                 f64::from(g.lamina.escala),
             );
             g.lamina.presentar(gpu, escena, g.capa.wl_surface(), qh);
+            g.lamina.sucio = g.tintes.iter().any(|t| t.anda(ahora));
         }
         let _ = conn.flush();
     }
@@ -628,16 +651,12 @@ impl Hilo {
                 self.sin_temporizador();
                 if let Some(g) = &mut self.globo {
                     let fila = g.rotulos.fila_en(x, y);
-                    if fila != g.encima {
-                        g.encima = fila;
-                        g.lamina.sucio = true;
-                    }
+                    g.poner_encima(fila);
                 }
             }
             PointerEventKind::Leave { .. } => {
                 if let Some(g) = &mut self.globo {
-                    g.encima = None;
-                    g.lamina.sucio = true;
+                    g.poner_encima(None);
                 }
                 self.temporizar(CERRAR_GLOBO, Pendiente::Cerrar);
             }

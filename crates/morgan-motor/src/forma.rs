@@ -153,7 +153,28 @@ pub fn panel(s: &mut Scene, tr: Affine, p: &Paleta, opacidad: f32, r: Rect, bord
     anillo(s, tr, r, RADIO, BORDE, p.primary, p.tertiary);
 }
 
-/// La caja de lo chico y pasajero (el menú de la bandeja): sin anillo, una línea neutra de 1 px
+/// Las medidas de lo que va adentro de un `marco`: el menú de la bandeja y el globo del dock.
+pub mod menu {
+    pub const MIN: f64 = 150.0;
+    /// La línea del marco (1) y el relleno hasta el contenido (4).
+    pub const BORDE_Y_RELLENO: f64 = 5.0;
+    /// Del recuadro a sus filas.
+    pub const LISTA: f64 = 2.0;
+    pub const FILA_X: f64 = 8.0;
+    pub const FILA_Y: f64 = 6.0;
+    /// Del borde de lo que va sin recuadro a su texto: alineado con el de las filas.
+    pub const BOTON_X: f64 = LISTA + FILA_X;
+    pub const RADIO_RECUADRO: f64 = 4.0;
+    pub const RADIO_FILA: f64 = 3.0;
+    pub const ENTRE: f64 = 10.0;
+    pub const ENTRE_BLOQUES: f64 = 4.0;
+    pub const PX: f32 = 14.0;
+    /// Los alfas del recuadro (`on_surface`) y de la fila bajo el puntero (`primary`).
+    pub const TINTE_RECUADRO: f32 = 0.04;
+    pub const TINTE_FILA: f32 = 0.14;
+}
+
+/// La caja de lo chico y pasajero (el menú de la bandeja, el globo del dock): sin anillo, una línea neutra de 1 px
 /// adentro de `r` y una sombra suave solo por fuera. `escala` lleva la caja a píxeles enteros:
 /// una línea entre dos píxeles se ve más gruesa de un lado que del otro.
 pub fn marco(s: &mut Scene, tr: Affine, escala: f64, p: &Paleta, opacidad: f32, r: Rect) {

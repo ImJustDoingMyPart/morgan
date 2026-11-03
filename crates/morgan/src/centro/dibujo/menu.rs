@@ -17,6 +17,10 @@ use std::time::Instant;
 use morgan_motor::color::{Color, Paleta, con_alfa, mezclar};
 use morgan_motor::curva::Revelado;
 use morgan_motor::forma::marco;
+use morgan_motor::forma::menu::{
+    BORDE_Y_RELLENO, BOTON_X, ENTRE, ENTRE_BLOQUES, FILA_X, FILA_Y, LISTA, MIN, PX, RADIO_FILA,
+    TINTE_FILA, TINTE_RECUADRO,
+};
 use morgan_motor::vello::Scene;
 use morgan_motor::vello::kurbo::{Affine, Point, Rect};
 use smithay_client_toolkit::seat::keyboard::Keysym;
@@ -26,17 +30,6 @@ use super::{Animos, DESPLIEGUE, Hoja, MARGEN, Objetivo, RADIO, Rotulos};
 use crate::bandeja::menu::Marca;
 use crate::centro::vista::{Menu, NodoMenu};
 
-const MIN: f64 = 150.0;
-/// La línea del marco (1) y el relleno hasta el contenido (4).
-const BORDE_Y_RELLENO: f64 = 5.0;
-const LISTA: f64 = 2.0;
-const FILA_X: f64 = 8.0;
-const FILA_Y: f64 = 6.0;
-/// Del borde del botón de un submenú a su texto: el mismo que el de las filas en su recuadro.
-const BOTON_X: f64 = LISTA + FILA_X;
-const RADIO_FILA: f64 = 3.0;
-const ENTRE: f64 = 10.0;
-const ENTRE_BLOQUES: f64 = 4.0;
 /// `max-width-chars` de la etiqueta, en celdas de la monoespaciada a 14 px.
 const ETIQUETA_MAX: f64 = 40.0 * 8.4;
 const CASILLA: f64 = 14.0;
@@ -128,7 +121,7 @@ impl MenuUi {
 
     /// Lo que mide el contenido de una fila sin recortar la etiqueta.
     fn natural(&mut self, n: &NodoMenu) -> f64 {
-        let l = self.rotulos.linea(&sin_tecla(&n.etiqueta), 14.0, 400.0);
+        let l = self.rotulos.linea(&sin_tecla(&n.etiqueta), PX, 400.0);
         let mut w = self.ancho(&l).min(ETIQUETA_MAX);
         if !n.hijos.is_empty() {
             let f = self.rotulos.linea(FLECHA, 16.0, 400.0);
@@ -137,7 +130,7 @@ impl MenuUi {
             match n.marca {
                 Some(Marca::Casilla(_)) => w += ENTRE + CASILLA,
                 Some(Marca::Radio(true)) => {
-                    let t = self.rotulos.linea("󰄬", 14.0, 400.0);
+                    let t = self.rotulos.linea("󰄬", PX, 400.0);
                     w += ENTRE + self.ancho(&t);
                 }
                 _ => {}
@@ -241,7 +234,7 @@ impl MenuUi {
             Trazo::Caja {
                 r: Rect::new(0.0, y0, ancho, y),
                 radio: RADIO,
-                color: op(&self.paleta.on_surface, 0.04),
+                color: op(&self.paleta.on_surface, TINTE_RECUADRO),
             },
         );
         y
@@ -261,7 +254,7 @@ impl MenuUi {
         let o = Objetivo::Fila(n.id);
         // Lo de la derecha.
         let tilde =
-            (n.marca == Some(Marca::Radio(true))).then(|| self.rotulos.linea("󰄬", 14.0, 400.0));
+            (n.marca == Some(Marca::Radio(true))).then(|| self.rotulos.linea("󰄬", PX, 400.0));
         let casilla = match n.marca {
             Some(Marca::Casilla(puesta)) => Some(puesta),
             _ => None,
@@ -274,7 +267,7 @@ impl MenuUi {
         let max = (x + ancho - FILA_X - w_der.map_or(0.0, |w| w + ENTRE) - tx).max(0.0);
         let etiqueta = self
             .rotulos
-            .recortada(&sin_tecla(&n.etiqueta), 14.0, max.min(ETIQUETA_MAX));
+            .recortada(&sin_tecla(&n.etiqueta), PX, max.min(ETIQUETA_MAX));
         let alto_contenido = self
             .alto(&etiqueta)
             .max(tilde.as_ref().map_or(0.0, |t| self.alto(t)))
@@ -295,7 +288,7 @@ impl MenuUi {
         h.trazos.push(Trazo::Caja {
             r,
             radio: RADIO_FILA,
-            color: op(&p.primary, 0.14 * luz),
+            color: op(&p.primary, TINTE_FILA * luz),
         });
         let ty = y + FILA_Y + ((alto_contenido - self.alto(&etiqueta)) / 2.0).floor();
         h.trazos.push(Trazo::Texto {
@@ -362,7 +355,7 @@ impl MenuUi {
         let max = (ancho - 2.0 * BOTON_X - w_flecha - ENTRE).max(0.0);
         let etiqueta = self
             .rotulos
-            .recortada(&sin_tecla(&n.etiqueta), 14.0, max.min(ETIQUETA_MAX));
+            .recortada(&sin_tecla(&n.etiqueta), PX, max.min(ETIQUETA_MAX));
         let alto_contenido = self.alto(&etiqueta).max(self.alto(&flecha)).ceil();
         let r = Rect::new(0.0, y, ancho, y + FILA_Y * 2.0 + alto_contenido);
         let revelado = self.revelados.get(&n.id);
@@ -373,7 +366,7 @@ impl MenuUi {
         let fondo = if abierto {
             op(&p.primary, 0.2)
         } else {
-            mezclar(&op(&p.on_surface, 0.06), &op(&p.primary, 0.14), luz)
+            mezclar(&op(&p.on_surface, 0.06), &op(&p.primary, TINTE_FILA), luz)
         };
         h.objetivo(o, r, n.habilitado);
         h.trazos.push(Trazo::Grupo {
