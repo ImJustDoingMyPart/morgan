@@ -123,6 +123,11 @@ pub enum Trazo {
         dy: f64,
         alfa: f32,
     },
+    /// Lo que sigue, hasta `Fin`, girado alrededor de `c`, en radianes.
+    Giro {
+        c: Point,
+        angulo: f64,
+    },
     /// Lo que sigue, hasta `Fin`, escalado desde la esquina de lo de arriba.
     Escala {
         x: f64,
@@ -353,6 +358,12 @@ pub fn pintar(s: &mut Scene, trazos: &[Trazo], base: Affine, escala: f64) {
                     );
                 }
                 pila.push(Nivel { tr: t, capa });
+            }
+            Trazo::Giro { c, angulo } => {
+                pila.push(Nivel {
+                    tr: actual * Affine::rotate_about(*angulo, *c),
+                    capa: false,
+                });
             }
             Trazo::Escala { x, y } => {
                 pila.push(Nivel {

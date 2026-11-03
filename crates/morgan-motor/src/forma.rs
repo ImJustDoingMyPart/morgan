@@ -153,6 +153,33 @@ pub fn panel(s: &mut Scene, tr: Affine, p: &Paleta, opacidad: f32, r: Rect, bord
     anillo(s, tr, r, RADIO, BORDE, p.primary, p.tertiary);
 }
 
+/// La caja de lo chico y pasajero (el menú de la bandeja): sin anillo, una línea neutra de 1 px
+/// adentro de `r` y una sombra suave solo por fuera. `escala` lleva la caja a píxeles enteros:
+/// una línea entre dos píxeles se ve más gruesa de un lado que del otro.
+pub fn marco(s: &mut Scene, tr: Affine, escala: f64, p: &Paleta, opacidad: f32, r: Rect) {
+    const RADIO: f64 = 4.0;
+    let entero = |v: f64| (v * escala).round() / escala;
+    let r = Rect::new(entero(r.x0), entero(r.y0), entero(r.x1), entero(r.y1));
+    let linea = escala.round().max(1.0) / escala;
+    let rr = RoundedRect::from_rect(r, RADIO);
+    let mut afuera = BezPath::new();
+    afuera.extend(r.inflate(16.0, 16.0).path_elements(0.1));
+    afuera.extend(rr.path_elements(0.1));
+    s.push_layer(Fill::EvenOdd, BlendMode::default(), 1.0, tr, &afuera);
+    sombra(s, tr, r, RADIO, [0.0, 0.0, 0.0, 0.4], (0.0, 2.0), 0.0, 8.0);
+    s.pop_layer();
+    let fondo = con_alfa(
+        &p.surface_container_low,
+        p.surface_container_low[3] * opacidad,
+    );
+    s.fill(Fill::NonZero, tr, pincel(&fondo), None, &rr);
+    let adentro = RoundedRect::from_rect(r.inflate(-linea, -linea), RADIO - linea);
+    let mut borde = BezPath::new();
+    borde.extend(rr.path_elements(0.1));
+    borde.extend(adentro.path_elements(0.1));
+    s.fill(Fill::EvenOdd, tr, pincel(&p.outline_variant), None, &borde);
+}
+
 /// Un anillo de `ancho` adentro de `r` (un `border` de GTK), `a` arriba y a la izquierda, `b`
 /// abajo y a la derecha, partido en diagonal en las esquinas como lo parte GTK: el de los
 /// paneles y el destello de lo elegido en el launcher.

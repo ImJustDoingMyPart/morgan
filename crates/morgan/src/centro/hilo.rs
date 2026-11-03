@@ -493,7 +493,7 @@ impl Hilo {
             Orden::Tema(p, o, b) => {
                 (self.ui.paleta, self.ui.opacidad, self.ui.borde) = (p, o, b);
                 if let Some(m) = &mut self.menu {
-                    (m.ui.paleta, m.ui.opacidad, m.ui.borde) = (p, o, b);
+                    (m.ui.paleta, m.ui.opacidad) = (p, o);
                 }
                 let t = &mut self.toasts_ui;
                 (t.paleta, t.opacidad, t.borde) = (p, o, b);
@@ -990,7 +990,7 @@ impl Hilo {
         capa.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
         capa.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
         capa.commit();
-        let ui = MenuUi::new(m, self.ui.paleta, self.ui.opacidad, self.ui.borde);
+        let ui = MenuUi::new(m, self.ui.paleta, self.ui.opacidad);
         self.menu = Some(MenuSup {
             lamina: Lamina::new((0, 0)),
             capa,
