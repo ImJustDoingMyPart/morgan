@@ -128,11 +128,10 @@ fn marcas(s: &mut Scene, tr: Affine, cx: f64, y: f64, m: &[Marca], p: &Paleta) {
     }
 }
 
-/// El nombre de la app y, debajo, cada ventana con su workspace en un recuadro; o, sin ventanas,
-/// qué hace el click. En píxeles del buffer, como los demás textos.
+/// El nombre de la app y, si tiene ventanas, cada una con su workspace en un recuadro. En píxeles
+/// del buffer, como los demás textos.
 pub struct Rotulos {
     titulo: Layout<u8>,
-    nota: Option<Layout<u8>>,
     filas: Vec<(Layout<u8>, Layout<u8>)>,
     foco: Option<usize>,
     /// Del inicio del workspace al del título.
@@ -143,18 +142,13 @@ pub struct Rotulos {
 }
 
 impl Rotulos {
-    pub fn armar(t: &mut Textos, pieza: &Pieza, nota: &str, escala: f32) -> Self {
+    pub fn armar(t: &mut Textos, pieza: &Pieza, escala: f32) -> Self {
         let e = f64::from(escala);
         let interno = 2.0 * (GLOBO_MARGEN + BORDE_Y_RELLENO + BOTON_X);
         let max = ((ANCHO_MAX - interno) * e) as f32;
         let titulo = texto::armar_recortado_con_peso(t, &pieza.nombre, ROL, PX, 700.0, escala, max);
         let alto_fila = FILA_Y * 2.0 + (texto::alto_de_linea(&titulo) / e).ceil();
         let mut ancho = texto::caja(&titulo).0 / e;
-        let nota = pieza.filas.is_empty().then(|| {
-            let l = texto::armar_recortado(t, nota, ROL, PX, escala, max);
-            ancho = ancho.max(texto::caja(&l).0 / e);
-            l
-        });
         let visibles = || pieza.filas.iter().take(TOPE_FILAS);
         let espacios: Vec<_> = visibles()
             .map(|f| {
@@ -180,15 +174,14 @@ impl Rotulos {
             .collect();
         let foco = visibles().position(|f| f.foco);
         let w = (ancho + interno).clamp(MIN + 2.0 * GLOBO_MARGEN, ANCHO_MAX);
-        let abajo = if nota.is_some() {
-            alto_fila
+        let abajo = if filas.is_empty() {
+            0.0
         } else {
             ENTRE_BLOQUES + 2.0 * LISTA + filas.len() as f64 * alto_fila
         };
         let h = 2.0 * (GLOBO_MARGEN + BORDE_Y_RELLENO) + alto_fila + abajo;
         Rotulos {
             titulo,
-            nota,
             filas,
             foco,
             columna,
@@ -246,9 +239,6 @@ pub fn pintar_globo(
         texto::dibujar_en(s, l, Affine::translate((x, y)), |_| c, 1.0);
     };
     escribir(s, &r.titulo, en(x0, y0, &r.titulo), p.on_surface);
-    if let Some(l) = &r.nota {
-        escribir(s, l, en(x0, y0 + r.alto_fila, l), p.on_surface_variant);
-    }
     if let Some(ultima) = r.filas.len().checked_sub(1) {
         let (a, b) = (r.fila(0), r.fila(ultima));
         s.fill(
@@ -310,13 +300,13 @@ mod tests {
 
     #[test]
     fn un_globo_corto_mide_lo_mismo_que_un_menu_corto() {
-        let r = Rotulos::armar(&mut Textos::new(), &pieza(&["I"]), "Abrir", 1.0);
+        let r = Rotulos::armar(&mut Textos::new(), &pieza(&["I"]), 1.0);
         assert_eq!(f64::from(r.tam.0), MIN + 2.0 * GLOBO_MARGEN);
     }
 
     #[test]
     fn solo_las_filas_reciben_el_puntero() {
-        let r = Rotulos::armar(&mut Textos::new(), &pieza(&["I", "II"]), "Abrir", 1.0);
+        let r = Rotulos::armar(&mut Textos::new(), &pieza(&["I", "II"]), 1.0);
         let (a, b) = (r.fila(0), r.fila(1));
         assert_eq!(a.y1, b.y0, "sin huecos entre filas");
         assert_eq!(r.fila_en(a.center().x, a.center().y), Some(0));
@@ -327,15 +317,17 @@ mod tests {
 
     #[test]
     fn un_workspace_largo_no_pisa_el_titulo() {
-        let r = Rotulos::armar(&mut Textos::new(), &pieza(&["XXVIII"]), "Abrir", 1.0);
+        let r = Rotulos::armar(&mut Textos::new(), &pieza(&["XXVIII"]), 1.0);
         let ancho = texto::caja(&r.filas[0].0).0;
         assert!(r.columna >= ancho + ENTRE, "{} {ancho}", r.columna);
     }
 
     #[test]
-    fn sin_ventanas_no_hay_filas() {
-        let r = Rotulos::armar(&mut Textos::new(), &pieza(&[]), "Abrir", 1.0);
+    fn sin_ventanas_queda_solo_el_nombre() {
+        let r = Rotulos::armar(&mut Textos::new(), &pieza(&[]), 1.0);
         assert_eq!(r.cuantas(), 0);
         assert_eq!(r.fila_en(50.0, 50.0), None);
+        let h = 2.0 * (GLOBO_MARGEN + BORDE_Y_RELLENO) + r.alto_fila;
+        assert_eq!(f64::from(r.tam.1), h.ceil(), "solo el nombre");
     }
 }

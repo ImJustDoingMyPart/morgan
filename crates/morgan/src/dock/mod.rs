@@ -17,7 +17,6 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use gio::prelude::*;
-use morgan_idioma::tr;
 use morgan_motor::color::Paleta;
 use morgan_motor::vello::peniko::ImageData;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
@@ -89,10 +88,6 @@ fn nombre_de(id: &str) -> Option<String> {
     d.should_show().then(|| d.display_name().to_string())
 }
 
-fn nota() -> String {
-    tr!("Click: abrir").to_owned()
-}
-
 impl Dock {
     pub fn new(hyprland: Hyprland, tema: &Tema, c: &config::Dock) -> Self {
         let (css, opacidad, borde) = tema.actual();
@@ -102,7 +97,6 @@ impl Dock {
             borde,
             mostrar: c.mostrar,
             ocultar: c.ocultar,
-            nota: nota(),
         });
         {
             let t = hilo.clone();
@@ -159,7 +153,6 @@ impl Dock {
         let _ = self.inner.hilo.send(Orden::Config {
             mostrar: c.mostrar,
             ocultar: c.ocultar,
-            nota: nota(),
         });
     }
 

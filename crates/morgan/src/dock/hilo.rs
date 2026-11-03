@@ -67,7 +67,6 @@ pub enum Orden {
     Config {
         mostrar: bool,
         ocultar: bool,
-        nota: String,
     },
 }
 
@@ -84,7 +83,6 @@ pub struct Arranque {
     pub borde: Borde,
     pub mostrar: bool,
     pub ocultar: bool,
-    pub nota: String,
 }
 
 /// Si no hay Wayland o la GPU no abre, el hilo termina: morgan sigue sin dock.
@@ -173,7 +171,6 @@ struct Hilo {
     mostrar: bool,
     ocultar: bool,
     juego: bool,
-    nota: String,
     ventanas: Vec<Ventana>,
     globo: Option<Globo>,
     globo_cerrado: Option<Instant>,
@@ -226,7 +223,6 @@ fn correr(
         mostrar: a.mostrar,
         ocultar: a.ocultar,
         juego: false,
-        nota: a.nota,
         ventanas: Vec::new(),
         globo: None,
         globo_cerrado: None,
@@ -264,10 +260,8 @@ impl Hilo {
             Orden::Config {
                 mostrar,
                 ocultar,
-                nota,
             } => {
                 let cambia = ocultar != self.ocultar;
-                self.nota = nota;
                 self.mostrar = mostrar;
                 self.ocultar = ocultar;
                 // La zona reservada se fija al crear la capa.
@@ -351,7 +345,7 @@ impl Hilo {
             match pieza {
                 Some(p) => {
                     let escala = self.globo.as_ref().map_or(1.0, |g| g.lamina.escala as f32);
-                    let r = Rotulos::armar(&mut self.textos, &p, &self.nota, escala);
+                    let r = Rotulos::armar(&mut self.textos, &p, escala);
                     let tam = r.tam;
                     if let Some(g) = &mut self.globo {
                         if tam != g.rotulos.tam {
@@ -429,7 +423,7 @@ impl Hilo {
         };
         let Some(pieza) = self.datos.piezas.get(p) else { return };
         let escala = v.lamina.escala.max(1);
-        let rotulos = Rotulos::armar(&mut self.textos, pieza, &self.nota, escala as f32);
+        let rotulos = Rotulos::armar(&mut self.textos, pieza, escala as f32);
         let tam = rotulos.tam;
         let tintes = vec![Transicion::new(0.0); rotulos.cuantas()];
         let ancho_salida = i32::try_from(v.lamina.tam.0).unwrap_or(i32::MAX);
