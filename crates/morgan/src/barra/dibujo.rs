@@ -8,20 +8,22 @@
 //!   íconos de 14 cada 24), la privacidad (4 por lado) y la grabación (4 y 6);
 //! - al pasar el puntero o con lo suyo abierto, un paso por el degradé del anillo en 150 ms;
 //!   apretado, al 92 % de su tamaño (suelto, vuelve en 150 ms);
-//! - el globo de ayuda es el de GTK con la hoja de morgan (relleno de 6 y 10, borde de 1, la
-//!   etiqueta con 1 y 4 más, y la sombra).
+//! - el globo de ayuda es el del dock: el marco y las medidas de `forma::menu`.
 
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use morgan_motor::color::{Color, Paleta, con_alfa, mezclar, pincel};
 use morgan_motor::curva::{Transicion, ease_in_out};
-use morgan_motor::forma::sombra;
+use morgan_motor::forma::marco;
+use morgan_motor::forma::menu::{
+    BORDE_Y_RELLENO, FILA_Y, GLOBO_TEXTO_MAX, GLOBO_X, PX as PX_GLOBO, SOMBRA, ancho_globo,
+};
 use morgan_motor::parley::Layout;
-use morgan_motor::texto::{self, Textos, pt};
+use morgan_motor::texto::{self, Estilo, Textos, pt};
 use morgan_motor::vello::Scene;
-use morgan_motor::vello::kurbo::{Affine, BezPath, Point, Rect, RoundedRect, Shape};
-use morgan_motor::vello::peniko::{BlendMode, Fill, ImageBrush, ImageData};
+use morgan_motor::vello::kurbo::{Affine, Point, Rect};
+use morgan_motor::vello::peniko::{Fill, ImageBrush, ImageData};
 
 use super::modelo::{self, Boton};
 use crate::hyprland::Espacios;
@@ -31,7 +33,6 @@ const ROL: u8 = 0;
 const PX: f32 = 14.0;
 const PX_SEPARADOR: f32 = 13.0;
 const PX_GLIFO: f32 = 15.5;
-const PX_GLOBO: f32 = 11.0;
 const ICONO: f64 = 14.0;
 const ENTRE_ICONOS: f64 = 10.0;
 const APRETADO: f32 = 0.92;
@@ -42,11 +43,10 @@ pub const REVELAR: Duration = Duration::from_millis(300);
 const CAMPANA: &str = "󰨝";
 const FLECHA: &str = "󰅁";
 
-/// El globo: borde, relleno del globo y de la etiqueta.
-const GLOBO_X: f64 = 1.0 + 10.0 + 4.0;
-const GLOBO_Y: f64 = 1.0 + 6.0 + 1.0;
-/// Lo que ocupa la sombra (`0 4px 12px`) alrededor del globo: izquierda, arriba, derecha, abajo.
-pub const GLOBO_SOMBRA: [f64; 4] = [12.0, 8.0, 12.0, 16.0];
+/// Lo que ocupa la sombra alrededor del globo, de cada lado.
+pub const GLOBO_SOMBRA: f64 = SOMBRA;
+/// Sin regla de blur propia (es un popup de la barra): casi opaco, o no se lee lo de atrás.
+const GLOBO_OPACIDAD: f32 = 0.95;
 
 /// La imagen va a 14 px lógicos, sea del tamaño que sea (se arma para la escala más alta).
 #[derive(Clone)]
@@ -524,9 +524,25 @@ fn texto_en(s: &mut Scene, l: &Layout<u8>, r: Rect, escala: f64, t: Affine, c: C
     texto::dibujar_en(s, l, t * Affine::translate((x, y)), |_| c, 1.0);
 }
 
-/// El texto de un globo, en píxeles del buffer.
+/// El texto de un globo, en píxeles del buffer: como en el del dock, el primer renglón en negrita.
+/// Lo que no entra baja de renglón: acá no hay otro lugar donde leerlo.
 pub fn armar_globo(t: &mut Textos, texto: &str, escala: f32) -> Layout<u8> {
-    t.armar(&[(texto, ROL)], PX_GLOBO, escala)
+    let corte = texto.find('\n').unwrap_or(texto.len());
+    let (nombre, resto) = texto.split_at(corte);
+    let estilo = |negrita| Estilo {
+        rol: ROL,
+        negrita,
+        cursiva: false,
+        subrayado: false,
+    };
+    let ancho = (GLOBO_TEXTO_MAX * f64::from(escala)) as f32;
+    t.parrafo(
+        &[(nombre, estilo(true)), (resto, estilo(false))],
+        PX_GLOBO,
+        escala,
+        ancho,
+        0,
+    )
 }
 
 /// El globo sin la sombra, en lógicos.
@@ -534,51 +550,27 @@ pub fn globo_caja(l: &Layout<u8>, escala: f32) -> (f64, f64) {
     let e = f64::from(escala);
     let renglones = l.lines().count().max(1) as f64;
     let w = texto::caja(l).0 / e;
-    let h = texto::alto_de_linea(l) * renglones / e;
-    ((w + 2.0 * GLOBO_X).ceil(), (h + 2.0 * GLOBO_Y).ceil())
+    let h = (texto::alto_de_linea(l) * renglones / e).ceil();
+    (ancho_globo(w), h + 2.0 * (BORDE_Y_RELLENO + FILA_Y))
 }
 
 /// El tamaño de la superficie del globo, con la sombra.
 pub fn globo_tam(l: &Layout<u8>, escala: f32) -> (u32, u32) {
     let (w, h) = globo_caja(l, escala);
-    let [i, a, d, b] = GLOBO_SOMBRA;
-    ((w + i + d) as u32, (h + a + b) as u32)
+    ((w + 2.0 * GLOBO_SOMBRA) as u32, (h + 2.0 * GLOBO_SOMBRA) as u32)
 }
 
 pub fn pintar_globo(s: &mut Scene, l: &Layout<u8>, p: &Paleta, escala: f64) {
     s.reset();
     let tr = Affine::scale(escala);
     let (w, h) = globo_caja(l, escala as f32);
-    let [i, a, ..] = GLOBO_SOMBRA;
-    let r = Rect::new(i, a, i + w, a + h);
-    let rr = RoundedRect::from_rect(r, 4.0);
-    // La sombra solo afuera: el fondo es apenas translúcido.
-    let mut afuera = BezPath::new();
-    afuera.extend(r.inflate(20.0, 20.0).path_elements(0.1));
-    afuera.extend(rr.path_elements(0.1));
-    s.push_layer(Fill::EvenOdd, BlendMode::default(), 1.0, tr, &afuera);
-    sombra(s, tr, r, 4.0, [0.0, 0.0, 0.0, 0.5], (0.0, 4.0), 0.0, 12.0);
-    s.pop_layer();
-    // `background-clip: padding-box`: el fondo adentro del borde.
-    let adentro = RoundedRect::from_rect(r.inset(-1.0), 3.0);
-    s.fill(
-        Fill::NonZero,
-        tr,
-        pincel(&opaco(&p.surface_container, 0.95)),
-        None,
-        &adentro,
+    let m = GLOBO_SOMBRA;
+    let r = Rect::new(m, m, m + w, m + h);
+    marco(s, tr, escala, p, GLOBO_OPACIDAD, r);
+    let (x, y) = (
+        (r.x0 + GLOBO_X) * escala,
+        (r.y0 + BORDE_Y_RELLENO + FILA_Y) * escala,
     );
-    let mut borde = BezPath::new();
-    borde.extend(rr.path_elements(0.1));
-    borde.extend(adentro.path_elements(0.1));
-    s.fill(
-        Fill::EvenOdd,
-        tr,
-        pincel(&opaco(&p.primary, 0.4)),
-        None,
-        &borde,
-    );
-    let (x, y) = ((r.x0 + GLOBO_X) * escala, (r.y0 + GLOBO_Y) * escala);
     texto::dibujar_en(
         s,
         l,
@@ -591,6 +583,24 @@ pub fn pintar_globo(s: &mut Scene, l: &Layout<u8>, p: &Paleta, escala: f64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use morgan_motor::forma::menu::GLOBO_MAX;
+
+    #[test]
+    fn un_globo_corto_es_corto() {
+        let l = armar_globo(&mut Textos::new(), "OpenRGB", 1.0);
+        let (w, _) = globo_caja(&l, 1.0);
+        assert_eq!(w, ancho_globo(texto::caja(&l).0));
+        assert!(w < 150.0, "{w}");
+        assert_eq!(l.lines().count(), 1);
+    }
+
+    #[test]
+    fn lo_largo_baja_de_renglon_sin_pasar_el_tope() {
+        let t = "Cachy-Update\nEl sistema está actualizado";
+        let l = armar_globo(&mut Textos::new(), t, 1.0);
+        assert!(globo_caja(&l, 1.0).0 <= GLOBO_MAX);
+        assert_eq!(l.lines().count(), 3, "el nombre y dos de texto");
+    }
 
     #[test]
     fn el_latido_va_y_vuelve() {

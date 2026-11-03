@@ -172,6 +172,20 @@ pub mod menu {
     /// Los alfas del recuadro (`on_surface`) y de la fila bajo el puntero (`primary`).
     pub const TINTE_RECUADRO: f32 = 0.04;
     pub const TINTE_FILA: f32 = 0.14;
+
+    /// El lugar de la sombra alrededor del marco de un globo.
+    pub const SOMBRA: f64 = 8.0;
+    /// Un globo mide lo que su contenido, hasta acá de borde a borde.
+    pub const GLOBO_MAX: f64 = 210.0;
+    /// Del borde de un globo a su texto.
+    pub const GLOBO_X: f64 = BORDE_Y_RELLENO + BOTON_X;
+    /// Lo que le queda al texto en el globo más ancho.
+    pub const GLOBO_TEXTO_MAX: f64 = GLOBO_MAX - 2.0 * GLOBO_X;
+
+    /// El ancho de un globo, de borde a borde, para un contenido de `ancho`.
+    pub fn ancho_globo(ancho: f64) -> f64 {
+        (ancho + 2.0 * GLOBO_X).min(GLOBO_MAX).ceil()
+    }
 }
 
 /// La caja de lo chico y pasajero (el menú de la bandeja, el globo del dock): sin anillo, una línea neutra de 1 px

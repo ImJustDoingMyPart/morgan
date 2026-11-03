@@ -959,10 +959,10 @@ impl Hilo {
             return;
         };
         b.capa.get_popup(popup.xdg_popup());
-        let [izq, arriba, ..] = dibujo::GLOBO_SOMBRA;
+        let m = dibujo::GLOBO_SOMBRA as i32;
         popup
             .xdg_surface()
-            .set_window_geometry(izq as i32, arriba as i32, gw as i32, gh as i32);
+            .set_window_geometry(m, m, gw as i32, gh as i32);
         if let Ok(r) = Region::new(&self.compositor) {
             popup.wl_surface().set_input_region(Some(r.wl_region()));
         }

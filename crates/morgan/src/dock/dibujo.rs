@@ -3,8 +3,8 @@
 
 use morgan_motor::color::{Color, Paleta, con_alfa, pincel};
 use morgan_motor::forma::menu::{
-    BORDE_Y_RELLENO, BOTON_X, ENTRE, ENTRE_BLOQUES, FILA_X, FILA_Y, LISTA, MIN, PX, RADIO_FILA,
-    RADIO_RECUADRO, TINTE_FILA, TINTE_RECUADRO,
+    BORDE_Y_RELLENO, BOTON_X, ENTRE, ENTRE_BLOQUES, FILA_X, FILA_Y, GLOBO_TEXTO_MAX, LISTA, PX,
+    RADIO_FILA, RADIO_RECUADRO, SOMBRA, TINTE_FILA, TINTE_RECUADRO, ancho_globo,
 };
 use morgan_motor::forma::{self, Anillo, Borde, degrade_horizontal, marco, tarjeta};
 use morgan_motor::parley::Layout;
@@ -19,11 +19,7 @@ const RADIO_CELDA: f64 = 6.0;
 const ALTO_PUNTO: f64 = 5.0;
 const ROL: u8 = 0;
 
-/// El lugar de la sombra alrededor de la caja.
-pub const GLOBO_MARGEN: f64 = 8.0;
-/// Lo que ocupa el workspace, si todos son cortos.
-const COLUMNA_MIN: f64 = 24.0;
-const ANCHO_MAX: f64 = 420.0;
+pub const GLOBO_MARGEN: f64 = SOMBRA;
 /// Más ventanas de una app no entran en un globo.
 pub const TOPE_FILAS: usize = 10;
 
@@ -134,7 +130,7 @@ pub struct Rotulos {
     titulo: Layout<u8>,
     filas: Vec<(Layout<u8>, Layout<u8>)>,
     foco: Option<usize>,
-    /// Del inicio del workspace al del título.
+    /// Lo que mide el workspace más largo, más el espacio hasta el título.
     columna: f64,
     alto_fila: f64,
     /// El tamaño de la capa, en lógicos.
@@ -144,8 +140,7 @@ pub struct Rotulos {
 impl Rotulos {
     pub fn armar(t: &mut Textos, pieza: &Pieza, escala: f32) -> Self {
         let e = f64::from(escala);
-        let interno = 2.0 * (GLOBO_MARGEN + BORDE_Y_RELLENO + BOTON_X);
-        let max = ((ANCHO_MAX - interno) * e) as f32;
+        let max = (GLOBO_TEXTO_MAX * e) as f32;
         let titulo = texto::armar_recortado_con_peso(t, &pieza.nombre, ROL, PX, 700.0, escala, max);
         let alto_fila = FILA_Y * 2.0 + (texto::alto_de_linea(&titulo) / e).ceil();
         let mut ancho = texto::caja(&titulo).0 / e;
@@ -159,7 +154,7 @@ impl Rotulos {
         let columna = espacios
             .iter()
             .map(|l| texto::caja(l).0 / e)
-            .fold(COLUMNA_MIN, f64::max)
+            .fold(0.0, f64::max)
             .ceil()
             + ENTRE;
         let libre = max - (columna * e) as f32;
@@ -173,7 +168,7 @@ impl Rotulos {
             })
             .collect();
         let foco = visibles().position(|f| f.foco);
-        let w = (ancho + interno).clamp(MIN + 2.0 * GLOBO_MARGEN, ANCHO_MAX);
+        let w = ancho_globo(ancho) + 2.0 * GLOBO_MARGEN;
         let abajo = if filas.is_empty() {
             0.0
         } else {
@@ -188,6 +183,11 @@ impl Rotulos {
             alto_fila,
             tam: (w.ceil() as u32, h.ceil() as u32),
         }
+    }
+
+    /// Dónde empieza un workspace para quedar centrado en su columna, que empieza en `x`.
+    fn x_espacio(&self, x: f64, l: &Layout<u8>, escala: f64) -> f64 {
+        x + (self.columna - ENTRE - texto::caja(l).0 / escala) / 2.0
     }
 
     pub fn cuantas(&self) -> usize {
@@ -269,7 +269,7 @@ pub fn pintar_globo(
         }
         let x = caja.x0 + FILA_X;
         let color_esp = if r.foco == Some(i) { p.primary } else { p.on_surface_variant };
-        escribir(s, esp, en(x, caja.y0, esp), color_esp);
+        escribir(s, esp, en(r.x_espacio(x, esp, escala), caja.y0, esp), color_esp);
         escribir(s, tit, en(x + r.columna, caja.y0, tit), p.on_surface);
     }
 }
@@ -278,6 +278,7 @@ pub fn pintar_globo(
 mod tests {
     use super::super::modelo::Fila;
     use super::*;
+    use morgan_motor::forma::menu::GLOBO_MAX;
 
     fn pieza(espacios: &[&str]) -> Pieza {
         Pieza {
@@ -299,9 +300,21 @@ mod tests {
     }
 
     #[test]
-    fn un_globo_corto_mide_lo_mismo_que_un_menu_corto() {
-        let r = Rotulos::armar(&mut Textos::new(), &pieza(&["I"]), 1.0);
-        assert_eq!(f64::from(r.tam.0), MIN + 2.0 * GLOBO_MARGEN);
+    fn un_nombre_corto_da_un_globo_corto() {
+        let r = Rotulos::armar(&mut Textos::new(), &pieza(&[]), 1.0);
+        let caja = f64::from(r.tam.0) - 2.0 * GLOBO_MARGEN;
+        assert_eq!(caja, ancho_globo(texto::caja(&r.titulo).0));
+        assert!(caja < 150.0, "{caja}");
+    }
+
+    #[test]
+    fn un_titulo_larguisimo_no_pasa_el_tope() {
+        let mut p = pieza(&["XXVIII"]);
+        p.filas[0].titulo = "Una nota de Obsidian con un nombre muy largo".repeat(4);
+        let r = Rotulos::armar(&mut Textos::new(), &p, 1.0);
+        assert!(f64::from(r.tam.0) <= GLOBO_MAX + 2.0 * GLOBO_MARGEN, "{:?}", r.tam);
+        let x = r.columna + texto::caja(&r.filas[0].1).0;
+        assert!(x <= GLOBO_TEXTO_MAX, "{x}");
     }
 
     #[test]
@@ -316,10 +329,23 @@ mod tests {
     }
 
     #[test]
-    fn un_workspace_largo_no_pisa_el_titulo() {
-        let r = Rotulos::armar(&mut Textos::new(), &pieza(&["XXVIII"]), 1.0);
-        let ancho = texto::caja(&r.filas[0].0).0;
-        assert!(r.columna >= ancho + ENTRE, "{} {ancho}", r.columna);
+    fn la_columna_del_workspace_mide_el_mas_largo() {
+        let mut t = Textos::new();
+        let corto = Rotulos::armar(&mut t, &pieza(&["I"]), 1.0);
+        let ancho = texto::caja(&corto.filas[0].0).0;
+        assert_eq!(corto.columna, ancho.ceil() + ENTRE);
+        let largo = Rotulos::armar(&mut t, &pieza(&["I", "XXVIII"]), 1.0);
+        let ancho = texto::caja(&largo.filas[1].0).0;
+        assert_eq!(largo.columna, ancho.ceil() + ENTRE);
+    }
+
+    #[test]
+    fn el_workspace_queda_centrado_en_su_columna() {
+        let r = Rotulos::armar(&mut Textos::new(), &pieza(&["I", "XXVIII"]), 1.0);
+        let centro = |l: &Layout<u8>| r.x_espacio(0.0, l, 1.0) + texto::caja(l).0 / 2.0;
+        let (a, b) = (centro(&r.filas[0].0), centro(&r.filas[1].0));
+        assert!((a - b).abs() < 1e-6, "{a} {b}");
+        assert!(r.x_espacio(0.0, &r.filas[1].0, 1.0) >= 0.0);
     }
 
     #[test]
