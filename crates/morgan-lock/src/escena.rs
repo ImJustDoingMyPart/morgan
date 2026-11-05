@@ -150,6 +150,80 @@ pub enum Cambio {
         fecha: String,
     },
     Aviso(Option<String>),
+    /// El contenido pasa a esta salida (el puntero entró a su superficie, o el teclado
+    /// mientras el puntero no se movió).
+    Duena {
+        id: u32,
+        t: i64,
+    },
+}
+
+/// Cuánto se ve el contenido (reloj, fecha, aviso, campo) en una salida. Con varias, solo la
+/// del puntero lo muestra; las otras, el fondo. Entra y sale con los dos fundidos del bloqueo,
+/// y un cambio a mitad de camino sigue desde el valor que había: sin saltos.
+#[derive(Clone, Copy, Debug)]
+pub struct Presencia {
+    de: f32,
+    a: f32,
+    t0: i64,
+}
+
+impl Presencia {
+    fn fija(v: f32) -> Self {
+        Presencia { de: v, a: v, t0: 0 }
+    }
+
+    fn dura(&self) -> i64 {
+        if self.a > self.de {
+            ENTRADA_MS * MS
+        } else {
+            SALIDA_MS * MS
+        }
+    }
+
+    pub fn valor(&self, t: i64) -> f32 {
+        if self.a == self.de {
+            return self.a;
+        }
+        let f = seg(t - self.t0) / seg(self.dura());
+        // Los extremos, exactos: la curva da 1e-7 de más o de menos.
+        if f <= 0.0 {
+            return self.de;
+        }
+        if f >= 1.0 {
+            return self.a;
+        }
+        let k = if self.a > self.de {
+            curva_entra(f)
+        } else {
+            curva_sale(f)
+        };
+        self.de + (self.a - self.de) * k
+    }
+
+    fn hacia(&mut self, a: f32, t: i64) {
+        if a != self.a {
+            *self = Presencia {
+                de: self.valor(t),
+                a,
+                t0: t,
+            };
+        }
+    }
+
+    /// Con margen, como los fundidos de `animando`: el último cuadro llega a su valor final.
+    fn moviendo(&self, t: i64) -> bool {
+        self.a != self.de && t - self.t0 < self.dura() + 50 * MS
+    }
+}
+
+/// Los dos fundidos de la hoja de `morgan-lock`: el de entrada y el de salida.
+fn curva_entra(f: f32) -> f32 {
+    bezier(0.5, 1.0, 0.89, 1.0, f)
+}
+
+fn curva_sale(f: f32) -> f32 {
+    bezier(0.33, 1.0, 0.68, 1.0, f)
 }
 
 pub struct Estado {
@@ -179,6 +253,10 @@ pub struct Estado {
     /// Las escrituras que no son la onda.
     pub fila: Caracteres,
     t_cuadro: i64,
+    /// La salida que muestra el contenido. La primera que aparece, hasta que el puntero diga
+    /// otra cosa.
+    duena: Option<u32>,
+    presencias: Vec<(u32, Presencia)>,
 }
 
 impl Estado {
@@ -217,6 +295,74 @@ impl Estado {
             version_textos: 0,
             fila: Caracteres::default(),
             t_cuadro: 0,
+            duena: None,
+            presencias: Vec::new(),
+        }
+    }
+
+    /// Una superficie nueva. La primera es la dueña desde ya (con una sola salida, todo como
+    /// siempre); las demás empiezan sin contenido, salvo que ya la hayan nombrado dueña.
+    pub fn salida_nueva(&mut self, id: u32, t: i64) {
+        if self.presencias.iter().any(|(i, _)| *i == id) {
+            return;
+        }
+        if self.presencias.is_empty() {
+            self.duena = Some(id);
+            self.presencias.push((id, Presencia::fija(1.0)));
+            return;
+        }
+        self.presencias.push((id, Presencia::fija(0.0)));
+        match self.duena {
+            // La nombraron antes de que tuviera superficie: ahora el contenido pasa.
+            Some(d) if d == id => {
+                for (i, p) in &mut self.presencias {
+                    p.hacia(if *i == id { 1.0 } else { 0.0 }, t);
+                }
+            }
+            Some(_) => {}
+            None => self.nombrar(id, t),
+        }
+    }
+
+    /// Se fue una salida. Si era la dueña, el contenido pasa a la primera que queda (el
+    /// principal puede nombrar otra después: la del teclado).
+    pub fn salida_quitada(&mut self, id: u32, t: i64) {
+        self.presencias.retain(|(i, _)| *i != id);
+        if self.duena == Some(id) {
+            self.duena = None;
+            if let Some(&(otra, _)) = self.presencias.first() {
+                self.nombrar(otra, t);
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub fn duena(&self) -> Option<u32> {
+        self.duena
+    }
+
+    /// Una salida que este modelo no conoce muestra todo: un desfase entre hilos no puede
+    /// dejar la pantalla sin campo.
+    pub fn presencia(&self, id: u32, t: i64) -> f32 {
+        self.presencias
+            .iter()
+            .find(|(i, _)| *i == id)
+            .map_or(1.0, |(_, p)| p.valor(t))
+    }
+
+    fn nombrar(&mut self, id: u32, t: i64) {
+        if self.duena == Some(id) {
+            return;
+        }
+        let conocida = self.presencias.iter().any(|(i, _)| *i == id);
+        // Una dueña que todavía no tiene superficie: la toma cuando llegue (`salida_nueva`).
+        // Hasta entonces, la anterior no suelta el contenido.
+        self.duena = Some(id);
+        if !conocida {
+            return;
+        }
+        for (i, p) in &mut self.presencias {
+            p.hacia(if *i == id { 1.0 } else { 0.0 }, t);
         }
     }
 
@@ -304,6 +450,7 @@ impl Estado {
                 self.aviso = a;
                 self.version_textos += 1;
             }
+            Cambio::Duena { id, t } => self.nombrar(id, t),
         }
     }
 
@@ -318,13 +465,11 @@ impl Estado {
     /// La opacidad de todo: los dos fundidos de la hoja de `morgan-lock`.
     pub fn opacidad(&self, t: i64) -> f32 {
         let entra = match self.t_entrada {
-            Some(t0) => bezier(0.5, 1.0, 0.89, 1.0, seg(t - t0) / seg(ENTRADA_MS * MS)),
+            Some(t0) => curva_entra(seg(t - t0) / seg(ENTRADA_MS * MS)),
             None => 0.0,
         };
         let sale = match self.t_salida() {
-            Some(t0) if t >= t0 => {
-                1.0 - bezier(0.33, 1.0, 0.68, 1.0, seg(t - t0) / seg(SALIDA_MS * MS))
-            }
+            Some(t0) if t >= t0 => 1.0 - curva_sale(seg(t - t0) / seg(SALIDA_MS * MS)),
             _ => 1.0,
         };
         entra * sale
@@ -430,6 +575,7 @@ impl Estado {
             || t - self.anillo.t0 < self.anillo.dura
             || t - self.visible.t0 < self.visible.dura
             || t - self.t_fallo < 1500 * MS
+            || self.presencias.iter().any(|(_, p)| p.moviendo(t))
     }
 }
 
@@ -485,6 +631,87 @@ mod tests {
             e.animando(t + (DESTELLO_MS + SALIDA_MS) * MS),
             "el último cuadro, en cero"
         );
+    }
+
+    #[test]
+    fn con_una_salida_el_contenido_esta_siempre() {
+        let mut e = estado();
+        e.salida_nueva(7, 0);
+        assert_eq!(e.duena(), Some(7));
+        assert_eq!(
+            e.presencia(7, 0),
+            1.0,
+            "sin fundido propio: lo cubre el de entrada"
+        );
+        e.aplicar(Cambio::Duena { id: 7, t: 100 * MS });
+        assert_eq!(e.presencia(7, 100 * MS), 1.0);
+        e.t_entrada = Some(0);
+        e.avanzar(10_000 * MS);
+        assert!(!e.animando(10_000 * MS));
+    }
+
+    #[test]
+    fn el_contenido_se_va_con_el_puntero_a_otra_salida() {
+        let mut e = estado();
+        e.salida_nueva(1, 0);
+        e.salida_nueva(2, 0);
+        assert_eq!(e.presencia(2, 0), 0.0, "la segunda empieza sin contenido");
+        let t = 1_000 * MS;
+        e.aplicar(Cambio::Duena { id: 2, t });
+        assert_eq!(e.duena(), Some(2));
+        assert!(e.animando(t + 100 * MS));
+        let a = |e: &Estado, ms| (e.presencia(1, t + ms * MS), e.presencia(2, t + ms * MS));
+        assert_eq!(a(&e, 0), (1.0, 0.0));
+        let (uno, dos) = a(&e, 100);
+        assert!(uno < 1.0 && dos > 0.0, "a mitad: las dos a medias");
+        assert_eq!(a(&e, SALIDA_MS.max(ENTRADA_MS)), (0.0, 1.0));
+        e.t_entrada = Some(0);
+        e.avanzar(t + 1_000 * MS);
+        assert!(!e.animando(t + 1_000 * MS));
+    }
+
+    #[test]
+    fn ida_y_vuelta_rapida_no_salta() {
+        let mut e = estado();
+        e.salida_nueva(1, 0);
+        e.salida_nueva(2, 0);
+        let t = 1_000 * MS;
+        e.aplicar(Cambio::Duena { id: 2, t });
+        let vuelta = t + 60 * MS;
+        let antes = (e.presencia(1, vuelta), e.presencia(2, vuelta));
+        e.aplicar(Cambio::Duena { id: 1, t: vuelta });
+        let despues = (e.presencia(1, vuelta), e.presencia(2, vuelta));
+        assert!((antes.0 - despues.0).abs() < 1e-6 && (antes.1 - despues.1).abs() < 1e-6);
+        let fin = vuelta + 1_000 * MS;
+        assert_eq!((e.presencia(1, fin), e.presencia(2, fin)), (1.0, 0.0));
+    }
+
+    #[test]
+    fn una_duena_sin_superficie_la_toma_al_llegar() {
+        let mut e = estado();
+        e.salida_nueva(1, 0);
+        e.aplicar(Cambio::Duena { id: 2, t: 0 });
+        assert_eq!(
+            e.presencia(1, 500 * MS),
+            1.0,
+            "la anterior no suelta todavía"
+        );
+        e.salida_nueva(2, 1_000 * MS);
+        let fin = 3_000 * MS;
+        assert_eq!((e.presencia(1, fin), e.presencia(2, fin)), (0.0, 1.0));
+    }
+
+    #[test]
+    fn si_se_va_la_duena_nadie_queda_sin_campo() {
+        let mut e = estado();
+        e.salida_nueva(1, 0);
+        e.salida_nueva(2, 0);
+        e.salida_quitada(1, 0);
+        assert_eq!(e.duena(), Some(2), "pasa sola a la que queda");
+        assert_eq!(e.presencia(2, 1_000 * MS), 1.0);
+        e.salida_quitada(2, 0);
+        assert_eq!(e.duena(), None);
+        assert_eq!(e.presencia(99, 0), 1.0, "una desconocida muestra todo");
     }
 
     #[test]

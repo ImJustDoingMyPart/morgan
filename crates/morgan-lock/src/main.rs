@@ -212,6 +212,9 @@ fn main() -> ExitCode {
         reloj: None,
         cruzado,
         salida: ExitCode::SUCCESS,
+        duena: None,
+        puntero_visto: false,
+        con_teclado: None,
     };
 
     match app.bloqueos.lock(&qh) {
@@ -280,6 +283,11 @@ struct App {
     reloj: Option<RegistrationToken>,
     cruzado: bool,
     salida: ExitCode,
+    /// La superficie que muestra el contenido (`escena::Presencia`): la del puntero. Mientras
+    /// el puntero no entró a ninguna, la del teclado.
+    duena: Option<u32>,
+    puntero_visto: bool,
+    con_teclado: Option<u32>,
 }
 
 impl App {
@@ -299,6 +307,20 @@ impl App {
             tam: (0, 0),
             escala: 1,
         });
+    }
+
+    fn id_de(&self, wl: &wl_surface::WlSurface) -> Option<u32> {
+        self.superficies
+            .iter()
+            .find(|s| s.lock.wl_surface() == wl)
+            .map(|s| s.id)
+    }
+
+    fn nombrar(&mut self, id: u32) {
+        if self.duena != Some(id) {
+            self.duena = Some(id);
+            self.pintor.cambio(Cambio::Duena { id, t: ahora() });
+        }
     }
 
     fn mandar_superficie(&self, i: usize) {
@@ -774,6 +796,19 @@ impl OutputHandler for App {
             listo: tx,
         });
         let _ = rx.recv_timeout(Duration::from_secs(1));
+        if self.con_teclado == Some(s.id) {
+            self.con_teclado = None;
+        }
+        // Si se fue la del contenido, pasa a la del teclado, o a cualquiera.
+        if self.duena == Some(s.id) {
+            self.duena = None;
+            if let Some(id) = self
+                .con_teclado
+                .or_else(|| self.superficies.first().map(|s| s.id))
+            {
+                self.nombrar(id);
+            }
+        }
         drop(s);
     }
 }
@@ -833,16 +868,24 @@ impl SeatHandler for App {
 }
 
 impl KeyboardHandler for App {
+    /// El compositor le da el teclado a la superficie de la salida enfocada: hasta que el
+    /// puntero entre a alguna, el contenido va ahí.
     fn enter(
         &mut self,
         _: &Connection,
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
-        _: &wl_surface::WlSurface,
+        wl: &wl_surface::WlSurface,
         _: u32,
         _: &[u32],
         _: &[Keysym],
     ) {
+        self.con_teclado = self.id_de(wl);
+        if !self.puntero_visto
+            && let Some(id) = self.con_teclado
+        {
+            self.nombrar(id);
+        }
     }
 
     fn leave(
@@ -920,6 +963,11 @@ impl PointerHandler for App {
         for e in eventos {
             if let PointerEventKind::Enter { serial } = e.kind {
                 puntero.set_cursor(serial, None, 0, 0);
+                // El contenido sigue al puntero (`escena::Presencia`).
+                if let Some(id) = self.id_de(&e.surface) {
+                    self.puntero_visto = true;
+                    self.nombrar(id);
+                }
             }
         }
     }

@@ -138,6 +138,7 @@ pub fn pintar(
     fondo: Option<&Fondo>,
     (ancho, alto): (u32, u32),
     escala: f64,
+    presencia: f32,
     t: i64,
 ) {
     s.reset();
@@ -174,6 +175,22 @@ pub fn pintar(
             None,
             &todo,
         ),
+    }
+
+    // Lo de encima del fondo solo en la salida del puntero (`Presencia`).
+    if presencia <= 0.001 {
+        s.pop_layer();
+        return;
+    }
+    let capa = presencia < 0.999;
+    if capa {
+        s.push_layer(
+            Fill::NonZero,
+            BlendMode::default(),
+            presencia,
+            Affine::IDENTITY,
+            &todo,
+        );
     }
 
     let (cx, cy) = (w * escala / 2.0, h * escala / 2.0);
@@ -213,6 +230,9 @@ pub fn pintar(
         ));
     campo(s, e, rot, textos, origen, escala as f32, t);
 
+    if capa {
+        s.pop_layer();
+    }
     s.pop_layer();
 }
 

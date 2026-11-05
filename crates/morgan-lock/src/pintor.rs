@@ -152,10 +152,12 @@ impl Pintor {
                     s.rotulos = None;
                 } else if let Some(s) = self.nueva(id, wl, ancho, alto, escala) {
                     self.salidas.push(s);
+                    self.estado.salida_nueva(id, ahora());
                 }
             }
             Orden::Quitar { id, listo } => {
                 self.salidas.retain(|s| s.id != id);
+                self.estado.salida_quitada(id, ahora());
                 let _ = listo.send(());
             }
             Orden::Cambio(c) => {
@@ -243,6 +245,7 @@ impl Pintor {
             fondo.as_ref(),
             (s.ancho, s.alto),
             s.escala as f64,
+            estado.presencia(s.id, t),
             t,
         );
 
@@ -343,6 +346,7 @@ mod tests {
             &mut textos,
             fondo.as_ref(),
             (w, h),
+            1.0,
             1.0,
             t,
         );
