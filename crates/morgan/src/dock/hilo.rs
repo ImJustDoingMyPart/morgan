@@ -75,6 +75,8 @@ pub enum Evento {
     Click(String),
     Nueva(String),
     Enfocar(String),
+    /// Se abrió o se cerró el globo: mientras está, los títulos importan.
+    Globo(bool),
 }
 
 pub struct Arranque {
@@ -283,7 +285,9 @@ impl Hilo {
     }
 
     fn quitar_capas(&mut self) {
-        self.globo = None;
+        if self.globo.take().is_some() {
+            let _ = self.eventos.send_blocking(Evento::Globo(false));
+        }
         self.ventanas.clear();
     }
 
@@ -450,6 +454,9 @@ impl Hilo {
         capa.commit();
         let mut lamina = Lamina::new(tam);
         lamina.escala = escala;
+        if self.globo.is_none() {
+            let _ = self.eventos.send_blocking(Evento::Globo(true));
+        }
         // El anterior se va recién acá: reemplazarlo no deja un cuadro sin globo.
         self.globo = Some(Globo {
             lamina,
@@ -465,6 +472,7 @@ impl Hilo {
     fn cerrar_globo(&mut self) {
         if self.globo.take().is_some() {
             self.globo_cerrado = Some(Instant::now());
+            let _ = self.eventos.send_blocking(Evento::Globo(false));
             let _ = self.conn.flush();
         }
         self.programar_ocultar();

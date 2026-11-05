@@ -16,19 +16,14 @@ use morgan_motor::vello::peniko::{Fill, ImageData};
 use super::modelo::{ALTO_MARCAS, Disposicion, ICONO, Marca, Pieza, marcas_en};
 
 const RADIO_CELDA: f64 = 6.0;
+/// El de `forma::tarjeta`.
+const RADIO_TARJETA: f64 = 4.0;
 const ALTO_PUNTO: f64 = 5.0;
 const ROL: u8 = 0;
 
 pub const GLOBO_MARGEN: f64 = SOMBRA;
 /// Más ventanas de una app no entran en un globo.
 pub const TOPE_FILAS: usize = 10;
-
-/// El fondo deja ver más que las otras superficies: está siempre a la vista, y lo que hay atrás
-/// es el fondo de pantalla. Sobre el 0,5 de `ignore_alpha` (la regla de la capa), o se queda
-/// sin blur.
-fn opacidad_isla(opacidad: f32) -> f32 {
-    (opacidad * 0.7).max(0.55)
-}
 
 /// `arriba`: cuánto de la isla ya subió, de 0 (afuera, abajo) a 1.
 #[allow(clippy::too_many_arguments)]
@@ -51,7 +46,15 @@ pub fn pintar_dock(
     }
     let bajar = (1.0 - arriba) * f64::from(alto);
     let tr = Affine::scale(escala) * Affine::translate((0.0, bajar));
-    tarjeta(s, tr, p, opacidad_isla(opacidad), borde, isla, Anillo::Bicolor);
+    // De `tarjeta`, solo el anillo y lo de afuera: el fondo es el mismo de la barra.
+    tarjeta(s, tr, p, 0.0, borde, isla, Anillo::Bicolor);
+    s.fill(
+        Fill::NonZero,
+        tr,
+        pincel(&con_alfa(&p.surface, p.surface[3] * opacidad)),
+        None,
+        &RoundedRect::from_rect(isla, RADIO_TARJETA),
+    );
     if let Some(x) = d.raya {
         let y0 = d.celdas[0].y0 + 8.0;
         let y1 = d.celdas[0].y1 - 8.0;

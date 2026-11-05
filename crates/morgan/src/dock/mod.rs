@@ -28,15 +28,7 @@ use crate::tema::Tema;
 use hilo::{Arranque, Datos, Evento, Orden};
 use modelo::{Abierta, Conocida, Contador, Pieza};
 
-/// Los eventos de Hyprland tras los que las ventanas pueden ser otras. Se agrupan: una ráfaga
-/// (una terminal que cambia el título sin parar) es una sola lectura.
-const EVENTOS: &[&str] = &[
-    "openwindow",
-    "closewindow",
-    "movewindowv2",
-    "windowtitlev2",
-    "activewindowv2",
-];
+/// Se agrupan: una ráfaga de eventos es una sola lectura.
 const AGRUPAR: Duration = Duration::from_millis(80);
 const LADO_ICONO: u32 = modelo::ICONO as u32;
 
@@ -57,6 +49,7 @@ struct Inner {
     apps: RefCell<HashMap<String, Conocida>>,
     iconos: RefCell<HashMap<String, ImageData>>,
     programado: Cell<bool>,
+    globo_abierto: Cell<bool>,
     escuchar: RefCell<Option<glib::JoinHandle<()>>>,
 }
 
@@ -119,14 +112,15 @@ impl Dock {
                 apps: RefCell::default(),
                 iconos: RefCell::default(),
                 programado: Cell::new(false),
+                globo_abierto: Cell::new(false),
                 escuchar: RefCell::default(),
             }),
         };
 
         let d = dock.clone();
+        let filtro = RefCell::new(modelo::Filtro::default());
         hyprland.al_evento(move |linea| {
-            let nombre = linea.split_once(">>").map_or("", |(n, _)| n);
-            if EVENTOS.contains(&nombre) {
+            if filtro.borrow_mut().importa(linea, d.inner.globo_abierto.get()) {
                 d.programar();
             }
         });
@@ -280,6 +274,13 @@ impl Dock {
             }
             Evento::Nueva(clave) => abrir(&clave),
             Evento::Enfocar(d) => self.enfocar(d),
+            // Abre con los títulos de la última lectura: se ponen al día enseguida.
+            Evento::Globo(abierto) => {
+                self.inner.globo_abierto.set(abierto);
+                if abierto {
+                    self.programar();
+                }
+            }
         }
     }
 

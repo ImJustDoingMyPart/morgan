@@ -305,6 +305,35 @@ impl Contador {
     }
 }
 
+/// Qué eventos de Hyprland obligan a releer las ventanas. Los títulos solo se ven en el globo: una
+/// terminal que cambia el suyo varias veces por segundo no despierta a nadie mientras esté
+/// cerrado. Hyprland repite `activewindowv2` con cada título de la ventana enfocada: sin cambio
+/// de ventana, no cuenta.
+#[derive(Debug, Default)]
+pub struct Filtro {
+    activa: Option<String>,
+}
+
+impl Filtro {
+    pub fn importa(&mut self, linea: &str, globo_abierto: bool) -> bool {
+        let Some((nombre, datos)) = linea.split_once(">>") else {
+            return false;
+        };
+        match nombre {
+            "openwindow" | "closewindow" | "movewindowv2" => true,
+            "windowtitlev2" => globo_abierto,
+            "activewindowv2" => {
+                let cambio = self.activa.as_deref() != Some(datos);
+                if cambio {
+                    self.activa = Some(datos.to_owned());
+                }
+                cambio
+            }
+            _ => false,
+        }
+    }
+}
+
 /// Un booleano de `j/getoption`. Si no se entiende, apagado: el valor de fábrica.
 pub fn opcion_activa(json: &str) -> bool {
     #[derive(Deserialize)]
@@ -547,6 +576,21 @@ mod tests {
         assert!(c.nuevas(&v).is_empty());
         v.remove(0);
         assert!(c.nuevas(&v).is_empty(), "cerrar no suma");
+    }
+
+    #[test]
+    fn un_titulo_que_cambia_no_despierta_con_el_globo_cerrado() {
+        let mut f = Filtro::default();
+        assert!(f.importa("activewindowv2>>abc", false), "la primera ventana");
+        assert!(!f.importa("windowtitlev2>>abc,uno", false));
+        assert!(!f.importa("activewindowv2>>abc", false), "repetido por el título");
+        assert!(f.importa("windowtitlev2>>abc,dos", true), "con el globo se ve");
+        assert!(f.importa("activewindowv2>>def", false), "otra ventana");
+        assert!(f.importa("openwindow>>x,1,kitty,t", false));
+        assert!(f.importa("closewindow>>x", false));
+        assert!(f.importa("movewindowv2>>x,2,2", false));
+        assert!(!f.importa("focusedmonv2>>DP-3,1", false));
+        assert!(!f.importa("sin formato", false));
     }
 
     #[test]
