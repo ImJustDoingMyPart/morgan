@@ -303,7 +303,7 @@ impl Dispatch<wl_callback::WlCallback, u32> for Pintor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::escena::{MS, Paleta};
+    use crate::escena::MS;
     use morgan_ipc::bloqueo::Bloqueo;
 
     /// Una pantalla entera sin compositor, para mirarla: con un juego abierto no se puede
@@ -317,13 +317,11 @@ mod tests {
     fn captura_sin_compositor() {
         let ruta = std::env::var_os("MORGAN_LOCK_CAPTURA").expect("MORGAN_LOCK_CAPTURA");
         let mut gpu = Gpu::sin_display("morgan-lock");
-        let css = crate::config_dir()
-            .and_then(|d| std::fs::read_to_string(d.join("morgan/theme.css")).ok())
-            .unwrap_or_default();
-        let mut e = Estado::new(Paleta::desde_css(&css), Bloqueo::default());
+        let rutas = crate::perfil::Rutas::del_home().expect("HOME");
+        let mut e = Estado::new(crate::perfil::paleta(&rutas.tema), Bloqueo::default());
         e.borde = match std::env::var("MORGAN_LOCK_SOMBRA") {
             Ok(id) => crate::escena::Borde::de(&id),
-            Err(_) => crate::estilo().1,
+            Err(_) => crate::perfil::estilo(&rutas.config).1,
         };
         e.aplicar(Cambio::Reloj {
             hora: "21".into(),
@@ -333,7 +331,7 @@ mod tests {
         let t = 10_000 * MS;
         e.t_entrada = Some(0);
         e.avanzar(t);
-        let fondo = crate::cargar_fondo();
+        let fondo = crate::perfil::cargar_fondo(&rutas.fondo);
         let mut textos = Textos::new();
         let mut rot = Rotulos::armar(&mut textos, &e, 1.0);
         sombras(&mut gpu, &mut rot, 1.0);

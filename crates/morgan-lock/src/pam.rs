@@ -6,7 +6,8 @@
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::path::Path;
 use std::ptr;
-use std::sync::atomic::{Ordering, compiler_fence};
+
+use morgan_lock::clave::{Secreto, borrar};
 
 const PAM_SUCCESS: c_int = 0;
 const PAM_BUF_ERR: c_int = 5;
@@ -87,34 +88,6 @@ unsafe extern "C" {
     ) -> c_int;
 }
 
-/// Bytes que se pisan con ceros al soltarse (la contraseña).
-pub struct Secreto(Vec<u8>);
-
-impl Secreto {
-    pub fn new(texto: String) -> Self {
-        Secreto(texto.into_bytes())
-    }
-}
-
-impl Drop for Secreto {
-    fn drop(&mut self) {
-        borrar(&mut self.0);
-    }
-}
-
-/// Pisa con ceros todo lo reservado, no solo lo usado: una escritura volátil por byte, que
-/// el compilador no puede sacar aunque nadie lea después.
-fn borrar(v: &mut Vec<u8>) {
-    let cap = v.capacity();
-    let p = v.as_mut_ptr();
-    for i in 0..cap {
-        // SAFETY: `i < capacity`, dentro de la reserva del Vec.
-        unsafe { ptr::write_volatile(p.add(i), 0) };
-    }
-    compiler_fence(Ordering::SeqCst);
-    v.clear();
-}
-
 #[derive(Debug, PartialEq)]
 pub enum Resultado {
     Bien,
@@ -165,13 +138,13 @@ pub fn autenticar(servicio: &str, usuario: &str, clave: Secreto) -> Resultado {
     let (Ok(c_servicio), Ok(c_usuario)) = (CString::new(servicio), CString::new(usuario)) else {
         return Resultado::Error("servicio o usuario con nul".into());
     };
-    if clave.0.contains(&0) {
+    if clave.bytes().contains(&0) {
         return Resultado::Fallo(Vec::new());
     }
     let mut datos = Datos {
         clave: {
-            let mut v = Vec::with_capacity(clave.0.len() + 1);
-            v.extend_from_slice(&clave.0);
+            let mut v = Vec::with_capacity(clave.bytes().len() + 1);
+            v.extend_from_slice(clave.bytes());
             v.push(0);
             v
         },

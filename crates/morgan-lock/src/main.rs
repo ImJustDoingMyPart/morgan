@@ -9,21 +9,10 @@
 //! (por el suyo) y el estado; el de render (`pintor.rs`) dibuja con vello y anima solo, así
 //! que una traba del principal no congela la animación.
 
-mod caracteres;
-mod clave;
-mod dibujo;
-mod escena;
-mod fondo;
-mod hundido;
 mod logind;
 mod pam;
-mod pintor;
-mod sombra;
 mod xray;
 
-pub(crate) use morgan_motor::texto;
-
-use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -47,20 +36,20 @@ use smithay_client_toolkit::session_lock::{
     SessionLockSurfaceConfigure,
 };
 use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
-use vello::peniko::{Blob, ImageAlphaType, ImageData, ImageFormat};
 use wayland_client::globals::registry_queue_init;
 use wayland_client::protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface};
 use wayland_client::{Connection, QueueHandle};
 
 use morgan_ipc::bloqueo::Bloqueo;
 
-use crate::clave::Clave;
-use crate::escena::{
-    Borde, Cambio, DESTELLO_MS, ENTRADA_MS, Estado, FALLO_MS, Paleta, SALIDA_MS, ahora,
-};
 use crate::logind::Logind;
 use crate::pam::Resultado;
-use crate::pintor::{Hilo, Orden};
+use morgan_lock::clave::Clave;
+use morgan_lock::escena::{
+    Borde, Cambio, DESTELLO_MS, ENTRADA_MS, Estado, FALLO_MS, Paleta, SALIDA_MS, ahora,
+};
+use morgan_lock::perfil::{self, Rutas};
+use morgan_lock::pintor::{self, Hilo, Orden};
 
 struct Opciones {
     servicio: String,
@@ -150,14 +139,19 @@ fn main() -> ExitCode {
 
     // El fondo se decodifica y desenfoca en paralelo con la GPU; el render lo espera antes
     // del primer cuadro.
-    let fondo = std::thread::spawn(cargar_fondo);
-    let paleta = Paleta::desde_css(
-        &config_dir()
-            .map(|d| d.join("morgan/theme.css"))
-            .and_then(|p| std::fs::read_to_string(p).ok())
-            .unwrap_or_default(),
-    );
-    let (estilo, borde) = estilo();
+    let rutas = Rutas::del_home();
+    let fondo = {
+        let ruta = rutas.as_ref().map(|r| r.fondo.clone());
+        std::thread::spawn(move || ruta.and_then(|r| perfil::cargar_fondo(&r)))
+    };
+    let paleta = rutas
+        .as_ref()
+        .map(|r| perfil::paleta(&r.tema))
+        .unwrap_or_else(|| Paleta::desde_css(""));
+    let (estilo, borde) = rutas
+        .as_ref()
+        .map(|r| perfil::estilo(&r.config))
+        .unwrap_or((Bloqueo::default(), Borde::Sombra));
 
     let logind = o.logind.then(|| lanzar_logind(avisos.clone()));
     let session_lock_state = SessionLockState::new(&globales, &qh);
@@ -473,7 +467,7 @@ impl App {
     /// Llamarlo de nuevo (al despertar: el monotónico no corre suspendido) reemplaza al
     /// pendiente.
     fn reloj(&mut self) {
-        let (hora, minutos, fecha, falta) = ahora_local();
+        let (hora, minutos, fecha, falta) = perfil::ahora_local();
         self.pintor.cambio(Cambio::Reloj {
             hora,
             minutos,
@@ -490,111 +484,6 @@ impl App {
                 TimeoutAction::Drop
             })
             .ok();
-    }
-}
-
-/// Hora, minutos, fecha («jueves 22 de octubre») y lo que falta para el próximo minuto.
-fn ahora_local() -> (String, String, String, Duration) {
-    let mut ts = libc::timespec {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
-    // SAFETY: punteros a structs locales, del tamaño que piden.
-    let tm = unsafe {
-        libc::clock_gettime(libc::CLOCK_REALTIME, &mut ts);
-        let mut tm: libc::tm = std::mem::zeroed();
-        libc::localtime_r(&ts.tv_sec, &mut tm);
-        tm
-    };
-    let formato = |f: &std::ffi::CStr| {
-        let mut buf = [0u8; 128];
-        // SAFETY: `buf` tiene el tamaño que se pasa; `tm` salió de localtime_r.
-        let n = unsafe { libc::strftime(buf.as_mut_ptr().cast(), buf.len(), f.as_ptr(), &tm) };
-        String::from_utf8_lossy(&buf[..n]).into_owned()
-    };
-    let falta = 60_000 - (tm.tm_sec as u64 * 1000 + ts.tv_nsec as u64 / 1_000_000).min(59_999);
-    (
-        formato(c"%H"),
-        formato(c"%M"),
-        formato(c"%A %-d de %B"),
-        Duration::from_millis(falta.max(1)),
-    )
-}
-
-fn cargar_fondo() -> Option<dibujo::Fondo> {
-    let ruta = std::env::var_os("XDG_STATE_HOME")
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))?
-        .join("wallpaper-lock.png");
-    let img = match fondo::cargar(&ruta) {
-        Ok(i) => i,
-        Err(e) => {
-            eprintln!("morgan-lock: {}: {e}", ruta.display());
-            return None;
-        }
-    };
-    // La imagen grande ya se soltó: que glibc devuelva esa memoria.
-    // SAFETY: sin argumentos que validar; solo recorta el heap.
-    unsafe { libc::malloc_trim(0) };
-    Some(dibujo::Fondo {
-        imagen: ImageData {
-            data: Blob::new(std::sync::Arc::new(img.pixeles)),
-            format: ImageFormat::Rgba8,
-            alpha_type: ImageAlphaType::Alpha,
-            width: img.ancho,
-            height: img.alto,
-        },
-        achicada: img.achicada as f64,
-    })
-}
-
-fn config_dir() -> Option<PathBuf> {
-    std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
-}
-
-/// `[lock]` de la config de morgan, y la sombra de `[appearance]`. Cualquier problema (sin
-/// archivo, TOML roto, un valor desconocido) deja los defaults y bloquea igual: la config no
-/// puede impedir el bloqueo.
-fn estilo() -> (Bloqueo, Borde) {
-    let Some(ruta) = config_dir().map(|d| d.join("morgan/config.toml")) else {
-        return (Bloqueo::default(), Borde::Sombra);
-    };
-    let Ok(texto) = std::fs::read_to_string(&ruta) else {
-        return (Bloqueo::default(), Borde::Sombra);
-    };
-    let estilo = leer_estilo(&texto).unwrap_or_else(|e| {
-        eprintln!(
-            "morgan-lock: {}: [lock]: {e}; con los valores de fábrica",
-            ruta.display()
-        );
-        Bloqueo::default()
-    });
-    (estilo, leer_borde(&texto))
-}
-
-/// `[appearance] shadow`: la misma que la de las ventanas y los paneles de morgan.
-fn leer_borde(texto: &str) -> Borde {
-    let tabla: toml::Table = texto.parse().unwrap_or_default();
-    let id = tabla
-        .get("appearance")
-        .and_then(|a| a.get("shadow"))
-        .and_then(|s| s.as_str())
-        .unwrap_or("black");
-    Borde::de(id)
-}
-
-fn leer_estilo(texto: &str) -> Result<Bloqueo, String> {
-    let tabla: toml::Table = texto.parse().map_err(|e: toml::de::Error| e.to_string())?;
-    match tabla.get("lock") {
-        Some(v) => v
-            .clone()
-            .try_into()
-            .map_err(|e: toml::de::Error| e.to_string()),
-        None => Ok(Bloqueo::default()),
     }
 }
 
@@ -982,33 +871,3 @@ impl ProvidesRegistryState for App {
 
 delegate_registry!(App);
 delegate_dispatch2!(App);
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use morgan_ipc::bloqueo::Escritura;
-
-    #[test]
-    fn el_borde_sigue_a_la_sombra() {
-        assert_eq!(
-            leer_borde("[appearance]\nshadow = \"glow\"\n"),
-            Borde::Brillo
-        );
-        assert_eq!(
-            leer_borde("[appearance]\nshadow = \"black\"\n"),
-            Borde::Sombra
-        );
-        assert_eq!(leer_borde(""), Borde::Sombra);
-        assert_eq!(leer_borde("no es toml ["), Borde::Sombra);
-    }
-
-    #[test]
-    fn el_estilo_sale_de_su_seccion_y_lo_roto_no_impide_leer() {
-        let b = leer_estilo("[shell]\nopacity = 0.9\n[lock]\ntyping = \"dots\"\n").unwrap();
-        assert_eq!(b.escritura, Escritura::Puntos);
-        assert!(b.chispa);
-        assert_eq!(leer_estilo("[shell]\n").unwrap(), Bloqueo::default());
-        assert!(leer_estilo("[lock]\ntyping = \"nada\"\n").is_err());
-        assert!(leer_estilo("no es toml [").is_err());
-    }
-}

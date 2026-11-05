@@ -5,7 +5,37 @@
 use std::ptr;
 use std::sync::atomic::{Ordering, compiler_fence};
 
-use crate::pam::Secreto;
+/// Bytes que se pisan con ceros al soltarse: la contraseña, en camino al que la verifica.
+pub struct Secreto(Vec<u8>);
+
+impl Secreto {
+    pub fn new(texto: String) -> Self {
+        Secreto(texto.into_bytes())
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl Drop for Secreto {
+    fn drop(&mut self) {
+        borrar(&mut self.0);
+    }
+}
+
+/// Pisa con ceros todo lo reservado, no solo lo usado: una escritura volátil por byte, que
+/// el compilador no puede sacar aunque nadie lea después.
+pub fn borrar(v: &mut Vec<u8>) {
+    let cap = v.capacity();
+    let p = v.as_mut_ptr();
+    for i in 0..cap {
+        // SAFETY: `i < capacity`, dentro de la reserva del Vec.
+        unsafe { ptr::write_volatile(p.add(i), 0) };
+    }
+    compiler_fence(Ordering::SeqCst);
+    v.clear();
+}
 
 /// Bytes; una contraseña más larga no entra (GTK tampoco tiene límite útil más allá).
 const RESERVA: usize = 1024;
@@ -79,7 +109,7 @@ impl Clave {
         self.n = 0;
     }
 
-    /// Se la lleva para PAM, sin copiarla: el `Secreto` se pisa al soltarse. El campo queda
+    /// Se la lleva para verificarla, sin copiarla: el `Secreto` se pisa al soltarse. El campo queda
     /// con una reserva nueva.
     pub fn tomar(&mut self) -> Secreto {
         self.n = 0;
@@ -87,6 +117,12 @@ impl Clave {
             &mut self.texto,
             String::with_capacity(RESERVA),
         ))
+    }
+}
+
+impl Default for Clave {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
