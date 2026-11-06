@@ -75,6 +75,8 @@ const PROPIAS: &[Propia] = &[
     Propia { nombre: "starship", plantilla: "starship.toml", programas: &["starship"], enlaces: &[], aviso: Aviso::Starship },
     // `morgan.lua` (lo escribe morgan) lo carga desde el render: no hace falta enlace.
     Propia { nombre: "hyprland", plantilla: "hyprland.lua", programas: &["Hyprland"], enlaces: &[], aviso: Aviso::Hyprland },
+    // `morgan.toml` de Umbriel (lo escribe morgan) lo incluye desde el render; Umbriel relee solo.
+    Propia { nombre: "umbriel", plantilla: "umbriel.toml", programas: &["umbriel"], enlaces: &[], aviso: Aviso::Nada },
 ];
 
 #[derive(Deserialize, Default)]

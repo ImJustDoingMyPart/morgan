@@ -8,6 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::animaciones;
 use crate::config::{AtajoPropio, Capturas, Config};
 use crate::launcher::binds;
 
@@ -114,13 +115,63 @@ fn extra_propio(p: &AtajoPropio) -> Vec<&'static str> {
     v
 }
 
+/// Los colores del tema (`templates/umbriel.toml`, renderizado por el motor de temas).
+fn colores_tema() -> PathBuf {
+    morgan_temas::Rutas::del_entorno()
+        .render()
+        .join("umbriel.toml")
+}
+
+/// La animación y la sombra elegidas en el menú (Apariencia), con lo que Umbriel tiene: sin
+/// degradés ni `popin` a medida; las curvas son las mismas de Hyprland (`animaciones.rs`).
+fn apariencia(c: &Config) -> String {
+    let comp = animaciones::por_id(&c.apariencia.animacion);
+    let t = animaciones::velocidad(&c.apariencia.velocidad).tiempos();
+    let estilo = match comp.id {
+        "fold" => "zoom",   // no-tr
+        "fade" => "fade",   // no-tr
+        _ => "popin",       // no-tr
+    };
+    let curva = |n: &str| n.to_owned();
+    let suave = if c.apariencia.sombra == "glow" { 3 } else { 6 }; // no-tr
+    format!(
+        "\n[animation]\nenabled = true\n\n\
+         [animation.beziers]\n\
+         morgan_decel = [0.05, 0.7, 0.1, 1.0]\n\
+         morgan_expo = [0.16, 1.0, 0.3, 1.0]\n\
+         morgan_rebote = [0.34, 1.3, 0.64, 1.0]\n\n\
+         [animation.windows_in]\nenabled = true\nstyle = \"{estilo}\"\ncurve = \"{c_v}\"\nduration_ms = {e}\n\n\
+         [animation.windows_out]\nenabled = true\nstyle = \"fade\"\ncurve = \"morgan_decel\"\nduration_ms = {s}\n\n\
+         [animation.windows_move]\nenabled = true\ncurve = \"{c_v}\"\nduration_ms = {m}\n\n\
+         [animation.workspaces]\nenabled = true\nstyle = \"slide\"\ncurve = \"{c_w}\"\nduration_ms = {w}\n\n\
+         [animation.layers]\nenabled = true\ncurve = \"morgan_decel\"\nduration_ms = {e}\n\n\
+         [appearance.shadow]\nenabled = true\nsoftness = {suave}\noffset_x = 0\noffset_y = 0\n", // no-tr
+        c_v = curva(comp.curva),
+        c_w = curva(comp.curva_workspace),
+        e = t.entrar,
+        s = t.salir,
+        m = t.mover,
+        w = t.workspace,
+    )
+}
+
 pub fn toml(c: &Config, con_grim: bool) -> String {
+    toml_con(c, con_grim, &colores_tema())
+}
+
+pub fn toml_con(c: &Config, con_grim: bool, tema: &Path) -> String {
     let a = &c.atajos;
     let mut out = String::from(concat!(
-        "# morgan: sus atajos y las reglas de sus capas. Lo escribe morgan con cada cambio de su\n", // no-tr
-        "# config (morgan/config.toml, [keybinds] y [screenshots]): no editar a mano.\n", // no-tr
-        "\n[keybinds]\n",                                                                 // no-tr
+        "# morgan: sus atajos, las reglas de sus capas, la animación y los colores del tema. Lo\n", // no-tr
+        "# escribe morgan con cada cambio de su config (morgan/config.toml): no editar a mano.\n", // no-tr
+        "# Lo que se ponga en ~/.config/umbriel/config.toml gana sobre esto.\n", // no-tr
     ));
+    out.push_str(&format!(
+        "\n[include.optional]\nfiles = [{}]\n", // no-tr
+        cadena(&tema.to_string_lossy())
+    ));
+    out.push_str(&apariencia(c));
+    out.push_str("\n[keybinds]\n"); // no-tr
     for (cabecera, lista) in binds::acciones(a) {
         out.push_str(&format!("# {cabecera}\n"));
         for (_, t, cmd, _, locked) in lista {
@@ -285,7 +336,8 @@ mod tests {
 
     #[test]
     fn los_defaults_son_toml_valido_con_las_capas() {
-        let t = toml(&Config::default(), true);
+        let t = toml_con(&Config::default(), true, Path::new("/e/tema/umbriel.toml"));
+        assert!(t.contains("files = [\"/e/tema/umbriel.toml\"]"));
         let v: toml::Table = toml::from_str(&t).expect("TOML válido");
         let binds = v["keybinds"].as_table().unwrap();
         assert_eq!(
@@ -299,8 +351,9 @@ mod tests {
         assert!(binds["Print"]["action"].as_str().unwrap().contains("slurp"));
         assert_eq!(v["layer_rule"].as_array().unwrap().len(), 2);
         // Sin grim, sin capturas.
-        let t = toml(&Config::default(), false);
+        let t = toml_con(&Config::default(), false, Path::new("/t"));
         assert!(!t.contains("Print"));
+        assert_eq!(v["animation"]["windows_in"]["duration_ms"].as_integer(), Some(200));
     }
 
     #[test]
@@ -316,7 +369,7 @@ mod tests {
                 ..Default::default()
             }],
         });
-        let v: toml::Table = toml::from_str(&toml(&c, false)).unwrap();
+        let v: toml::Table = toml::from_str(&toml_con(&c, false, Path::new("/t"))).unwrap();
         let binds = v["keybinds"].as_table().unwrap();
         assert_eq!(
             binds["Super+R"]["action"].as_str(),
