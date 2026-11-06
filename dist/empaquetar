@@ -10,7 +10,7 @@ destino=${1:?uso: dist/empaquetar DESTINO [BINARIOS]}
 binarios=${2:-target/release}
 [ -f dist/morgan.service ] || { echo 'dist/empaquetar: correrlo desde la raíz del repo' >&2; exit 1; }
 
-install -Dm755 "$binarios/morgan" "$binarios/morganctl" "$binarios/morgan-lock" -t "$destino/usr/bin/"
+install -Dm755 "$binarios/morgan" "$binarios/morganctl" "$binarios/morgan-lock" "$binarios/morgan-greet" -t "$destino/usr/bin/"
 install -Dm755 dist/morgan-captura dist/morgan-cuota -t "$destino/usr/bin/"
 
 install -dm755 "$destino/usr/lib/systemd/user"

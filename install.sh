@@ -7,7 +7,7 @@
 #   ./install.sh --desinstalar   saca lo instalado; la config (~/.config/morgan) queda
 #
 # Lo que hace:
-#   - compila morgan, morganctl y morgan-lock (cargo, --release --locked);
+#   - compila morgan, morganctl, morgan-lock y morgan-greet (cargo, --release --locked);
 #   - instala los binarios y los scripts de dist/ (morgan-captura, morgan-cuota);
 #   - instala el tema propio y sus plantillas en ~/.local/share/morgan (se elige en el menú
 #     de sistema, Apariencia; mientras no se elige ninguno, morgan usa esos colores);
@@ -119,7 +119,7 @@ instalar() {
 
     paso "Binarios en $bin"
     local b
-    for b in morgan morganctl morgan-lock; do
+    for b in morgan morganctl morgan-lock morgan-greet; do
         install -Dm755 "$raiz/target/release/$b" "$bin/$b"
     done
     install -Dm755 "$raiz/dist/morgan-captura" "$bin/morgan-captura"
@@ -165,7 +165,7 @@ desinstalar() {
 
     paso "Archivos"
     local f
-    for f in "$bin"/{morgan,morganctl,morgan-lock,morgan-captura,morgan-cuota} \
+    for f in "$bin"/{morgan,morganctl,morgan-lock,morgan-greet,morgan-captura,morgan-cuota} \
         "$unidades"/{morgan.service,morgan-lock.service} "$dbus" "$config/hypr/morgan.lua"; do
         if [[ -e $f ]]; then rm -v "$f"; fi
     done
