@@ -1,5 +1,8 @@
 //! Lo que se toca a mano vale hasta el próximo cambio de horario.
 //!
+//! Fuera de Hyprland, en vez de `hyprsunset` corre `morgan nightlight` (`gama.rs`), con el
+//! mismo trato.
+//!
 //! Hyprland funde cada cambio de la CTM y no deja preguntar si está en identidad, así que
 //! prendida es que `hyprsunset` corre: al prender se lanza con la temperatura (funde de neutro
 //! a cálido) y al apagar se le pide `identity` y se lo termina cuando acabó el fundido.
@@ -14,7 +17,6 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
-
 
 use crate::comando;
 use crate::config;
@@ -116,7 +118,14 @@ impl Luz {
             prender(temperatura).await?;
         } else if unidad_activa().await {
             // Si ya no corre, no hay fundido que esperar.
-            let _ = comando::salida(&["hyprctl", "hyprsunset", "identity"]).await;
+            if es_hyprland() {
+                let _ = comando::salida(&["hyprctl", "hyprsunset", "identity"]).await;
+            } else {
+                // `morgan nightlight` funde a neutro y sale solo.
+                let _ =
+                    comando::salida(&["systemctl", "--user", "kill", "--signal=SIGUSR1", UNIDAD])
+                        .await;
+            }
             glib::timeout_future(FUNDIDO).await;
             if i.orden.get() == orden {
                 comando::salida(&["systemctl", "--user", "stop", UNIDAD]).await?;
@@ -200,23 +209,41 @@ impl Luz {
 
 async fn unidad_activa() -> bool {
     for u in [UNIDAD, UNIDAD_VIEJA] {
-        if comando::salida(&["systemctl", "--user", "is-active", "--quiet", u]).await.is_ok() {
+        if comando::salida(&["systemctl", "--user", "is-active", "--quiet", u])
+            .await
+            .is_ok()
+        {
             return true;
         }
     }
     false
 }
 
-/// Con el entorno de la sesión gráfica, que el gestor de systemd no tiene por qué tener.
+fn es_hyprland() -> bool {
+    morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Hyprland
+}
+
+/// Con el entorno de la sesión gráfica, que el gestor de systemd no tiene por qué tener. En
+/// Hyprland, `hyprsunset`; en los demás, `morgan nightlight` (`gama.rs`, por
+/// `wlr-gamma-control`).
 async fn prender(temperatura: u32) -> Result<(), String> {
     let t = temperatura.to_string();
-    if unidad_activa().await {
+    let activa = unidad_activa().await;
+    if activa && es_hyprland() {
         return comando::salida(&["hyprctl", "hyprsunset", "temperature", &t])
             .await
             .map(drop);
     }
+    if activa {
+        // La gama es de un solo dueño: el de antes sale sin fundido y entra el nuevo.
+        let _ = comando::salida(&["systemctl", "--user", "kill", "--signal=SIGKILL", UNIDAD]).await;
+        let _ = comando::salida(&["systemctl", "--user", "stop", UNIDAD]).await;
+    }
     let unidad = format!("--unit={UNIDAD}");
-    comando::salida(&[
+    let morgan = std::env::current_exe()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| "morgan".into());
+    let mut args = vec![
         "systemd-run",
         "--user",
         "--quiet",
@@ -224,15 +251,20 @@ async fn prender(temperatura: u32) -> Result<(), String> {
         &unidad,
         "-E",
         "WAYLAND_DISPLAY",
-        "-E",
-        "HYPRLAND_INSTANCE_SIGNATURE",
-        "--",
-        "hyprsunset",
-        "-t",
-        &t,
-    ])
-    .await
-    .map(drop)
+    ];
+    if es_hyprland() {
+        args.extend([
+            "-E",
+            "HYPRLAND_INSTANCE_SIGNATURE",
+            "--",
+            "hyprsunset",
+            "-t",
+            &t,
+        ]);
+    } else {
+        args.extend(["--", &morgan, "nightlight", &t]);
+    }
+    comando::salida(&args).await.map(drop)
 }
 
 #[cfg(test)]

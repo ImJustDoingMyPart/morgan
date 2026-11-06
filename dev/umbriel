@@ -49,7 +49,6 @@ arrancar)
     if [[ -s $estado/display ]] && u outputs >/dev/null 2>&1; then
         echo "umbriel: ya está corriendo ($(cat "$estado/display"))" >&2; exit 1
     fi
-    antes=$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | sort || true)
     modo=$(hyprctl -j monitors 2>/dev/null | jq -r '[.[] | select(.focused)][0] | "\(.width)x\(.height)"' || true)
     [[ $modo =~ ^[0-9]+x[0-9]+$ ]] || modo=2560x1440
     # La config de prueba incluye la de morgan (`morgan setup` la escribe en
@@ -73,7 +72,7 @@ EOF
         umbriel -c "$estado/config.toml" >"$estado/umbriel.log" 2>&1 </dev/null &
     for _ in $(seq 50); do
         sleep 0.1
-        nuevo=$(comm -13 <(echo "$antes") <(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | sort) | head -1)
+        nuevo=$(grep -o 'running on WAYLAND_DISPLAY=[^ ]*' "$estado/umbriel.log" 2>/dev/null | head -1 | cut -d= -f2)
         if [[ -n $nuevo && -S $XDG_RUNTIME_DIR/umbriel-$nuevo.sock ]]; then
             echo "$nuevo" >"$estado/display"
             u outputs --json | jq -r '.[] | "umbriel: \(.name) \(.logical_size.width)x\(.logical_size.height)"'

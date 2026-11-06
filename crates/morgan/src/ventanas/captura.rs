@@ -45,6 +45,31 @@ mod protocolo {
 use protocolo::hyprland_toplevel_export_frame_v1::{self as marco, HyprlandToplevelExportFrameV1};
 use protocolo::hyprland_toplevel_export_manager_v1::HyprlandToplevelExportManagerV1;
 
+/// La de Hyprland (su protocolo propio) o la de los protocolos estándar
+/// (`captura_ext.rs`), en ese orden.
+pub enum Captura {
+    Hyprland(Rc<Capturador>),
+    Ext(Rc<super::captura_ext::CapturadorExt>),
+}
+
+impl Captura {
+    pub fn conectar() -> Result<Self, String> {
+        match Capturador::conectar() {
+            Ok(c) => Ok(Captura::Hyprland(c)),
+            Err(e) => super::captura_ext::CapturadorExt::conectar()
+                .map(Captura::Ext)
+                .map_err(|e2| format!("{e}; {e2}")),
+        }
+    }
+
+    pub async fn capturar(&self, ventana: &str, ancho_max: i32) -> Option<Foto> {
+        match self {
+            Captura::Hyprland(c) => c.capturar(ventana, ancho_max).await,
+            Captura::Ext(c) => c.capturar(ventana, ancho_max).await,
+        }
+    }
+}
+
 /// Una captura de verdad tarda 5–10 ms.
 const TOPE: Duration = Duration::from_millis(400);
 
@@ -356,12 +381,12 @@ impl Drop for Capturador {
 }
 
 /// Los formatos que se saben leer.
-fn memoria(f: wl_shm::Format) -> bool {
+pub(super) fn memoria(f: wl_shm::Format) -> bool {
     matches!(f, wl_shm::Format::Argb8888 | wl_shm::Format::Xrgb8888)
 }
 
 /// De BGRA (lo que da el compositor) a RGBA; con `opaco`, el alfa que sobra pasa a 255.
-fn a_rgba(px: &mut [u8], opaco: bool) {
+pub(super) fn a_rgba(px: &mut [u8], opaco: bool) {
     for p in px.as_chunks_mut::<4>().0 {
         p.swap(0, 2);
         if opaco {
@@ -370,7 +395,7 @@ fn a_rgba(px: &mut [u8], opaco: bool) {
     }
 }
 
-fn archivo_anonimo(largo: u64) -> std::io::Result<File> {
+pub(super) fn archivo_anonimo(largo: u64) -> std::io::Result<File> {
     let dir = glib::user_runtime_dir();
     let ruta = dir.join(format!(
         "morgan-captura-{}-{}",

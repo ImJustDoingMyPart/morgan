@@ -21,6 +21,7 @@
 //! desplazamiento y el anillo; acá quedan lo que dice Hyprland, las fotos, los íconos y enfocar.
 
 mod captura;
+mod captura_ext;
 pub(crate) mod modelo;
 
 use std::cell::{Cell, RefCell};
@@ -36,7 +37,7 @@ use crate::centro::Centro;
 use crate::centro::hilo::Orden;
 use crate::centro::vista::{EventoVentanas, VistaVentanas};
 use crate::compositor::Compositor;
-use captura::Capturador;
+use captura::Captura;
 use modelo::Lienzo;
 
 const SUBMAP: &str = "morgan-windows";
@@ -80,7 +81,7 @@ struct Inner {
     hilo: Sender<Orden>,
     /// `[shell] hot_corner`.
     con_esquina: Cell<bool>,
-    capturador: RefCell<Option<Rc<Capturador>>>,
+    capturador: RefCell<Option<Rc<Captura>>>,
     fotos: RefCell<HashMap<String, Foto>>,
     abierta: RefCell<Option<Rc<Vista>>>,
     /// Sube con cada pedido: una apertura que termina de leer tarde no abre si mientras tanto se
@@ -311,9 +312,9 @@ impl Ventanas {
         Some(l)
     }
 
-    fn capturador(&self) -> Option<Rc<Capturador>> {
+    fn capturador(&self) -> Option<Rc<Captura>> {
         if self.inner.capturador.borrow().is_none() {
-            match Capturador::conectar() {
+            match Captura::conectar().map(Rc::new) {
                 Ok(c) => {
                     self.inner.capturador.replace(Some(c));
                 }

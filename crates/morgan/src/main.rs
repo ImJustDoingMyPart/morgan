@@ -29,6 +29,7 @@ mod fondos;
 mod greeter;
 mod hypr_cfg;
 mod compositor;
+mod gama;
 mod setup_umbriel;
 mod umbriel_cfg;
 mod icono;
@@ -81,6 +82,10 @@ fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
         Some("about") => return acerca::correr(),
         Some("setup") => return setup::correr(),
+        Some("nightlight") => {
+            let k = std::env::args().nth(2).and_then(|t| t.parse().ok()).unwrap_or(4000.0);
+            return gama::correr(k);
+        }
         _ => {}
     }
     // Evita intentos fallidos de conexión a at-spi en canberra y GTK.
