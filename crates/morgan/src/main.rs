@@ -26,6 +26,7 @@ mod dock;
 mod energia;
 mod escucha;
 mod fondos;
+mod greeter;
 mod hypr_cfg;
 mod hyprland;
 mod icono;
@@ -142,6 +143,9 @@ fn main() -> ExitCode {
             &config.shell,
             morgan_motor::forma::Borde::de(&config.apariencia.sombra),
         );
+        // Las copias para el greeter: ahora y con cada tema.
+        greeter::iniciar(&config_path);
+        tema.al_cambiar(|_, _, _| greeter::copiar());
         let hyprland = Hyprland::new();
         // La escala y el tamaño de las salidas (`pixeles`) siguen a las que se conectan.
         {

@@ -183,7 +183,7 @@ pub fn sesiones(carpetas: &[PathBuf]) -> Vec<Sesion> {
     v
 }
 
-fn en_el_path(prog: &str) -> bool {
+pub fn en_el_path(prog: &str) -> bool {
     if prog.contains('/') {
         return Path::new(prog).is_file();
     }

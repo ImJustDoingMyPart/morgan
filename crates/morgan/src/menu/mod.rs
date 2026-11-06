@@ -987,6 +987,7 @@ impl Menu {
         let mut c = i.config.borrow().clone();
         cambio.aplicar(&mut c);
         config::guardar(&i.s.ruta_config, &c).map_err(|e| e.to_string())?;
+        crate::greeter::copiar();
         // Lo que vale es lo que quedó en el archivo, releído.
         let c = config::load(&i.s.ruta_config).map_err(|e| e.to_string())?;
         i.s.tema.set_shell(&c.shell);

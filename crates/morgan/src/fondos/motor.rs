@@ -279,7 +279,7 @@ async fn copiar_para_bloqueo(img: &Path) {
     ])
     .await;
     match r.and_then(|_| std::fs::rename(&tmp, &destino).map_err(|e| e.to_string())) {
-        Ok(()) => {}
+        Ok(()) => crate::greeter::copiar(),
         Err(e) => {
             eprintln!("morgan: fondos: copia para el bloqueo: {e}");
             let _ = std::fs::remove_file(&tmp);

@@ -5,6 +5,8 @@
 //!   morgan-greet pantalla            la pantalla, contra greetd (`GREETD_SOCK`)
 //!   morgan-greet pantalla --demo     la pantalla sin greetd, para probarla en un Hyprland
 //!                                    anidado: cualquier clave entra y «mal» falla
+//!   morgan-greet install [--apply]   lo pone en greetd (como root; ver `instalar.rs`)
+//!   morgan-greet restore [--apply]   vuelve a la config de greetd de antes
 //!
 //! La pantalla es la de `morgan-lock` (`pantalla.rs`), con greetd en vez de PAM, sin logind
 //! y con los archivos de la cuenta copiados en `/var/lib/morgan-greet` (`greeter.rs`).
@@ -21,15 +23,33 @@ use morgan_lock::pantalla::{self, Ajustes};
 use morgan_lock::perfil::Rutas;
 use morgan_lock::verificar::{Resultado, Verificador};
 
-const USO: &str = "uso: morgan-greet [pantalla [--demo]]";
+const USO: &str =
+    "uso: morgan-greet [pantalla [--demo] | install [--apply] | restore [--apply]] [--raiz DIR]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let mut args: Vec<&str> = args.iter().map(String::as_str).collect();
+    // `--raiz` es para probar el instalador sin root, sobre una copia de /etc y /var.
+    let raiz = match args.iter().position(|a| *a == "--raiz") {
+        Some(i) if i + 1 < args.len() => {
+            let r = PathBuf::from(args[i + 1]);
+            args.drain(i..=i + 1);
+            Some(r)
+        }
+        Some(_) => {
+            eprintln!("morgan-greet: {USO}");
+            return ExitCode::FAILURE;
+        }
+        None => None,
+    };
     match args.as_slice() {
         [] => lanzar(),
         ["pantalla"] => pantalla(false),
         ["pantalla", "--demo"] => pantalla(true),
+        ["install"] => instalar(raiz, false),
+        ["install", "--apply"] => instalar(raiz, true),
+        ["restore"] => restaurar(raiz, false),
+        ["restore", "--apply"] => restaurar(raiz, true),
         _ => {
             eprintln!("morgan-greet: {USO}");
             ExitCode::FAILURE
@@ -40,6 +60,7 @@ fn main() -> ExitCode {
 /// Escribe la config y reemplaza este proceso por Hyprland (con su watchdog,
 /// `start-hyprland`). Lo que Hyprland lanza hereda `GREETD_SOCK`.
 fn lanzar() -> ExitCode {
+    idioma_del_sistema();
     let exe = match std::env::current_exe() {
         Ok(e) => e,
         Err(e) => {
@@ -71,6 +92,224 @@ fn lanzar() -> ExitCode {
         .exec();
     eprintln!("morgan-greet: start-hyprland: {e}");
     ExitCode::FAILURE
+}
+
+/// greetd no siempre le pasa el idioma al greeter: sin `LANG`, el de `/etc/locale.conf`, para
+/// que la fecha salga en el idioma de la máquina. Antes de crear hilos y de lanzar Hyprland,
+/// que lo hereda.
+fn idioma_del_sistema() {
+    if std::env::var_os("LANG").is_some() {
+        return;
+    }
+    let Ok(t) = std::fs::read_to_string("/etc/locale.conf") else {
+        return;
+    };
+    for l in t.lines() {
+        if let Some((k, v)) = l.split_once('=')
+            && (k == "LANG" || k.starts_with("LC_"))
+            && std::env::var_os(k).is_none()
+        {
+            // SAFETY: todavía hay un solo hilo.
+            unsafe { std::env::set_var(k, v.trim_matches('"')) };
+        }
+    }
+}
+
+/// Lo que va a hacer `install`, paso por paso, y si `aplicar`, lo hace.
+fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
+    use morgan_lock::instalar::*;
+    let r = raiz.clone().unwrap_or_else(|| PathBuf::from("/"));
+    if aplicar && raiz.is_none() && unsafe { libc::geteuid() } != 0 {
+        eprintln!("morgan-greet: install --apply necesita root (sudo)");
+        return ExitCode::FAILURE;
+    }
+    let Some((compositor, _)) = COMPOSITORES
+        .iter()
+        .find(|(_, prog)| greeter::en_el_path(prog))
+    else {
+        eprintln!("morgan-greet: no hay ningún compositor que el greeter sepa lanzar (Hyprland)");
+        return ExitCode::FAILURE;
+    };
+    let exe = match std::env::current_exe() {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("morgan-greet: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let del_paquete = exe.starts_with("/usr/");
+    let binario = if del_paquete {
+        exe.clone()
+    } else {
+        Path::new("/").join(BINARIO)
+    };
+    let greetd = r.join(GREETD);
+    let actual = match std::fs::read_to_string(&greetd) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("morgan-greet: {}: {e}", greetd.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    let nueva = match config_nueva(&actual, &binario.to_string_lossy()) {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("morgan-greet: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let respaldo = greetd.with_file_name(nombre_respaldo(&fecha()));
+    let estado = r.join(ESTADO);
+
+    println!("Plan (compositor: {compositor}):");
+    if del_paquete {
+        println!("  1. el greeter es el del paquete: {}", binario.display());
+    } else {
+        println!(
+            "  1. copiar {} a {}",
+            exe.display(),
+            r.join(BINARIO).display()
+        );
+    }
+    println!(
+        "  2. crear {} (de greeter) y {}/usuarios (con sticky bit)",
+        estado.display(),
+        estado.display()
+    );
+    println!(
+        "  3. respaldar {} en {}",
+        greetd.display(),
+        respaldo.display()
+    );
+    println!(
+        "  4. en {}: [default_session] command = \"{}\", y sin [initial_session] (sin inicio automático)",
+        greetd.display(),
+        binario.display()
+    );
+    let logind = std::fs::read_to_string(r.join("etc/systemd/logind.conf")).unwrap_or_default();
+    if hay_tty_de_emergencia(&logind) {
+        println!(
+            "Salida de emergencia: si el greeter no arranca, Ctrl+Alt+F2 da un login de texto;"
+        );
+        println!(
+            "  ahí, `sudo morgan-greet restore --apply` (o el binario de {}).",
+            binario.display()
+        );
+    } else {
+        println!("Ojo: logind tiene NAutoVTs=0: sin login de texto de emergencia. Se sigue igual.");
+    }
+    println!("Vale desde el próximo arranque: greetd no se reinicia.");
+    if !aplicar {
+        println!(
+            "Nada cambió. Para hacerlo: sudo {} install --apply",
+            exe.display()
+        );
+        return ExitCode::SUCCESS;
+    }
+
+    let hecho = (|| -> Result<(), String> {
+        let e = |p: &Path, err: std::io::Error| format!("{}: {err}", p.display());
+        if !del_paquete {
+            let destino = r.join(BINARIO);
+            let dir = destino.parent().unwrap_or(&r);
+            std::fs::create_dir_all(dir).map_err(|x| e(dir, x))?;
+            let tmp = destino.with_extension("nuevo");
+            std::fs::copy(&exe, &tmp).map_err(|x| e(&tmp, x))?;
+            std::fs::rename(&tmp, &destino).map_err(|x| e(&destino, x))?;
+        }
+        let usuarios = estado.join("usuarios");
+        std::fs::create_dir_all(&usuarios).map_err(|x| e(&usuarios, x))?;
+        permisos(&estado, 0o755)?;
+        permisos(&usuarios, 0o1777)?;
+        if raiz.is_none() {
+            de_greeter(&estado)?;
+        }
+        std::fs::copy(&greetd, &respaldo).map_err(|x| e(&respaldo, x))?;
+        let tmp = greetd.with_extension("toml.nuevo");
+        std::fs::write(&tmp, &nueva).map_err(|x| e(&tmp, x))?;
+        // Con los permisos del original (en Arch, solo root la lee).
+        let modo = std::fs::metadata(&greetd).map_err(|x| e(&greetd, x))?.permissions();
+        std::fs::set_permissions(&tmp, modo).map_err(|x| e(&tmp, x))?;
+        std::fs::rename(&tmp, &greetd).map_err(|x| e(&greetd, x))?;
+        Ok(())
+    })();
+    match hecho {
+        Ok(()) => {
+            println!("Hecho. Respaldo: {}", respaldo.display());
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("morgan-greet: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn permisos(p: &Path, modo: u32) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(p, std::fs::Permissions::from_mode(modo))
+        .map_err(|e| format!("{}: {e}", p.display()))
+}
+
+/// Dueño: el usuario `greeter` (escribe ahí el recuerdo de la última cuenta y sesión).
+fn de_greeter(p: &Path) -> Result<(), String> {
+    use std::os::unix::ffi::OsStrExt;
+    // SAFETY: getpwnam con una cadena terminada en nul; se copian uid y gid enseguida.
+    let pw = unsafe { libc::getpwnam(c"greeter".as_ptr()) };
+    if pw.is_null() {
+        return Err("no existe el usuario greeter (lo crea el paquete de greetd)".into());
+    }
+    let (uid, gid) = unsafe { ((*pw).pw_uid, (*pw).pw_gid) };
+    let c = std::ffi::CString::new(p.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
+    // SAFETY: ruta terminada en nul.
+    if unsafe { libc::chown(c.as_ptr(), uid, gid) } != 0 {
+        return Err(format!(
+            "{}: {}",
+            p.display(),
+            std::io::Error::last_os_error()
+        ));
+    }
+    Ok(())
+}
+
+/// Vuelve al último respaldo de la config de greetd. El binario y las carpetas quedan:
+/// sin la config, nada los usa.
+fn restaurar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
+    use morgan_lock::instalar::*;
+    let r = raiz.clone().unwrap_or_else(|| PathBuf::from("/"));
+    if aplicar && raiz.is_none() && unsafe { libc::geteuid() } != 0 {
+        eprintln!("morgan-greet: restore --apply necesita root (sudo)");
+        return ExitCode::FAILURE;
+    }
+    let greetd = r.join(GREETD);
+    let Some(respaldo) = greetd.parent().and_then(ultimo_respaldo) else {
+        eprintln!(
+            "morgan-greet: no hay respaldos de morgan-greet junto a {}",
+            greetd.display()
+        );
+        return ExitCode::FAILURE;
+    };
+    println!(
+        "Plan: copiar {} sobre {}",
+        respaldo.display(),
+        greetd.display()
+    );
+    println!("Vale desde el próximo arranque: greetd no se reinicia.");
+    if !aplicar {
+        println!("Nada cambió. Para hacerlo: sudo morgan-greet restore --apply");
+        return ExitCode::SUCCESS;
+    }
+    let tmp = greetd.with_extension("toml.nuevo");
+    match std::fs::copy(&respaldo, &tmp).and_then(|_| std::fs::rename(&tmp, &greetd)) {
+        Ok(()) => {
+            println!("Hecho.");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("morgan-greet: {}: {e}", greetd.display());
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn pantalla(demo: bool) -> ExitCode {

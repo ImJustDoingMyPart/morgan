@@ -13,6 +13,7 @@ pub mod fondo;
 pub mod greetd;
 pub mod greeter;
 pub mod hundido;
+pub mod instalar;
 mod logind;
 pub mod pantalla;
 pub mod perfil;
