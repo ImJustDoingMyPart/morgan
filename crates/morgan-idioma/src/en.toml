@@ -291,7 +291,7 @@
 "{} está corriendo: morgan hace lo mismo; conviene pararlo y deshabilitarlo." = "{} is running: morgan does the same; better stop and disable it."
 "{} tiene las notificaciones: hay que pararlo antes de arrancar morgan." = "{} owns notifications: stop it before starting morgan."
 "morgan arrancó. El menú de sistema se abre con Super+coma." = "morgan is running. The system menu opens with Super+comma."
-"Listo: morgan arranca la próxima vez que entres a Hyprland." = "Done: morgan starts the next time you log into Hyprland."
+"Listo: morgan arranca la próxima vez que entres a Hyprland o a Umbriel." = "Done: morgan starts the next time you log into Hyprland or Umbriel."
 "Agregada la línea de morgan al final de {}." = "Added morgan's line at the end of {}."
 "{} ya carga morgan." = "{} already loads morgan."
 "Falló systemctl --user {}." = "systemctl --user {} failed."
@@ -459,3 +459,7 @@
 "Apretá la combinación · Escape cancela" = "Press the combination · Escape cancels"
 "un bind sin descripción" = "a bind without a description"
 "Ya la usa {}: Enter la reasigna, Escape cancela" = "{} already uses it: Enter reassigns it, Escape cancels"
+
+# setup_umbriel.rs
+"Agregada la config de morgan a {}." = "Added morgan's config to {}."
+"Creada {} con la config de morgan." = "Created {} with morgan's config."

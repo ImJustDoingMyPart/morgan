@@ -1,5 +1,5 @@
 //! `morgan setup`: lo que cada usuario hace una vez y un paquete no puede hacer por él (la
-//! línea de `hyprland.lua` y la unidad de systemd --user). Se puede correr de nuevo: lo que ya
+//! línea de `hyprland.lua`, el include de la config de Umbriel y la unidad de systemd --user). Se puede correr de nuevo: lo que ya
 //! está no se repite.
 
 use std::path::Path;
@@ -40,7 +40,13 @@ const COMPETIDORES: &[&str] = &[
 pub fn correr() -> ExitCode {
     let config = glib::user_config_dir();
     let hypr = config.join("hypr/hyprland.lua");
-    if !hypr.is_file() {
+    let umbriel = glib::find_program_in_path("umbriel").is_some();
+    if hypr.is_file() {
+        if let Err(e) = agregar_linea(&hypr) {
+            eprintln!("{}", trf!("No se pudo escribir {}: {}", hypr.display(), e));
+            return ExitCode::FAILURE;
+        }
+    } else if !umbriel {
         if config.join("hypr/hyprland.conf").is_file() {
             eprintln!("{}", trf!("morgan necesita la config de Hyprland en Lua ({}); hay una hyprland.conf.", hypr.display()));
         } else {
@@ -48,9 +54,15 @@ pub fn correr() -> ExitCode {
         }
         return ExitCode::FAILURE;
     }
-    if let Err(e) = agregar_linea(&hypr) {
-        eprintln!("{}", trf!("No se pudo escribir {}: {}", hypr.display(), e));
-        return ExitCode::FAILURE;
+    if umbriel {
+        let c = crate::config::path()
+            .ok()
+            .and_then(|p| crate::config::load(&p).ok())
+            .unwrap_or_default();
+        if let Err(e) = crate::setup_umbriel::correr(&c) {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
     }
     if !systemctl(&["enable", "morgan.service"]) {
         return ExitCode::FAILURE;
@@ -62,8 +74,8 @@ pub fn correr() -> ExitCode {
     if let Some(quien) = &ajenas {
         println!("  ! {}", trf!("{} tiene las notificaciones: hay que pararlo antes de arrancar morgan.", quien));
     }
-    let en_hyprland = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some();
-    if en_hyprland && ajenas.is_none() {
+    let en_sesion = morgan_ipc::compositor::actual() != morgan_ipc::compositor::Tipo::Otro;
+    if en_sesion && ajenas.is_none() {
         let _ = Command::new("systemctl")
             .args(["--user", "import-environment"])
             .args(VARIABLES)
@@ -72,7 +84,7 @@ pub fn correr() -> ExitCode {
             println!("{}", tr!("morgan arrancó. El menú de sistema se abre con Super+coma."));
         }
     } else {
-        println!("{}", tr!("Listo: morgan arranca la próxima vez que entres a Hyprland."));
+        println!("{}", tr!("Listo: morgan arranca la próxima vez que entres a Hyprland o a Umbriel."));
     }
     ExitCode::SUCCESS
 }

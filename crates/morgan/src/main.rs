@@ -29,6 +29,7 @@ mod fondos;
 mod greeter;
 mod hypr_cfg;
 mod compositor;
+mod setup_umbriel;
 mod umbriel_cfg;
 mod icono;
 mod ical;
