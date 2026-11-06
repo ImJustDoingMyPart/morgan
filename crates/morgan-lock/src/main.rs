@@ -62,5 +62,6 @@ fn main() -> ExitCode {
         logind: o.logind,
         xray: true,
         rutas: Rutas::del_home(),
+        eleccion: None,
     })
 }

@@ -15,6 +15,7 @@ use vello::kurbo::{Affine, BezPath, Cap, Circle, Join, Point, Rect, RoundedRect,
 use vello::peniko::{BlendMode, Fill, Gradient, ImageBrush, ImageData, ImageQuality};
 
 use crate::caracteres;
+use crate::eleccion::{Eleccion, Paso, Que, Zona};
 use crate::escena::*;
 use crate::hundido::{self, Hundido};
 use crate::sombra::Sombra;
@@ -37,7 +38,7 @@ pub(crate) const PERIMETRO: f32 = 2.0 * (BW + BH);
 /// (`en()` de `vista.rs`).
 const Y_RELOJ: f64 = 170.0;
 const Y_FECHA: f64 = 70.0;
-const Y_CAMPO: f64 = -50.0;
+pub const Y_CAMPO: f64 = -50.0;
 const Y_AVISO: f64 = -105.0;
 
 /// Roles de la paleta para el pincel del texto.
@@ -72,6 +73,8 @@ pub struct Rotulos {
     pub glifos: HashMap<char, parley::Layout<u8>>,
     /// La sombra y la luz de adentro del campo (`hundido.rs`), en píxeles del buffer.
     pub hundido: Option<(ImageData, ImageData)>,
+    /// Los textos de la elección del greeter, por texto, rol y tamaño.
+    pub sueltos: HashMap<(String, u8, u32), parley::Layout<u8>>,
 }
 
 impl Rotulos {
@@ -98,6 +101,7 @@ impl Rotulos {
             aviso,
             campo: None,
             glifos: HashMap::new(),
+            sueltos: HashMap::new(),
             hundido: HUNDIDO.map(|hd| {
                 let (w, h) = (ANCHO as f64 - 2.0 * BORDE, ALTO as f64 - 2.0 * BORDE);
                 hundido::hacer(w, h, RADIO - BORDE / 2.0, escala as f64, &hd)
@@ -220,6 +224,10 @@ pub fn pintar(
     if let Some(a) = &rot.aviso {
         let esq = texto::esquina(a, cx, cy - Y_AVISO * escala);
         con_relieve(s, a, &rot.sombras[4], esq, color, None, escala);
+    }
+
+    if let Some(el) = &e.eleccion {
+        renglon(s, el, rot, textos, &e.paleta, (cx, cy), escala, t);
     }
 
     // El campo en sus coordenadas: (0, 0) es su esquina, en píxeles lógicos.
@@ -357,6 +365,14 @@ fn campo(
         }
         _ => (BRILLO, 0.0),
     };
+    // Cada avance de la elección destella como un acierto.
+    let (alfa, extra) = match e.eleccion.as_ref().and_then(|el| el.destellos.last()) {
+        Some(&t0) if estilo.destello && t - t0 < 1500 * MS => {
+            let k = (-(seg(t - t0) - 0.2).max(0.0) / 0.3).exp();
+            (alfa.max(BRILLO + (1.0 - BRILLO) * k), extra.max(0.6 * k))
+        }
+        _ => (alfa, extra),
+    };
     caja(
         s,
         tr,
@@ -368,6 +384,36 @@ fn campo(
         rot.hundido.as_ref(),
         escala as f64,
     );
+
+    if let Some(el) = &e.eleccion {
+        ruedas(s, el, rot, textos, &p, tr, escala, t);
+    }
+    // Lo de la clave entra y sale con su paso; en el bloqueo, siempre a la vista.
+    let clave = e.eleccion.as_ref().map_or((0.0, 1.0), |el| {
+        let (dy, _, a) = el.capa(el.pasos().len() - 1, t);
+        (dy, a)
+    });
+    if clave.1 <= 0.01 {
+        cometas(s, e, tr, &par, t);
+        return;
+    }
+    let capa = clave.1 < 0.999;
+    if capa {
+        s.push_layer(
+            Fill::NonZero,
+            BlendMode::default(),
+            clave.1,
+            tr,
+            &Rect::new(
+                -ANCHO as f64,
+                -ALTO as f64,
+                2.0 * ANCHO as f64,
+                2.0 * ALTO as f64,
+            ),
+        );
+    }
+    let tr_anillo = tr;
+    let tr = tr * Affine::translate((0.0, clave.0 as f64));
 
     let latido = e.latido().then(|| seg(t - e.t_modo));
     match estilo.escritura {
@@ -419,12 +465,21 @@ fn campo(
             texto::dibujar(s, l, c.x, c.y, |r| rol(&p, r), a);
         }
     }
+    if capa {
+        s.pop_layer();
+    }
+    cometas(s, e, tr_anillo, &par, t);
+}
 
+/// Lo que recorre el borde: el giro de la verificación, las chispas, el destello del acierto
+/// y los de cada avance de la elección.
+fn cometas(s: &mut Scene, e: &Estado, tr: Affine, par: &[Color; 2], t: i64) {
+    let estilo = e.estilo;
     if e.modo == Modo::Verificando && estilo.verificar.gira() {
         let edad = seg(t - e.t_modo);
         let cabeza = PERIMETRO * 0.25 + edad * 520.0;
         let entrada = acotar(edad / 0.15, 0.0, 1.0);
-        cometa(s, tr, cabeza, 1.0, 120.0, 0.95 * entrada, &par, 2.2);
+        cometa(s, tr, cabeza, 1.0, 120.0, 0.95 * entrada, par, 2.2);
         cometa(
             s,
             tr,
@@ -432,7 +487,7 @@ fn campo(
             1.0,
             120.0,
             0.95 * entrada,
-            &par,
+            par,
             2.2,
         );
     }
@@ -449,16 +504,198 @@ fn campo(
             c.dir,
             44.0 * c.fuerza,
             (1.0 - f) * c.fuerza,
-            &par,
+            par,
             2.0,
         );
     }
-    if e.modo == Modo::Saliendo && estilo.destello {
-        let edad = seg(t - e.t_acierto);
+    let mut destellos: Vec<i64> = e
+        .eleccion
+        .as_ref()
+        .map(|el| el.destellos.clone())
+        .unwrap_or_default();
+    if e.modo == Modo::Saliendo {
+        destellos.push(e.t_acierto);
+    }
+    if !estilo.destello {
+        return;
+    }
+    for t0 in destellos {
+        let edad = seg(t - t0);
         let d = ease_out(edad / 0.26) * PERIMETRO / 2.0;
         let a = 1.0 - acotar((edad - 0.26) / 0.26, 0.0, 1.0);
-        cometa(s, tr, BW / 2.0 + d, 1.0, d.max(8.0), a, &par, 2.4);
-        cometa(s, tr, BW / 2.0 - d, -1.0, d.max(8.0), a, &par, 2.4);
+        cometa(s, tr, BW / 2.0 + d, 1.0, d.max(8.0), a, par, 2.4);
+        cometa(s, tr, BW / 2.0 - d, -1.0, d.max(8.0), a, par, 2.4);
+    }
+}
+
+/// Dónde va cada pieza de la elección, en píxeles lógicos desde el borde de arriba del campo:
+/// el nombre del paso justo arriba, el renglón de lo elegido más arriba.
+const Y_ETIQUETA: f64 = 17.0;
+pub const Y_RENGLON: f64 = 50.0;
+/// Del «›» al texto de cada lado.
+const X_RENGLON: f64 = 14.0;
+/// Las flechas, desde cada borde del campo.
+pub const X_FLECHA: f64 = 22.0;
+/// Lo que se toca de cada flecha, desde el borde.
+pub const ANCHO_FLECHA: f64 = 44.0;
+/// Lo que corre una opción de la rueda al girar: más que el campo, para que salga entera.
+const PASO_RUEDA: f64 = 300.0;
+
+fn suelto<'a>(
+    rot: &'a mut Rotulos,
+    textos: &mut texto::Textos,
+    txt: &str,
+    r: u8,
+    px: f32,
+    escala: f32,
+) -> &'a parley::Layout<u8> {
+    rot.sueltos
+        .entry((txt.to_owned(), r, (px * 100.0) as u32))
+        .or_insert_with(|| textos.armar(&[(txt, r)], px, escala))
+}
+
+/// Un layout con su centro, o un borde, en `en` (píxeles del buffer), escalado alrededor de
+/// ese punto.
+fn poner(s: &mut Scene, l: &parley::Layout<u8>, en: Point, ancla: f64, k: f64, c: Color, a: f32) {
+    let (w, h) = texto::caja(l);
+    let tr = Affine::translate(en.to_vec2())
+        * Affine::scale(k)
+        * Affine::translate((-w * ancla, -h / 2.0));
+    texto::dibujar_en(s, l, tr, |_| c, a);
+}
+
+/// El nombre de cada paso arriba del campo y, más arriba, lo elegido a los lados del «›»,
+/// que queda en el centro de la salida, bajo los «:» del reloj.
+#[allow(clippy::too_many_arguments)]
+fn renglon(
+    s: &mut Scene,
+    el: &Eleccion,
+    rot: &mut Rotulos,
+    textos: &mut texto::Textos,
+    p: &Paleta,
+    (cx, cy): (f64, f64),
+    escala: f64,
+    t: i64,
+) {
+    let esc = escala as f32;
+    let arriba = cy - (Y_CAMPO + ALTO as f64 / 2.0) * escala;
+    for (k, paso) in el.pasos().iter().enumerate() {
+        let (dy, _, a) = el.capa(k, t);
+        if a <= 0.01 {
+            continue;
+        }
+        let nombre = match paso {
+            Paso::Elegir(Que::Usuario) => "usuario",
+            Paso::Elegir(Que::Sesion) => "sesión",
+            Paso::Clave => "contraseña",
+        };
+        let l = suelto(rot, textos, nombre, ROL_PRIMARY, texto::pt(9.0), esc);
+        let en = Point::new(
+            cx,
+            arriba - Y_ETIQUETA * escala + (dy / 3.0) as f64 * escala,
+        );
+        poner(s, l, en, 0.5, 1.0, p.primary, a);
+    }
+
+    let migas = el.migas(t);
+    if migas.iter().all(Option::is_none) {
+        return;
+    }
+    let y = arriba - Y_RENGLON * escala;
+    let l = suelto(rot, textos, "›", ROL_PRIMARY, texto::pt(13.0), esc);
+    poner(
+        s,
+        l,
+        Point::new(cx, y),
+        0.5,
+        1.0,
+        con_alfa(&p.primary, 0.45),
+        1.0,
+    );
+    for (i, m) in migas.iter().enumerate() {
+        let Some((txt, f)) = *m else { continue };
+        let que = if i == 0 { Que::Usuario } else { Que::Sesion };
+        let encima = el.encima == Some(Zona::Miga(que)) && el.miga_vuelve(que).is_some();
+        let c = if encima { p.primary } else { p.on_surface };
+        let l = suelto(rot, textos, txt, ROL_TEXTO, texto::pt(11.5), esc);
+        let (x, ancla) = if i == 0 {
+            (cx - X_RENGLON * escala, 1.0)
+        } else {
+            (cx + X_RENGLON * escala, 0.0)
+        };
+        let en = Point::new(x, y + (1.0 - f as f64) * 22.0 * escala);
+        poner(
+            s,
+            l,
+            en,
+            ancla,
+            0.7 + 0.3 * f as f64,
+            c,
+            acotar(f, 0.0, 1.0),
+        );
+    }
+}
+
+/// Las ruedas de los pasos de elegir, dentro del anillo: la opción elegida al centro, las
+/// otras afuera (se ven solo al pasar), y las flechas a los costados.
+#[allow(clippy::too_many_arguments)]
+fn ruedas(
+    s: &mut Scene,
+    el: &Eleccion,
+    rot: &mut Rotulos,
+    textos: &mut texto::Textos,
+    p: &Paleta,
+    tr: Affine,
+    escala: f32,
+    t: i64,
+) {
+    let dentro = RoundedRect::new(
+        BORDE,
+        BORDE,
+        ANCHO as f64 - BORDE,
+        ALTO as f64 - BORDE,
+        RADIO - BORDE / 2.0,
+    );
+    for (k, paso) in el.pasos().iter().enumerate() {
+        let Paso::Elegir(que) = *paso else { continue };
+        let (dy, esc, a) = el.capa(k, t);
+        if a <= 0.01 {
+            continue;
+        }
+        s.push_layer(Fill::NonZero, BlendMode::default(), a, tr, &dentro);
+        let (cx, cy) = (ANCHO as f64 / 2.0, ALTO as f64 / 2.0 + dy as f64);
+        let (lista, i) = el.lista(que);
+        let pos = el.posicion(que, t);
+        for (j, nombre) in lista.iter().enumerate() {
+            let d = j as f32 - pos;
+            let alfa = acotar(1.0 - d.abs(), 0.0, 1.0);
+            if alfa <= 0.01 {
+                continue;
+            }
+            let l = suelto(rot, textos, nombre, ROL_TEXTO, texto::pt(12.5), escala);
+            let en = tr * Point::new(cx + d as f64 * PASO_RUEDA, cy);
+            poner(s, l, en, 0.5, esc as f64, p.on_surface, alfa);
+        }
+        let activa = el.actual() == *paso;
+        for (zona, x, glifo, puede) in [
+            (Zona::Antes, X_FLECHA, "‹", i > 0),
+            (
+                Zona::Despues,
+                ANCHO as f64 - X_FLECHA,
+                "›",
+                i + 1 < lista.len(),
+            ),
+        ] {
+            let c = if activa && puede && el.encima == Some(zona) {
+                p.primary
+            } else {
+                p.on_surface
+            };
+            let l = suelto(rot, textos, glifo, ROL_TEXTO, texto::pt(15.0), escala);
+            let en = tr * Point::new(x, cy);
+            poner(s, l, en, 0.5, esc as f64, c, if puede { 1.0 } else { 0.25 });
+        }
+        s.pop_layer();
     }
 }
 

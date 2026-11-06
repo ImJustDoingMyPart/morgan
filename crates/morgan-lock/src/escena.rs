@@ -12,6 +12,7 @@ use std::time::Instant;
 use morgan_ipc::bloqueo::{Bloqueo, Escritura};
 
 use crate::caracteres::Caracteres;
+use crate::eleccion::{Eleccion, Que, Zona};
 
 pub const ANCHO: f32 = 344.0;
 pub const ALTO: f32 = 52.0;
@@ -156,6 +157,27 @@ pub enum Cambio {
         id: u32,
         t: i64,
     },
+    /// El greeter: qué se puede elegir y por dónde empieza (`eleccion.rs`).
+    Elegir {
+        usuarios: Vec<String>,
+        sesiones: Vec<String>,
+        u: usize,
+        s: usize,
+    },
+    Girar {
+        que: Que,
+        i: usize,
+        t: i64,
+    },
+    /// El destello de un avance; el paso cambia después, con `Ir`.
+    Avance {
+        t: i64,
+    },
+    Ir {
+        paso: usize,
+        t: i64,
+    },
+    Encima(Option<Zona>),
 }
 
 /// Cuánto se ve el contenido (reloj, fecha, aviso, campo) en una salida. Con varias, solo la
@@ -257,6 +279,8 @@ pub struct Estado {
     /// otra cosa.
     duena: Option<u32>,
     presencias: Vec<(u32, Presencia)>,
+    /// Solo en el greeter.
+    pub eleccion: Option<Eleccion>,
 }
 
 impl Estado {
@@ -297,6 +321,7 @@ impl Estado {
             t_cuadro: 0,
             duena: None,
             presencias: Vec::new(),
+            eleccion: None,
         }
     }
 
@@ -451,6 +476,32 @@ impl Estado {
                 self.version_textos += 1;
             }
             Cambio::Duena { id, t } => self.nombrar(id, t),
+            Cambio::Elegir {
+                usuarios,
+                sesiones,
+                u,
+                s,
+            } => self.eleccion = Some(Eleccion::new(usuarios, sesiones, u, s)),
+            Cambio::Girar { que, i, t } => {
+                if let Some(e) = &mut self.eleccion {
+                    e.girar(que, i, t);
+                }
+            }
+            Cambio::Avance { t } => {
+                if let Some(e) = &mut self.eleccion {
+                    e.destello(t);
+                }
+            }
+            Cambio::Ir { paso, t } => {
+                if let Some(e) = &mut self.eleccion {
+                    e.ir(paso, t);
+                }
+            }
+            Cambio::Encima(z) => {
+                if let Some(e) = &mut self.eleccion {
+                    e.encima = z;
+                }
+            }
         }
     }
 
@@ -535,6 +586,9 @@ impl Estado {
         self.impulsos
             .retain(|p| seg(t - p.t0) / p.tipo.lento() < 2.5);
         self.chispas.retain(|c| t - c.t0 < 700 * MS);
+        if let Some(e) = &mut self.eleccion {
+            e.limpiar(t);
+        }
         let quiere = if self.quiere_onda(t) { 1.0 } else { 0.0 };
         if quiere != self.visible.a {
             let dura = if quiere > 0.5 { 150 } else { 300 };
@@ -576,6 +630,16 @@ impl Estado {
             || t - self.visible.t0 < self.visible.dura
             || t - self.t_fallo < 1500 * MS
             || self.presencias.iter().any(|(_, p)| p.moviendo(t))
+            || self.eleccion.as_ref().is_some_and(|e| e.animando(t))
+    }
+
+    /// Cuánto se ve lo de la clave (la onda y el texto del campo): con elección, la capa de
+    /// su paso; en el bloqueo, siempre.
+    pub fn clave_visible(&self, t: i64) -> f32 {
+        self.eleccion.as_ref().map_or(1.0, |e| {
+            let k = e.pasos().len() - 1;
+            e.capa(k, t).2
+        })
     }
 }
 

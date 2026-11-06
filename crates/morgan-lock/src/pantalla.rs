@@ -22,6 +22,10 @@ use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
 use smithay_client_toolkit::seat::keyboard::{
     KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers,
 };
+use smithay_client_toolkit::reexports::protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::{
+    Shape, WpCursorShapeDeviceV1,
+};
+use smithay_client_toolkit::seat::pointer::cursor_shape::CursorShapeManager;
 use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind, PointerHandler};
 use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState};
 use smithay_client_toolkit::session_lock::{
@@ -36,8 +40,10 @@ use wayland_client::{Connection, QueueHandle};
 use morgan_ipc::bloqueo::Bloqueo;
 
 use crate::clave::Clave;
+use crate::dibujo::{ANCHO_FLECHA, Y_CAMPO, Y_RENGLON};
+use crate::eleccion::{AVANCE_MS, Eleccion, Paso, Que, Zona};
 use crate::escena::{
-    Borde, Cambio, DESTELLO_MS, ENTRADA_MS, Estado, FALLO_MS, Paleta, SALIDA_MS, ahora,
+    ALTO, ANCHO, Borde, Cambio, DESTELLO_MS, ENTRADA_MS, Estado, FALLO_MS, Paleta, SALIDA_MS, ahora,
 };
 use crate::logind::Logind;
 use crate::perfil::{self, Rutas};
@@ -54,6 +60,9 @@ pub struct Ajustes {
     pub xray: bool,
     /// Paleta, fondo y config; sin rutas, los valores de fábrica.
     pub rutas: Option<Rutas>,
+    /// El greeter: cuentas y sesiones, y por cuáles empezar (`eleccion.rs`). Con elección,
+    /// el puntero se ve y sirve.
+    pub eleccion: Option<(Vec<String>, Vec<String>, usize, usize)>,
 }
 
 /// Lo que llega al hilo principal desde los otros.
@@ -124,6 +133,9 @@ pub fn correr(a: Ajustes) -> ExitCode {
         .map(|r| perfil::estilo(&r.config))
         .unwrap_or((Bloqueo::default(), Borde::Sombra));
 
+    let eleccion = a
+        .eleccion
+        .map(|(usuarios, sesiones, u, s)| Eleccion::new(usuarios, sesiones, u, s));
     let logind = a.logind.then(|| lanzar_logind(avisos.clone()));
     let session_lock_state = SessionLockState::new(&globales, &qh);
     let compositor = match CompositorState::bind(&globales, &qh) {
@@ -144,6 +156,14 @@ pub fn correr(a: Ajustes) -> ExitCode {
 
     let mut estado = Estado::new(paleta, estilo);
     estado.borde = borde;
+    if let Some(el) = &eleccion {
+        estado.aplicar(Cambio::Elegir {
+            usuarios: el.usuarios.clone(),
+            sesiones: el.sesiones.clone(),
+            u: el.u,
+            s: el.s,
+        });
+    }
     let pintor = pintor::lanzar(conn.clone(), estado, fondo);
 
     let mut app = App {
@@ -170,6 +190,17 @@ pub fn correr(a: Ajustes) -> ExitCode {
         saliendo: false,
         estilo,
         verificador: Some(a.verificador),
+        cursor: if eleccion.is_some() {
+            CursorShapeManager::bind(&globales, &qh).ok()
+        } else {
+            None
+        },
+        forma: None,
+        eleccion,
+        avanzando: false,
+        encima: None,
+        puntero_en: None,
+        serial_puntero: 0,
         avisos,
         logind: logind.map(|(tx, _)| tx),
         pintor,
@@ -192,6 +223,14 @@ pub fn correr(a: Ajustes) -> ExitCode {
     }
     for s in app.salidas.outputs().collect::<Vec<_>>() {
         app.cubrir(s);
+    }
+    // Sin nada que elegir, la cuenta y la sesión ya están.
+    if app
+        .eleccion
+        .as_ref()
+        .is_some_and(|e| e.actual() == Paso::Clave)
+    {
+        app.cuenta_elegida();
     }
     app.reloj();
 
@@ -252,7 +291,21 @@ struct App {
     duena: Option<u32>,
     puntero_visto: bool,
     con_teclado: Option<u32>,
+    /// Solo con elección: la forma del puntero (`wp_cursor_shape_v1`).
+    cursor: Option<CursorShapeManager>,
+    forma: Option<WpCursorShapeDeviceV1>,
+    /// El mismo modelo que el render, sin animar: qué paso es y qué está elegido.
+    eleccion: Option<Eleccion>,
+    /// Entre el destello y el cambio de paso: no se acepta otro.
+    avanzando: bool,
+    encima: Option<Zona>,
+    /// La superficie y el punto (lógico) del puntero.
+    puntero_en: Option<(u32, f64, f64)>,
+    serial_puntero: u32,
 }
+
+/// `BTN_LEFT` de `linux/input-event-codes.h`.
+const BTN_IZQUIERDO: u32 = 0x110;
 
 impl App {
     /// Una superficie de bloqueo por salida.
@@ -346,8 +399,18 @@ impl App {
     }
 
     fn tecla(&mut self, ev: KeyEvent) {
-        if self.saliendo || self.ocupado {
+        if self.saliendo || self.ocupado || self.avanzando {
             return;
+        }
+        if let Some(paso) = self.eleccion.as_ref().map(Eleccion::actual) {
+            match paso {
+                Paso::Elegir(q) => return self.tecla_eleccion(q, ev.keysym),
+                // Con el campo vacío, Escape vuelve un paso.
+                Paso::Clave if ev.keysym == Keysym::Escape && self.clave.is_empty() => {
+                    return self.volver(None);
+                }
+                Paso::Clave => {}
+            }
         }
         let antes = self.clave.len();
         match ev.keysym {
@@ -375,6 +438,169 @@ impl App {
             let todo = n == 0 && antes > 1;
             self.pintor.cambio(Cambio::Quitar { n, todo, t });
         }
+    }
+
+    fn tecla_eleccion(&mut self, q: Que, k: Keysym) {
+        match k {
+            Keysym::Left | Keysym::KP_Left => self.girar(q, -1),
+            Keysym::Right | Keysym::KP_Right => self.girar(q, 1),
+            Keysym::Return | Keysym::KP_Enter => self.avanzar(),
+            Keysym::Escape | Keysym::BackSpace => self.volver(None),
+            _ => {}
+        }
+    }
+
+    fn girar(&mut self, q: Que, d: i32) {
+        let Some(el) = &mut self.eleccion else { return };
+        let i = el.lista(q).1 as i32 + d;
+        let t = ahora();
+        if i >= 0 && el.girar(q, i as usize, t) {
+            self.pintor.cambio(Cambio::Girar {
+                que: q,
+                i: i as usize,
+                t,
+            });
+        }
+    }
+
+    /// El destello y, cuando el anillo se completó, el paso siguiente.
+    fn avanzar(&mut self) {
+        if self.avanzando
+            || self
+                .eleccion
+                .as_ref()
+                .is_none_or(|e| e.actual() == Paso::Clave)
+        {
+            return;
+        }
+        self.avanzando = true;
+        self.pintor.cambio(Cambio::Avance { t: ahora() });
+        let _ = self.bucle.insert_source(
+            Timer::from_duration(Duration::from_millis(AVANCE_MS as u64)),
+            |_, _, app| {
+                app.avanzando = false;
+                if let Some(el) = &mut app.eleccion {
+                    let (k, t) = (el.paso + 1, ahora());
+                    el.ir(k, t);
+                    app.pintor.cambio(Cambio::Ir { paso: el.paso, t });
+                    if el.actual() == Paso::Clave {
+                        app.cuenta_elegida();
+                    }
+                }
+                app.refrescar_encima();
+                TimeoutAction::Drop
+            },
+        );
+    }
+
+    /// Al paso `k`, o al anterior. Lo tipeado se pierde.
+    fn volver(&mut self, k: Option<usize>) {
+        let Some(el) = &mut self.eleccion else { return };
+        let Some(k) = k.or_else(|| el.paso.checked_sub(1)) else {
+            return;
+        };
+        if k >= el.paso {
+            return;
+        }
+        let t = ahora();
+        el.ir(k, t);
+        self.pintor.cambio(Cambio::Ir { paso: k, t });
+        if !self.clave.is_empty() {
+            self.clave.vaciar();
+            self.pintor.cambio(Cambio::Vaciar { t });
+        }
+        if matches!(self.fallos, 1..) {
+            self.normal();
+        }
+        self.refrescar_encima();
+    }
+
+    /// La cuenta y la sesión quedaron: el verificador se entera antes de la primera clave.
+    fn cuenta_elegida(&mut self) {
+        if let (Some(el), Some(v)) = (&self.eleccion, &mut self.verificador) {
+            v.elegir(el.u, el.s);
+        }
+    }
+
+    /// Qué hay bajo el puntero, en la superficie que muestra el contenido.
+    fn zona(&self, id: u32, x: f64, y: f64) -> Option<Zona> {
+        let el = self.eleccion.as_ref()?;
+        if Some(id) != self.duena {
+            return None;
+        }
+        let (w, h) = self.superficies.iter().find(|s| s.id == id)?.tam;
+        let (w, h) = (w as f64, h as f64);
+        let (ancho, alto) = (ANCHO as f64, ALTO as f64);
+        let x0 = (w / 2.0 - ancho / 2.0).round();
+        let y0 = (h / 2.0 - Y_CAMPO - alto / 2.0).round();
+        if (x0..x0 + ancho).contains(&x) && (y0..y0 + alto).contains(&y) {
+            let Paso::Elegir(q) = el.actual() else {
+                return None;
+            };
+            let (lista, i) = el.lista(q);
+            return if x < x0 + ANCHO_FLECHA {
+                (i > 0).then_some(Zona::Antes)
+            } else if x >= x0 + ancho - ANCHO_FLECHA {
+                (i + 1 < lista.len()).then_some(Zona::Despues)
+            } else {
+                Some(Zona::Centro)
+            };
+        }
+        let yr = y0 - Y_RENGLON;
+        if (y - yr).abs() <= 14.0 {
+            let cx = w / 2.0;
+            let q = if (cx - 240.0..cx - 6.0).contains(&x) {
+                Que::Usuario
+            } else if (cx + 6.0..cx + 240.0).contains(&x) {
+                Que::Sesion
+            } else {
+                return None;
+            };
+            return el.miga_vuelve(q).map(|_| Zona::Miga(q));
+        }
+        None
+    }
+
+    fn refrescar_encima(&mut self) {
+        let z = self.puntero_en.and_then(|(id, x, y)| self.zona(id, x, y));
+        let z = if self.avanzando || self.ocupado || self.saliendo {
+            None
+        } else {
+            z
+        };
+        if z != self.encima {
+            if z.is_some() != self.encima.is_some()
+                && let Some(f) = &self.forma
+            {
+                let forma = if z.is_some() {
+                    Shape::Pointer
+                } else {
+                    Shape::Default
+                };
+                f.set_shape(self.serial_puntero, forma);
+            }
+            self.encima = z;
+            self.pintor.cambio(Cambio::Encima(z));
+        }
+    }
+
+    fn click(&mut self) {
+        if self.saliendo || self.ocupado || self.avanzando {
+            return;
+        }
+        let Some(el) = &self.eleccion else { return };
+        let actual = el.actual();
+        match (self.encima, actual) {
+            (Some(Zona::Antes), Paso::Elegir(q)) => self.girar(q, -1),
+            (Some(Zona::Despues), Paso::Elegir(q)) => self.girar(q, 1),
+            (Some(Zona::Centro), Paso::Elegir(_)) => self.avanzar(),
+            (Some(Zona::Miga(q)), _) => {
+                let k = el.miga_vuelve(q);
+                self.volver(k);
+            }
+            _ => {}
+        }
+        self.refrescar_encima();
     }
 
     fn enviar(&mut self) {
@@ -692,9 +918,12 @@ impl SeatHandler for App {
         seat: wl_seat::WlSeat,
         c: Capability,
     ) {
-        // El puntero solo se pide para esconderlo, como `morgan-lock`.
+        // En el bloqueo, el puntero solo se pide para esconderlo; con elección, se ve y sirve.
         if c == Capability::Pointer && self.puntero.is_none() {
             self.puntero = self.asientos.get_pointer(qh, &seat).ok();
+            if let (Some(m), Some(p)) = (&self.cursor, &self.puntero) {
+                self.forma = Some(m.get_shape_device(p, qh));
+            }
         }
         if c == Capability::Keyboard && self.teclado.is_none() {
             match self.asientos.get_keyboard_with_repeat(
@@ -826,14 +1055,38 @@ impl PointerHandler for App {
         eventos: &[PointerEvent],
     ) {
         for e in eventos {
-            if let PointerEventKind::Enter { serial } = e.kind {
-                puntero.set_cursor(serial, None, 0, 0);
-                // El contenido sigue al puntero (`escena::Presencia`).
-                if let Some(id) = self.id_de(&e.surface) {
-                    self.puntero_visto = true;
-                    self.nombrar(id);
+            let id = self.id_de(&e.surface);
+            match e.kind {
+                PointerEventKind::Enter { serial } => {
+                    match &self.forma {
+                        Some(f) => f.set_shape(serial, Shape::Default),
+                        None => puntero.set_cursor(serial, None, 0, 0),
+                    }
+                    // La forma recién puesta es la de siempre: lo de encima se recalcula.
+                    if self.encima.take().is_some() {
+                        self.pintor.cambio(Cambio::Encima(None));
+                    }
+                    self.serial_puntero = serial;
+                    // El contenido sigue al puntero (`escena::Presencia`).
+                    if let Some(id) = id {
+                        self.puntero_visto = true;
+                        self.nombrar(id);
+                    }
                 }
+                PointerEventKind::Leave { .. } => self.puntero_en = None,
+                PointerEventKind::Press { button, .. } if button == BTN_IZQUIERDO => {
+                    self.click();
+                }
+                _ => {}
             }
+            if !matches!(e.kind, PointerEventKind::Leave { .. })
+                && let Some(id) = id
+            {
+                self.puntero_en = Some((id, e.position.0, e.position.1));
+            }
+        }
+        if self.eleccion.is_some() {
+            self.refrescar_encima();
         }
     }
 }

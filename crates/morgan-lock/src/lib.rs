@@ -7,6 +7,7 @@
 pub mod caracteres;
 pub mod clave;
 pub mod dibujo;
+pub mod eleccion;
 pub mod escena;
 pub mod fondo;
 pub mod greetd;

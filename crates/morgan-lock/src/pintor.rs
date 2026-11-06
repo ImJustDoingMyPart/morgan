@@ -161,7 +161,11 @@ impl Pintor {
                 let _ = listo.send(());
             }
             Orden::Cambio(c) => {
-                let reloj = matches!(c, Cambio::Reloj { .. } | Cambio::Aviso(_));
+                // Lo que cambia sin animar: hay que pedir un cuadro igual.
+                let reloj = matches!(
+                    c,
+                    Cambio::Reloj { .. } | Cambio::Aviso(_) | Cambio::Encima(_)
+                );
                 self.estado.aplicar(c);
                 if reloj {
                     for s in &mut self.salidas {

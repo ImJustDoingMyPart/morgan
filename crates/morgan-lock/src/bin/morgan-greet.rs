@@ -74,62 +74,85 @@ fn lanzar() -> ExitCode {
 }
 
 fn pantalla(demo: bool) -> ExitCode {
+    let mut usuarios =
+        greeter::usuarios(&std::fs::read_to_string("/etc/passwd").unwrap_or_default());
+    let sesiones = greeter::sesiones(&[PathBuf::from("/usr/share/wayland-sessions")]);
+    if demo {
+        // Con dos cuentas, para ver los dos pasos aunque la máquina tenga una.
+        usuarios.push(Usuario {
+            nombre: "invitado".into(),
+            uid: u32::MAX,
+        });
+    }
+    if usuarios.is_empty() {
+        eprintln!("morgan-greet: no hay cuentas de personas en /etc/passwd");
+        return ExitCode::FAILURE;
+    }
+    if sesiones.is_empty() {
+        eprintln!("morgan-greet: no hay sesiones en /usr/share/wayland-sessions");
+        return ExitCode::FAILURE;
+    }
+    let recuerdo = if demo {
+        Recuerdo::default()
+    } else {
+        Recuerdo::leer()
+    };
+    let u = recuerdo
+        .usuario
+        .as_ref()
+        .and_then(|n| usuarios.iter().position(|u| &u.nombre == n))
+        .unwrap_or(0);
+    let s = recuerdo
+        .sesion
+        .as_ref()
+        .and_then(|id| sesiones.iter().position(|s| &s.id == id))
+        .unwrap_or_else(|| greeter::por_defecto(&sesiones));
+    let eleccion = Some((
+        usuarios.iter().map(|u| u.nombre.clone()).collect(),
+        sesiones.iter().map(|s| s.nombre.clone()).collect(),
+        u,
+        s,
+    ));
     if demo {
         return pantalla::correr(Ajustes {
             verificador: Box::new(Demo),
             logind: false,
             xray: false,
             rutas: Rutas::del_home(),
+            eleccion,
         });
     }
-    let usuarios = greeter::usuarios(&std::fs::read_to_string("/etc/passwd").unwrap_or_default());
-    let sesiones = greeter::sesiones(&[PathBuf::from("/usr/share/wayland-sessions")]);
-    let recuerdo = Recuerdo::leer();
-    let Some(usuario) = recuerdo
-        .usuario
-        .as_ref()
-        .and_then(|n| usuarios.iter().find(|u| &u.nombre == n))
-        .or(usuarios.first())
-        .cloned()
-    else {
-        eprintln!("morgan-greet: no hay cuentas de personas en /etc/passwd");
-        return ExitCode::FAILURE;
-    };
-    let Some(sesion) = recuerdo
-        .sesion
-        .as_ref()
-        .and_then(|id| sesiones.iter().find(|s| &s.id == id))
-        .or_else(|| sesiones.get(greeter::por_defecto(&sesiones)))
-        .cloned()
-    else {
-        eprintln!("morgan-greet: no hay sesiones en /usr/share/wayland-sessions");
-        return ExitCode::FAILURE;
-    };
-    let greetd = match Greetd::conectar(&usuario.nombre) {
+    let greetd = match Greetd::conectar(&usuarios[u].nombre) {
         Ok(g) => g,
         Err(e) => {
             eprintln!("morgan-greet: {e}");
             return ExitCode::FAILURE;
         }
     };
-    let rutas = greeter::rutas_de(&usuario, Path::new(BASE));
+    // Los colores y el fondo, los de la cuenta con la que se empieza.
+    let rutas = greeter::rutas_de(&usuarios[u], Path::new(BASE));
     pantalla::correr(Ajustes {
         verificador: Box::new(Entrar {
             greetd,
-            usuario,
-            sesion,
+            usuarios,
+            sesiones,
+            u,
+            s,
         }),
         logind: false,
         xray: false,
         rutas: Some(rutas),
+        eleccion,
     })
 }
 
 /// greetd, y al acertar, la sesión elegida.
 struct Entrar {
     greetd: Greetd,
-    usuario: Usuario,
-    sesion: Sesion,
+    usuarios: Vec<Usuario>,
+    sesiones: Vec<Sesion>,
+    u: usize,
+    s: usize,
 }
 
 impl Verificador for Entrar {
@@ -137,13 +160,23 @@ impl Verificador for Entrar {
         self.greetd.verificar(clave)
     }
 
+    fn elegir(&mut self, u: usize, s: usize) {
+        if u < self.usuarios.len() && s < self.sesiones.len() {
+            (self.u, self.s) = (u, s);
+            if let Err(e) = self.greetd.usuario(&self.usuarios[u].nombre) {
+                eprintln!("morgan-greet: {e}");
+            }
+        }
+    }
+
     fn al_entrar(&mut self) -> Result<(), String> {
+        let sesion = &self.sesiones[self.s];
         self.greetd
-            .iniciar(&self.sesion.cmd, &self.sesion.entorno())
+            .iniciar(&sesion.cmd, &sesion.entorno())
             .map_err(|e| e.to_string())?;
         let r = Recuerdo {
-            usuario: Some(self.usuario.nombre.clone()),
-            sesion: Some(self.sesion.id.clone()),
+            usuario: Some(self.usuarios[self.u].nombre.clone()),
+            sesion: Some(sesion.id.clone()),
         };
         if let Err(e) = r.guardar() {
             eprintln!("morgan-greet: {BASE}/estado.toml: {e}");

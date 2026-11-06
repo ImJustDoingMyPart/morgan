@@ -25,6 +25,10 @@ pub trait Verificador: Send + 'static {
 
     /// Después de `Bien`, en el mismo hilo y antes de la animación de salida: el greeter
     /// deja la sesión lista para arrancar. Un error acá se muestra como `Error`.
+    /// El greeter eligió cuenta y sesión (índices de las listas que le pasó a la pantalla),
+    /// antes de la primera clave y cada vez que vuelve a elegir.
+    fn elegir(&mut self, _usuario: usize, _sesion: usize) {}
+
     fn al_entrar(&mut self) -> Result<(), String> {
         Ok(())
     }
