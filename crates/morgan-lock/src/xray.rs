@@ -8,12 +8,24 @@
 //! Nunca con la sesión ya bloqueada: un `morgan-lock` relanzado tras una caída mostraría el
 //! escritorio mientras entra. Por eso `main` lo prende solo si `LockedHint` dice que no lo está.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use morgan_ipc::hyprland::{dir_from, pedir_ya};
+
+static ACTIVO: AtomicBool = AtomicBool::new(true);
+
+/// Para el greeter: en su Hyprland no hay escritorio que mostrar en los fundidos.
+pub fn desactivar() {
+    ACTIVO.store(false, Ordering::Relaxed);
+}
 
 /// Sincrónico: el valor tiene que estar puesto antes del primer cuadro del bloqueo. Seguro en
 /// el hilo principal mientras no se espere a Hyprland entre el connect y el write (ver
 /// `pedir_ya`); acá no hay nada en el medio.
 pub fn poner(si: bool) {
+    if !ACTIVO.load(Ordering::Relaxed) {
+        return;
+    }
     let Some(dir) = dir_from(|k| std::env::var_os(k)) else {
         return;
     };

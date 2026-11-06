@@ -22,4 +22,10 @@ pub enum Resultado {
 /// verificador viaja a ese hilo y vuelve con el resultado, así que no necesita candado.
 pub trait Verificador: Send + 'static {
     fn verificar(&mut self, clave: Secreto) -> Resultado;
+
+    /// Después de `Bien`, en el mismo hilo y antes de la animación de salida: el greeter
+    /// deja la sesión lista para arrancar. Un error acá se muestra como `Error`.
+    fn al_entrar(&mut self) -> Result<(), String> {
+        Ok(())
+    }
 }

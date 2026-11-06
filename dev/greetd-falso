@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""greetd de mentira para probar morgan-greet sin tocar el login de verdad: «mal» falla, lo
+demás entra. Anota los pedidos (sin la clave) en el archivo del segundo argumento.
+
+    dev/greetd-falso SOCKET REGISTRO &
+    dev/anidado ejecutar env GREETD_SOCK=SOCKET target/debug/morgan-greet
+
+El Hyprland del greeter se abre como ventana dentro del anidado; las teclas se le mandan con
+`WAYLAND_DISPLAY=<el suyo> wtype …` (el de `/proc/<pid de morgan-greet pantalla>/environ`)."""
+import json, os, socket, struct, sys
+
+ruta, registro = sys.argv[1], sys.argv[2]
+if os.path.exists(ruta):
+    os.unlink(ruta)
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.bind(ruta)
+s.listen(4)
+
+
+def leer(c):
+    n = c.recv(4, socket.MSG_WAITALL)
+    if len(n) < 4:
+        return None
+    (largo,) = struct.unpack("=I", n)
+    return json.loads(c.recv(largo, socket.MSG_WAITALL))
+
+
+def mandar(c, m):
+    b = json.dumps(m).encode()
+    c.sendall(struct.pack("=I", len(b)) + b)
+
+
+with open(registro, "a", buffering=1) as log:
+    while True:
+        c, _ = s.accept()
+        while (p := leer(c)) is not None:
+            t = p["type"]
+            if t == "post_auth_message_response":
+                log.write(json.dumps({"type": t, "con_respuesta": "response" in p}) + "\n")
+            else:
+                log.write(json.dumps(p) + "\n")
+            if t == "create_session":
+                mandar(c, {"type": "auth_message", "auth_message_type": "secret", "auth_message": "Password: "})
+            elif t == "post_auth_message_response":
+                if p.get("response") == "mal":
+                    mandar(c, {"type": "error", "error_type": "auth_error", "description": "pam_authenticate: AUTH_ERR"})
+                else:
+                    mandar(c, {"type": "success"})
+            else:
+                mandar(c, {"type": "success"})
+        c.close()

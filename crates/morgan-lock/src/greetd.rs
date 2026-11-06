@@ -186,12 +186,10 @@ impl<S: Read + Write> Greetd<S> {
                     // igual.
                     let _ = self.pedir(&Pedido::CancelSession);
                     return Ok(match error_type {
-                        TipoError::AuthError => {
-                            if !description.is_empty() && mensajes.is_empty() {
-                                mensajes.push(description);
-                            }
-                            Resultado::Fallo(mensajes)
-                        }
+                        // La descripción es el código de PAM («pam_authenticate:
+                        // AUTH_ERR»), no algo para mostrar: como en el bloqueo, solo los
+                        // avisos de la conversación.
+                        TipoError::AuthError => Resultado::Fallo(mensajes),
                         TipoError::Error => Resultado::Error(format!("greetd: {description}")),
                     });
                 }
@@ -372,7 +370,7 @@ mod tests {
         let mut g = Greetd::sobre(s, "anon");
         assert_eq!(
             g.verificar(Secreto::new("mal".into())),
-            Resultado::Fallo(vec!["pam_authenticate: AUTH_ERR".into()])
+            Resultado::Fallo(Vec::new())
         );
         assert_eq!(g.verificar(Secreto::new("bien".into())), Resultado::Bien);
         drop(g);
