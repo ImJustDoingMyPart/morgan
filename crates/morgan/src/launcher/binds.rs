@@ -6,9 +6,9 @@
 use crate::aplicacion::App;
 use crate::config::{AtajoPropio, Atajos, Capturas, Cuando, Modo};
 
-type Accion<'a> = (&'static str, &'a str, &'static str, &'static str, bool);
+pub(crate) type Accion<'a> = (&'static str, &'a str, &'static str, &'static str, bool);
 
-fn acciones(a: &Atajos) -> [(&'static str, Vec<Accion<'_>>); 2] {
+pub(crate) fn acciones(a: &Atajos) -> [(&'static str, Vec<Accion<'_>>); 2] {
     [
         (
             "Menús y lanzadores (morgan)", // no-tr
@@ -81,6 +81,22 @@ pub fn submap_grabar(entrar: bool) -> String {
     }
 }
 
+/// El comando que entra al submap de grabar o sale de él, para el compositor de la sesión.
+pub fn comando_submap_grabar(entrar: bool) -> Vec<String> {
+    use morgan_ipc::compositor::Tipo;
+    match (morgan_ipc::compositor::actual(), entrar) {
+        (Tipo::Umbriel, true) => ["umbriel", "msg", "submap", SUBMAP_GRABAR] // no-tr
+            .map(str::to_owned)
+            .to_vec(),
+        (Tipo::Umbriel, false) => vec![
+            "sh".into(), // no-tr
+            "-c".into(),
+            format!("[ \"$(umbriel submap --json)\" = '\"{SUBMAP_GRABAR}\"' ] && umbriel msg submap reset"), // no-tr
+        ],
+        _ => vec!["hyprctl".into(), "eval".into(), submap_grabar(entrar)], // no-tr
+    }
+}
+
 /// `super + h` y `SUPER + H` son la misma para Hyprland.
 pub fn normalizar(tecla: &str) -> String {
     let mut mods = [false; 4];
@@ -114,7 +130,7 @@ pub fn combinacion(mods: [bool; 4], tecla: &str) -> String {
 }
 
 /// Todas `locked`: el volumen se cambia también con la pantalla bloqueada.
-fn multimedia() -> [(&'static str, &'static str, &'static str, bool); 10] {
+pub(crate) fn multimedia() -> [(&'static str, &'static str, &'static str, bool); 10] {
     [
         ("XF86AudioRaiseVolume", "morganctl volume up", tr!("Subir volumen"), true), // no-tr
         ("XF86AudioLowerVolume", "morganctl volume down", tr!("Bajar volumen"), true), // no-tr
@@ -129,7 +145,7 @@ fn multimedia() -> [(&'static str, &'static str, &'static str, bool); 10] {
     ]
 }
 
-const CAPTURAS: [(&str, &str, &str); 3] = [
+pub(crate) const CAPTURAS: [(&str, &str, &str); 3] = [
     ("Print", tr_const!("Captura región"), "-m region"), // no-tr
     ("CTRL + Print", tr_const!("Captura pantalla"), "-m output"), // no-tr
     ("ALT + Print", tr_const!("Captura ventana activa"), "-m window -m active"), // no-tr
@@ -163,7 +179,7 @@ fn entre_comillas(ruta: &str) -> String {
     format!("'{}'", ruta.replace('\'', "'\\''"))
 }
 
-fn carpeta_capturas() -> String {
+pub(crate) fn carpeta_capturas() -> String {
     glib::user_special_dir(glib::UserDirectory::Pictures)
         .unwrap_or_else(glib::home_dir)
         .join("Screenshots") // no-tr

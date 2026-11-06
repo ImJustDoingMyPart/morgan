@@ -29,6 +29,7 @@ fn correr(lista: &[Vec<String>]) -> Vec<Result<String, String>> {
     let hijos: Vec<_> = lista
         .iter()
         .map(|a| {
+            permitido(&a[0])?;
             std::process::Command::new(&a[0])
                 .args(&a[1..])
                 .stdin(std::process::Stdio::null())
@@ -75,6 +76,7 @@ pub async fn salida_cortable(
 }
 
 fn con_salida(args: &[&str]) -> Result<gio::Subprocess, String> {
+    permitido(args[0])?;
     let argv: Vec<&std::ffi::OsStr> = args.iter().map(|a| std::ffi::OsStr::new(*a)).collect();
     gio::Subprocess::newv(
         &argv,
@@ -100,7 +102,10 @@ static UWSM: OnceLock<bool> = OnceLock::new();
 /// uwsm es Python y tarda ~100 ms: `main` lo pregunta al arrancar, en otro hilo.
 pub fn con_uwsm() -> bool {
     *UWSM.get_or_init(|| {
-        glib::find_program_in_path("uwsm").is_some()
+        // Un Umbriel anidado en un Hyprland con uwsm vería a uwsm activo, y las apps se abrirían
+        // en la sesión de afuera. morgan solo conoce a uwsm con Hyprland.
+        es_hyprland()
+            && glib::find_program_in_path("uwsm").is_some()
             && std::process::Command::new("uwsm")
                 .args(["check", "is-active"])
                 .stdin(std::process::Stdio::null())
@@ -146,14 +151,34 @@ pub fn abrir(ruta: &std::path::Path, otro_tipo: &str) -> Result<(), String> {
 
 /// Con uwsm, `uwsm stop` (su doc pide que la termine él).
 pub fn salir_de_la_sesion() -> &'static [&'static str] {
+    use morgan_ipc::compositor::Tipo;
     if con_uwsm() {
-        &["uwsm", "stop"]
-    } else {
-        &["hyprctl", "eval", "hl.dispatch(hl.dsp.exit())"]
+        return &["uwsm", "stop"];
+    }
+    match morgan_ipc::compositor::actual() {
+        Tipo::Umbriel => &["umbriel", "msg", "session-quit", "skip-confirmation"],
+        _ => &["hyprctl", "eval", "hl.dispatch(hl.dsp.exit())"],
     }
 }
 
+fn es_hyprland() -> bool {
+    morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Hyprland
+}
+
+/// `hyprctl` fuera de Hyprland no tiene con quién hablar, salvo con el de afuera si morgan corre
+/// en otro compositor anidado (hereda `HYPRLAND_INSTANCE_SIGNATURE`): ahí le cambiaría la sesión
+/// real. Se corta acá, para todo lo que lo lance.
+fn permitido(programa: &str) -> Result<(), String> {
+    if programa == "hyprctl" && !es_hyprland() {
+        return Err("hyprctl: la sesión no es de Hyprland".into());
+    }
+    Ok(())
+}
+
 pub fn lanzar(args: &[&str]) {
+    if let Err(e) = permitido(args[0]) {
+        return eprintln!("morgan: {e}");
+    }
     let argv: Vec<&std::ffi::OsStr> = args.iter().map(|a| std::ffi::OsStr::new(*a)).collect();
     match gio::Subprocess::newv(&argv, gio::SubprocessFlags::NONE) {
         Ok(p) => p.wait_async(gio::Cancellable::NONE, |_| {}),
@@ -162,6 +187,9 @@ pub fn lanzar(args: &[&str]) {
 }
 
 pub fn lanzar_con_entrada(args: &[&str], entrada: &[u8]) {
+    if let Err(e) = permitido(args[0]) {
+        return eprintln!("morgan: {e}");
+    }
     let argv: Vec<&std::ffi::OsStr> = args.iter().map(|a| std::ffi::OsStr::new(*a)).collect();
     let p = match gio::Subprocess::newv(&argv, gio::SubprocessFlags::STDIN_PIPE) {
         Ok(p) => p,

@@ -159,7 +159,7 @@ impl Menu {
         let m = Menu { inner };
         m.conectar(&centro);
         // Por si morgan se cayó grabando una tecla: en el submap de grabar no anda ningún bind.
-        comando::lanzar(&["hyprctl", "eval", &binds::submap_grabar(false)]);
+        comando::lanzar(&binds::comando_submap_grabar(false).iter().map(String::as_str).collect::<Vec<_>>());
         // La primera apertura no tiene «lo de la vez anterior»: sin esto se dibuja vacía y se
         // llena un instante después. Se lee al rato de arrancar, no en el arranque mismo.
         let yo = m.clone();
@@ -501,6 +501,11 @@ impl Menu {
                         hora::filas(&hora::leer().await, region.as_deref(), chrono::Utc::now());
                 }
                 if cat == Categoria::Pantalla
+                    && let Some(nombre) = lectura::otro_compositor()
+                    && let Some(m) = p.first_mut()
+                {
+                    m.filas = vec![arbol::solo_hyprland(nombre)];
+                } else if cat == Categoria::Pantalla
                     && let Some(m) = p.first_mut()
                 {
                     let mut salidas =
@@ -736,8 +741,9 @@ impl Menu {
                     eprintln!("morgan: menú: {e}");
                     Vec::new()
                 });
-            let entrar = binds::submap_grabar(true);
-            if let Err(e) = comando::salida(&["hyprctl", "eval", &entrar]).await {
+            let entrar = binds::comando_submap_grabar(true);
+            let entrar: Vec<&str> = entrar.iter().map(String::as_str).collect();
+            if let Err(e) = comando::salida(&entrar).await {
                 eprintln!("morgan: menú: submap de grabar: {e}");
             }
             let sigue = match &mut *yo.inner.grabando.borrow_mut() {
@@ -749,7 +755,7 @@ impl Menu {
             };
             // Se canceló mientras entraba: se sale de nuevo.
             if !sigue {
-                comando::lanzar(&["hyprctl", "eval", &binds::submap_grabar(false)]);
+                comando::lanzar(&binds::comando_submap_grabar(false).iter().map(String::as_str).collect::<Vec<_>>());
             }
         });
     }
@@ -758,7 +764,7 @@ impl Menu {
         let Some(g) = self.inner.grabando.take() else {
             return;
         };
-        comando::lanzar(&["hyprctl", "eval", &binds::submap_grabar(false)]);
+        comando::lanzar(&binds::comando_submap_grabar(false).iter().map(String::as_str).collect::<Vec<_>>());
         self.mandar(Orden::AjustesGrabando(false));
         self.hecho(g.lugar, true);
         if self.inner.abierto.get() && self.inner.categoria.get() == g.categoria {
@@ -979,7 +985,7 @@ impl Menu {
             c.guardar(&ruta)?;
         }
         let config = self.inner.config.borrow().clone();
-        crate::hypr_cfg::aplicar(&config, &self.inner.s.ruta_config).await
+        crate::compositor::aplicar_config(&config, &self.inner.s.ruta_config).await
     }
 
     fn cambiar_config(&self, cambio: &arbol::Cambio) -> Result<(), String> {

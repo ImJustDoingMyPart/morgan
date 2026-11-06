@@ -26,7 +26,7 @@ use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::bandeja::Bandeja;
 use crate::calendario::Calendario;
-use crate::hyprland::Hyprland;
+use crate::compositor::Compositor;
 use crate::notificaciones::Notificaciones;
 use crate::privacidad::{self, Privacidad};
 use crate::sistema;
@@ -34,7 +34,7 @@ use crate::tema::Tema;
 use hilo::{Evento, Orden};
 
 pub struct Servicios {
-    pub hyprland: Hyprland,
+    pub compositor: Compositor,
     pub notificaciones: Notificaciones,
     pub bandeja: Bandeja,
     pub privacidad: Privacidad,
@@ -105,7 +105,7 @@ impl Barra {
         });
 
         let weak = Rc::downgrade(&inner);
-        inner.s.hyprland.al_cambiar_espacios(move |e| {
+        inner.s.compositor.al_cambiar_espacios(move |e| {
             if let Some(inner) = weak.upgrade() {
                 let _ = inner.hilo.send(Orden::Espacios(e.clone()));
                 inner.privacidad();
@@ -132,7 +132,7 @@ impl Barra {
         });
         let _ = inner
             .hilo
-            .send(Orden::Espacios(inner.s.hyprland.espacios()));
+            .send(Orden::Espacios(inner.s.compositor.espacios()));
         inner.campana();
         inner.privacidad();
         inner.grabacion();
@@ -182,7 +182,7 @@ impl Inner {
     fn evento(&self, e: Evento) {
         match e {
             Evento::Pedir(r) => (self.s.pedir)(r),
-            Evento::IrA(id) => self.s.hyprland.ir_a(id),
+            Evento::IrA(id) => self.s.compositor.ir_a(id),
             Evento::Grabar => crate::comando::lanzar(&["gsr-ui-cli", "toggle-record"]),
             Evento::Bandeja {
                 clave,
@@ -256,7 +256,7 @@ impl Inner {
         if e.pantalla {
             glifos.push("󰹑");
         }
-        let tele = self.s.hyprland.espacios().prendida(&self.s.tele);
+        let tele = self.s.compositor.espacios().prendida(&self.s.tele);
         if tele {
             glifos.push("󰔂");
         }

@@ -3,13 +3,15 @@
 //! y hacia negro. `misc:session_lock_xray` las dibuja, y eso cuesta mientras dure (en el
 //! anidado, con algo moviéndose debajo: 3 puntos de CPU y 7 de GPU de Hyprland). Con el
 //! bloqueo puesto el fondo es opaco y no se ve nada de abajo, así que va prendido solo durante
-//! los fundidos. Fuera de Hyprland no hace nada y el fundido queda desde negro.
+//! los fundidos. Fuera de Hyprland no hace nada y el fundido queda desde negro (Umbriel no tiene
+//! una opción así: mientras el bloqueo prepara sus superficies deja ver el escritorio).
 //!
 //! Nunca con la sesión ya bloqueada: un `morgan-lock` relanzado tras una caída mostraría el
 //! escritorio mientras entra. Por eso `main` lo prende solo si `LockedHint` dice que no lo está.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use morgan_ipc::compositor::{self, Tipo};
 use morgan_ipc::hyprland::{dir_from, pedir_ya};
 
 static ACTIVO: AtomicBool = AtomicBool::new(true);
@@ -23,7 +25,9 @@ pub fn desactivar() {
 /// el hilo principal mientras no se espere a Hyprland entre el connect y el write (ver
 /// `pedir_ya`); acá no hay nada en el medio.
 pub fn poner(si: bool) {
-    if !ACTIVO.load(Ordering::Relaxed) {
+    // En un compositor anidado (Umbriel dentro de Hyprland), la firma de Hyprland es la del
+    // de afuera: sin esto, el bloqueo de prueba le cambiaría la opción a la sesión real.
+    if !ACTIVO.load(Ordering::Relaxed) || compositor::actual() != Tipo::Hyprland {
         return;
     }
     let Some(dir) = dir_from(|k| std::env::var_os(k)) else {

@@ -62,7 +62,7 @@ use wayland_protocols::wp::relative_pointer::zv1::client::zwp_relative_pointer_v
 use super::dibujo::{self, ALTO, Animos, Estado, Icono, Lugar, Pintura, Que, Rotulos};
 use super::modelo;
 use crate::calendario::dibujo::{self as cal, Cal, Hoja, Objetivo};
-use crate::hyprland::Espacios;
+use crate::compositor::Espacios;
 use crate::lamina::Lamina;
 
 /// Lo que GTK espera del puntero quieto antes de mostrar el globo; si otro globo se cerró hace

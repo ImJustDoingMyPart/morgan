@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 
 use crate::config;
-use crate::hyprland::Hyprland;
+use crate::compositor::Compositor;
 use modelo::{Destino, Guardado, Imagen, Notificacion, Pixeles};
 use servidor::{Emisor, Pedido, Razon};
 
@@ -41,7 +41,7 @@ struct Inner {
     en_juego: RefCell<Vec<String>>,
     config: RefCell<config::Notificaciones>,
     resumen_juego: Cell<bool>,
-    hyprland: Hyprland,
+    compositor: Compositor,
     dir: Option<PathBuf>,
     emisor: RefCell<Option<Emisor>>,
     oyentes: RefCell<Vec<Oyente>>,
@@ -49,7 +49,7 @@ struct Inner {
 }
 
 impl Notificaciones {
-    pub fn new(config: &config::Config, hyprland: Hyprland) -> Self {
+    pub fn new(config: &config::Config, compositor: Compositor) -> Self {
         let dir = dir_from(|k| std::env::var_os(k));
         let guardado = dir.as_deref().map(cargar).unwrap_or_default();
         let inner = Rc::new(Inner {
@@ -59,7 +59,7 @@ impl Notificaciones {
             en_juego: RefCell::default(),
             config: RefCell::new(config.notificaciones.clone()),
             resumen_juego: Cell::new(config.juego.resumen),
-            hyprland: hyprland.clone(),
+            compositor: compositor.clone(),
             dir,
             emisor: RefCell::default(),
             oyentes: RefCell::default(),
@@ -69,7 +69,7 @@ impl Notificaciones {
         n.podar();
 
         let weak = Rc::downgrade(&n.inner);
-        hyprland.al_cambiar(move |juego| {
+        compositor.al_cambiar(move |juego| {
             if !juego && let Some(inner) = weak.upgrade() {
                 Notificaciones { inner }.salir_del_juego();
             }
@@ -162,7 +162,7 @@ impl Notificaciones {
         let destino = modelo::destino(
             &n,
             self.no_molestar(),
-            self.inner.hyprland.juego_en_foco(),
+            self.inner.compositor.juego_en_foco(),
             silenciada,
         );
         if destino == Destino::Juego {

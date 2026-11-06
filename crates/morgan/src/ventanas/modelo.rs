@@ -2,7 +2,7 @@
 //! viewport de todas las franjas es el mismo rectángulo y queda alineado en columna; una
 //! columna de un layout scrolling fuera de pantalla tiene x negativa o mayor que el ancho.
 
-use serde::Deserialize;
+use crate::compositor::{Cliente, Salida};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Rect {
@@ -70,68 +70,35 @@ pub enum Dir {
     Abajo,
 }
 
-pub fn leer(clientes: &str, monitores: &str) -> Result<Lienzo, serde_json::Error> {
-    #[derive(Deserialize)]
-    struct C {
-        address: String,
-        mapped: bool,
-        hidden: bool,
-        at: [i32; 2],
-        size: [i32; 2],
-        workspace: W,
-        monitor: i64,
-        class: String,
-        title: String,
-        #[serde(rename = "focusHistoryID")]
-        historia: i32,
-    }
-    #[derive(Deserialize)]
-    struct W {
-        id: i64,
-    }
-    #[derive(Deserialize)]
-    struct M {
-        id: i64,
-        x: i32,
-        y: i32,
-        width: i32,
-        height: i32,
-        scale: f64,
-        transform: i32,
-        focused: bool,
-        #[serde(rename = "activeWorkspace")]
-        activo: W,
-    }
-    let monitores: Vec<M> = serde_json::from_str(monitores)?;
-    let ws_actual = monitores.iter().find(|m| m.focused).map(|m| m.activo.id);
+/// Coordenadas relativas al origen de la salida de cada ventana. Las de un workspace especial
+/// (el scratchpad) quedan afuera.
+pub fn leer(clientes: &[Cliente], salidas: &[Salida]) -> Lienzo {
+    let ws_actual = salidas.iter().find(|s| s.enfocada).map(|s| s.activo);
     let mut ventanas = Vec::new();
-    for c in serde_json::from_str::<Vec<C>>(clientes)? {
-        if !c.mapped || c.hidden || c.workspace.id <= 0 {
+    for c in clientes {
+        if c.ws <= 0 {
             continue;
         }
-        let Some(m) = monitores.iter().find(|m| m.id == c.monitor) else {
+        let Some(m) = salidas.iter().find(|s| s.nombre == c.salida) else {
             continue;
         };
-        // El tamaño lógico: los píxeles sobre la escala, girados si el monitor lo está.
-        let (mut w, mut h) = (
-            (f64::from(m.width) / m.scale).round() as i32,
-            (f64::from(m.height) / m.scale).round() as i32,
-        );
-        if m.transform % 2 == 1 {
-            std::mem::swap(&mut w, &mut h);
-        }
         ventanas.push(Ventana {
-            direccion: c.address,
-            clase: c.class,
-            titulo: c.title,
-            ws: c.workspace.id,
+            direccion: c.id.clone(),
+            clase: c.clase.clone(),
+            titulo: c.titulo.clone(),
+            ws: c.ws,
             rect: Rect {
-                x: c.at[0] - m.x,
-                y: c.at[1] - m.y,
-                w: c.size[0],
-                h: c.size[1],
+                x: c.rect.x - m.rect.x,
+                y: c.rect.y - m.rect.y,
+                w: c.rect.w,
+                h: c.rect.h,
             },
-            monitor: Rect { x: 0, y: 0, w, h },
+            monitor: Rect {
+                x: 0,
+                y: 0,
+                w: m.rect.w,
+                h: m.rect.h,
+            },
             historia: c.historia,
         });
     }
@@ -151,18 +118,12 @@ pub fn leer(clientes: &str, monitores: &str) -> Result<Lienzo, serde_json::Error
     }
     let mut recientes: Vec<usize> = (0..ventanas.len()).collect();
     recientes.sort_by_key(|&i| ventanas[i].historia);
-    Ok(Lienzo {
+    Lienzo {
         ventanas,
         franjas,
         recientes,
         ws_actual,
-    })
-}
-
-/// `j/activewindow` dice que la ventana activa es esta.
-pub fn es_la_activa(activa: &str, direccion: &str) -> bool {
-    serde_json::from_str::<serde_json::Value>(activa)
-        .is_ok_and(|v| v["address"].as_str() == Some(direccion))
+    }
 }
 
 impl Lienzo {
@@ -309,15 +270,6 @@ pub fn medidas(
 mod tests {
     use super::*;
 
-    #[test]
-    fn reconoce_la_ventana_activa() {
-        assert!(es_la_activa(r#"{"address":"0xa","title":"x"}"#, "0xa"));
-        assert!(!es_la_activa(r#"{"address":"0xb"}"#, "0xa"));
-        // Sin ventana activa, Hyprland da un objeto vacío.
-        assert!(!es_la_activa("{}", "0xa"));
-        assert!(!es_la_activa("no es json", "0xa"));
-    }
-
     const MONITORES: &str = r#"[{"id":0,"name":"DP-1","x":0,"y":0,"width":2560,"height":1440,
         "scale":1.0,"transform":0,"focused":true,"activeWorkspace":{"id":3,"name":"3"}}]"#;
 
@@ -329,8 +281,17 @@ mod tests {
         )
     }
 
+    /// Desde las respuestas de Hyprland, como llegan.
+    fn leer_json(clientes: &str, monitores: &str) -> Lienzo {
+        use crate::compositor::hyprland::{leer_clientes, leer_salidas};
+        leer(
+            &leer_clientes(clientes, monitores).unwrap(),
+            &leer_salidas(monitores).unwrap(),
+        )
+    }
+
     fn lienzo(clientes: &[String]) -> Lienzo {
-        leer(&format!("[{}]", clientes.join(",")), MONITORES).unwrap()
+        leer_json(&format!("[{}]", clientes.join(",")), MONITORES)
     }
 
     fn dir(l: &Lienzo, i: usize) -> &str {
@@ -389,12 +350,12 @@ mod tests {
 
     #[test]
     fn coordenadas_relativas_al_monitor() {
-        let monitores = r#"[{"id":0,"x":0,"y":0,"width":1920,"height":1080,"scale":1.0,
+        let monitores = r#"[{"id":0,"name":"A","x":0,"y":0,"width":1920,"height":1080,"scale":1.0,
             "transform":0,"focused":false,"activeWorkspace":{"id":1}},
-            {"id":1,"x":1920,"y":0,"width":3840,"height":2160,"scale":2.0,"transform":0,
+            {"id":1,"name":"B","x":1920,"y":0,"width":3840,"height":2160,"scale":2.0,"transform":0,
             "focused":true,"activeWorkspace":{"id":5}}]"#;
         let c = cliente("t", 5, 1940, 20, 900, 1000, 0).replace(r#""monitor":0"#, r#""monitor":1"#);
-        let l = leer(&format!("[{c}]"), monitores).unwrap();
+        let l = leer_json(&format!("[{c}]"), monitores);
         assert_eq!(l.ventanas[0].rect.x, 20);
         assert_eq!(
             l.ventanas[0].monitor,

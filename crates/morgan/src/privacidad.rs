@@ -7,7 +7,7 @@
 //!   grabación sin pistas de audio no se ve, y una que se arranca con el replay corriendo (la
 //!   hace el mismo proceso, con una señal) tampoco.
 //! - **Pantalla**: el evento `screencast` de Hyprland no se puede consultar, así que lo lleva
-//!   `hyprland.rs`. Cuenta solo si dura `COMPARTIR_MINIMO`: las fotos de ventanas de morgan
+//!   `compositor/hyprland.rs`. Cuenta solo si dura `COMPARTIR_MINIMO`: las fotos de ventanas de morgan
 //!   también lo disparan.
 
 use std::cell::{Cell, RefCell};
@@ -21,7 +21,7 @@ use pulse::context::State;
 use pulse::context::subscribe::InterestMaskSet;
 
 use crate::audio::Conexion;
-use crate::hyprland::Hyprland;
+use crate::compositor::Compositor;
 
 const REINTENTO: Duration = Duration::from_secs(2);
 
@@ -107,12 +107,12 @@ struct Inner {
 }
 
 impl Privacidad {
-    pub fn new(hyprland: &Hyprland) -> Self {
+    pub fn new(compositor: &Compositor) -> Self {
         let p = Privacidad {
             inner: Rc::default(),
         };
         let yo = p.clone();
-        hyprland.al_compartir(move |v| yo.compartiendo(v));
+        compositor.al_compartir(move |v| yo.compartiendo(v));
         p.conectar();
         p
     }

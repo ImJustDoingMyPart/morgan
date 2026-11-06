@@ -17,7 +17,7 @@ use zbus::Proxy;
 use zbus::zvariant::OwnedObjectPath;
 
 use crate::config;
-use crate::hyprland::Hyprland;
+use crate::compositor::Compositor;
 use crate::osd::Aviso;
 use logind::Logind;
 use wayland::Notificador;
@@ -74,7 +74,7 @@ pub struct Idle {
 
 struct Inner {
     config: RefCell<config::Idle>,
-    hyprland: Hyprland,
+    compositor: Compositor,
     activo: Cell<bool>,
     caffeine: Cell<bool>,
     dbus: Cell<usize>,
@@ -90,11 +90,11 @@ struct Inner {
 }
 
 impl Idle {
-    pub fn new(config: &config::Idle, hyprland: Hyprland) -> Self {
+    pub fn new(config: &config::Idle, compositor: Compositor) -> Self {
         let idle = Idle {
             inner: Rc::new(Inner {
                 config: RefCell::new(config.clone()),
-                hyprland,
+                compositor,
                 activo: Cell::new(false),
                 caffeine: Cell::new(false),
                 dbus: Cell::new(0),
@@ -110,10 +110,17 @@ impl Idle {
             }),
         };
         let yo = idle.clone();
-        idle.inner.hyprland.al_evento(move |linea| {
-            if yo.inner.apagadas.get() && monitor_nuevo(linea) {
+        let antes = RefCell::new(None::<Vec<String>>);
+        idle.inner.compositor.al_salidas(move |ahora| {
+            let previas = antes.replace(Some(ahora.to_vec()));
+            let nueva = previas.is_some_and(|p| {
+                crate::compositor::nuevas(&p, ahora)
+                    .iter()
+                    .any(|n| monitor_nuevo(n))
+            });
+            if yo.inner.apagadas.get() && nueva {
                 eprintln!("morgan: idle: un monitor se reconectó; se lo apaga otra vez");
-                yo.inner.hyprland.dpms(false);
+                yo.inner.compositor.dpms(false);
             }
         });
         let yo = idle.clone();
@@ -227,7 +234,7 @@ impl Idle {
             return;
         }
         eprintln!("morgan: idle: pantallas apagadas");
-        self.inner.hyprland.dpms(false);
+        self.inner.compositor.dpms(false);
         if let Some(n) = self.inner.notificador.borrow().as_ref() {
             n.pedir_entrada(Accion::Despertar, DESPERTAR_MS);
         }
@@ -239,7 +246,7 @@ impl Idle {
         }
         if self.inner.apagadas.replace(false) {
             eprintln!("morgan: idle: pantallas prendidas");
-            self.inner.hyprland.dpms(true);
+            self.inner.compositor.dpms(true);
         }
     }
 
@@ -401,11 +408,9 @@ impl Idle {
 /// Muchos monitores, al quedarse sin señal, se desconectan y vuelven a los pocos segundos.
 /// Hyprland prende al que vuelve aunque DPMS esté apagado: lo corrigió en 0.55.3 y lo perdió en
 /// 0.56.0. `FALLBACK` es el que Hyprland pone mientras no hay ninguno.
-fn monitor_nuevo(linea: &str) -> bool {
-    linea
-        .strip_prefix("monitoraddedv2>>")
-        .and_then(|d| d.split(',').nth(1))
-        .is_some_and(|nombre| nombre != "FALLBACK")
+/// La salida de respaldo de Hyprland (sin monitores) no cuenta.
+fn monitor_nuevo(nombre: &str) -> bool {
+    nombre != "FALLBACK"
 }
 
 fn registrar(r: zbus::Result<()>) {
@@ -465,12 +470,8 @@ mod tests {
 
     #[test]
     fn monitor_que_vuelve() {
-        assert!(monitor_nuevo(
-            "monitoraddedv2>>2,DP-3,Shenzhen KTC Technology Group 27GS600 0000000000001"
-        ));
-        assert!(!monitor_nuevo("monitoraddedv2>>0,FALLBACK,"));
-        assert!(!monitor_nuevo("monitorremovedv2>>2,DP-3,KTC"));
-        assert!(!monitor_nuevo("monitoradded>>DP-3"));
+        assert!(monitor_nuevo("DP-3"));
+        assert!(!monitor_nuevo("FALLBACK"));
     }
 
     #[test]

@@ -26,7 +26,7 @@ use morgan_motor::vello::kurbo::{Affine, Point, Rect};
 use morgan_motor::vello::peniko::{Fill, ImageBrush, ImageData};
 
 use super::modelo::{self, Boton};
-use crate::hyprland::Espacios;
+use crate::compositor::Espacios;
 
 pub const ALTO: u32 = 28;
 const ROL: u8 = 0;

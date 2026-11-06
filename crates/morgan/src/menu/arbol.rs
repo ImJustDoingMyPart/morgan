@@ -541,6 +541,25 @@ pub fn ajuste(titulo: &str, sub: &str, control: Control) -> Fila {
     }
 }
 
+/// Lo que en este compositor no se puede cambiar desde morgan: a la vista, sin control y con el
+/// porqué (nunca escondido).
+pub fn solo_hyprland(compositor: &str) -> Fila {
+    let sub = if compositor.is_empty() {
+        tr!("en este compositor se cambia desde su propia config").to_owned()
+    } else {
+        trf!("en {} se cambia desde su propia config", compositor)
+    };
+    ajuste(tr!("Solo con Hyprland"), &sub, Control::Nada)
+}
+
+/// Cada sección de la página con la fila de [`solo_hyprland`].
+pub fn pagina_solo_hyprland(cat: Categoria, compositor: &str) -> Vec<Seccion> {
+    armar(
+        cat,
+        cat.secciones().iter().map(|_| vec![solo_hyprland(compositor)]).collect(),
+    )
+}
+
 pub fn con_nota(fila: Fila, texto: &str) -> Fila {
     match fila {
         Fila::Ajuste {

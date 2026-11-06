@@ -28,7 +28,8 @@ mod escucha;
 mod fondos;
 mod greeter;
 mod hypr_cfg;
-mod hyprland;
+mod compositor;
+mod umbriel_cfg;
 mod icono;
 mod ical;
 mod idle;
@@ -66,7 +67,7 @@ use morgan_ipc::{
 
 use crate::audio::Audio;
 use crate::centro::Centro;
-use crate::hyprland::Hyprland;
+use crate::compositor::Compositor;
 use crate::launcher::Launcher;
 use crate::menu::Menu;
 use crate::notificaciones::Notificaciones;
@@ -133,8 +134,8 @@ fn main() -> ExitCode {
         {
             let (c, ruta) = (config.clone(), config_path.clone());
             glib::MainContext::default().spawn_local(async move {
-                if let Err(e) = hypr_cfg::aplicar(&c, &ruta).await {
-                    eprintln!("morgan: hyprland: {e}");
+                if let Err(e) = compositor::aplicar_config(&c, &ruta).await {
+                    eprintln!("morgan: compositor: {e}");
                 }
             });
         }
@@ -146,41 +147,36 @@ fn main() -> ExitCode {
         // Las copias para el greeter: ahora y con cada tema.
         greeter::iniciar(&config_path);
         tema.al_cambiar(|_, _, _| greeter::copiar());
-        let hyprland = Hyprland::new();
+        let compositor = Compositor::new();
         // La escala y el tamaño de las salidas (`pixeles`) siguen a las que se conectan.
         {
-            let h = hyprland.clone();
-            hyprland.al_evento(move |linea| {
-                if ["monitoradded", "monitorremoved", "configreloaded"]
-                    .iter()
-                    .any(|e| linea.starts_with(e))
-                {
-                    let h = h.clone();
-                    glib::MainContext::default().spawn_local(async move {
-                        if let Some(json) = h.consultar("j/monitors").await {
-                            let _ = pixeles::poner_salidas(&json);
-                        }
-                    });
-                }
+            let h = compositor.clone();
+            compositor.al_salidas(move |_| {
+                let h = h.clone();
+                glib::MainContext::default().spawn_local(async move {
+                    if let Some(s) = h.salidas().await {
+                        pixeles::poner_salidas(&s);
+                    }
+                });
             });
         }
-        let notificaciones = Notificaciones::new(&config, hyprland.clone());
+        let notificaciones = Notificaciones::new(&config, compositor.clone());
         let osd = Osd::new(&tema);
         {
-            let (osd, hyprland) = (osd.clone(), hyprland.clone());
+            let (osd, compositor) = (osd.clone(), compositor.clone());
             dispositivos::escuchar(move |a| {
-                if !hyprland.juego_en_foco() {
+                if !compositor.juego_en_foco() {
                     osd.mostrar(a);
                 }
             });
         }
         let agenda = agenda::Agenda::new();
-        let idle = idle::Idle::new(&config.idle, hyprland.clone());
+        let idle = idle::Idle::new(&config.idle, compositor.clone());
         let luz = luz::Luz::new(&config.luz, osd.clone());
         let brillo = brillo::Brillo::new();
         let centro = Centro::new(centro::Servicios {
             notificaciones: notificaciones.clone(),
-            hyprland: hyprland.clone(),
+            compositor: compositor.clone(),
             osd: osd.clone(),
             idle: idle.clone(),
             luz: luz.clone(),
@@ -188,7 +184,7 @@ fn main() -> ExitCode {
             tema: tema.clone(),
         });
         centro.aplicar_config(&config.sonido);
-        let fondos = fondos::Fondos::new(hyprland.clone(), &config.fondos, &centro);
+        let fondos = fondos::Fondos::new(compositor.clone(), &config.fondos, &centro);
         let (hilo_barra, eventos_barra) = barra::lanzar(&tema, &config.barra.fijos);
         let iconos_bandeja = config.barra.iconos_bandeja.clone();
         let tele = config.barra.tele.clone();
@@ -197,8 +193,8 @@ fn main() -> ExitCode {
         let polkit = polkit::Polkit::new(&centro);
         let audio = Audio::new(&config.sonido);
         let sonidos = sonidos::Sonidos::new(&config.sonido);
-        let ventanas = ventanas::Ventanas::new(hyprland.clone(), &centro, config.shell.esquina);
-        let dock = dock::Dock::new(hyprland.clone(), &tema, &config.dock);
+        let ventanas = ventanas::Ventanas::new(compositor.clone(), &centro, config.shell.esquina);
+        let dock = dock::Dock::new(compositor.clone(), &tema, &config.dock);
         let servicios = Rc::new(Servicios {
             osd,
             calendario: calendario.clone(),
@@ -231,14 +227,14 @@ fn main() -> ExitCode {
             audio,
             sonidos,
             reproductor: Reproductor::default(),
-            hyprland,
+            compositor,
             notificaciones,
             barra: OnceCell::new(),
         });
         let weak = Rc::downgrade(&servicios);
         // Los binds avisan por el socket de eventos (`ipc::de_evento`).
         let w = weak.clone();
-        servicios.hyprland.al_evento(move |linea| {
+        servicios.compositor.al_linea_hyprland(move |linea| {
             let Some(pedido) = ipc::de_evento(linea) else {
                 return;
             };
@@ -257,7 +253,7 @@ fn main() -> ExitCode {
                 Err(e) => eprintln!("morgan: {linea}: {e}"),
             }
         });
-        let privacidad = privacidad::Privacidad::new(&servicios.hyprland);
+        let privacidad = privacidad::Privacidad::new(&servicios.compositor);
         let sonidos = servicios.sonidos.clone();
         let grababa = std::cell::Cell::new(false);
         privacidad.al_cambiar(move |e| {
@@ -269,7 +265,7 @@ fn main() -> ExitCode {
         let osd = servicios.osd.clone();
         let salida = tele.clone();
         let estaba = std::cell::Cell::new(None);
-        servicios.hyprland.al_cambiar_espacios(move |e| {
+        servicios.compositor.al_cambiar_espacios(move |e| {
             let prendida = e.prendida(&salida);
             if estaba.replace(Some(prendida)).is_some_and(|antes| antes != prendida) {
                 let texto = if prendida { "Encendida" } else { "Apagada" };
@@ -281,7 +277,7 @@ fn main() -> ExitCode {
             hilo_barra,
             eventos_barra,
             barra::Servicios {
-                hyprland: servicios.hyprland.clone(),
+                compositor: servicios.compositor.clone(),
                 notificaciones: servicios.notificaciones.clone(),
                 tema: tema.clone(),
                 calendario: servicios.calendario.clone(),
@@ -362,7 +358,7 @@ struct Servicios {
     audio: Audio,
     sonidos: sonidos::Sonidos,
     reproductor: Reproductor,
-    hyprland: Hyprland,
+    compositor: Compositor,
     notificaciones: Notificaciones,
     /// Pide por `dispatch`, que necesita a `Servicios`.
     barra: OnceCell<barra::Barra>,
@@ -490,16 +486,11 @@ async fn dispatch(request: &Request, s: &Servicios) -> Response {
             return Response::Done;
         }
         Request::BloqMayus => {
-            let Some(devices) = s.hyprland.consultar("j/devices").await else {
-                return Response::Error {
-                    message: "Hyprland no contestó j/devices".into(),
-                };
-            };
-            match teclas::bloq_mayus(&devices) {
+            match s.compositor.bloq_mayus().await {
                 Some(prendido) => teclas::aviso(prendido),
                 None => {
                     return Response::Error {
-                        message: "j/devices sin teclados".into(),
+                        message: "no se pudo leer Bloq Mayús".into(),
                     };
                 }
             }
@@ -662,7 +653,7 @@ async fn dispatch(request: &Request, s: &Servicios) -> Response {
     }
     // Ninguna capa se abre sobre un juego: suelta el puntero enganchado y rompe el direct
     // scanout.
-    if !s.hyprland.juego_en_foco() {
+    if !s.compositor.juego_en_foco() {
         s.osd.mostrar(&aviso);
     }
     Response::Done

@@ -35,7 +35,7 @@ use smithay_client_toolkit::reexports::calloop::channel::Sender;
 use crate::centro::Centro;
 use crate::centro::hilo::Orden;
 use crate::centro::vista::{EventoVentanas, VistaVentanas};
-use crate::hyprland::Hyprland;
+use crate::compositor::Compositor;
 use captura::Capturador;
 use modelo::Lienzo;
 
@@ -76,7 +76,7 @@ pub struct Ventanas {
 }
 
 struct Inner {
-    hyprland: Hyprland,
+    compositor: Compositor,
     hilo: Sender<Orden>,
     /// `[shell] hot_corner`.
     con_esquina: Cell<bool>,
@@ -98,10 +98,10 @@ struct Inner {
 }
 
 impl Ventanas {
-    pub fn new(hyprland: Hyprland, centro: &Centro, con_esquina: bool) -> Self {
+    pub fn new(compositor: Compositor, centro: &Centro, con_esquina: bool) -> Self {
         let v = Ventanas {
             inner: Rc::new(Inner {
-                hyprland: hyprland.clone(),
+                compositor: compositor.clone(),
                 hilo: centro.hilo(),
                 con_esquina: Cell::new(con_esquina),
                 capturador: RefCell::default(),
@@ -128,16 +128,14 @@ impl Ventanas {
         });
         // Un morgan que se cayó con el lienzo abierto pudo dejar a Hyprland en el submap:
         // lo primero es salir de ahí.
-        let h = hyprland.clone();
+        let h = compositor.clone();
         glib::MainContext::default().spawn_local(async move {
-            if let Some(actual) = h.consultar("submap").await
-                && actual.trim() == SUBMAP
-            {
-                h.eval("hl.dispatch(hl.dsp.submap(\"reset\"))").await;
+            if h.submap().await.as_deref() == Some(SUBMAP) {
+                h.salir_del_submap().await;
             }
         });
         let debil = Rc::downgrade(&v.inner);
-        hyprland.al_cambiar_espacios(move |e| {
+        compositor.al_cambiar_espacios(move |e| {
             if let Some(inner) = debil.upgrade() {
                 for f in inner.fotos.borrow_mut().values_mut() {
                     if f.congelada.is_some_and(|ws| e.activo(ws)) {
@@ -147,7 +145,7 @@ impl Ventanas {
             }
         });
         let debil = Rc::downgrade(&v.inner);
-        hyprland.al_enfocar(move |direccion| {
+        compositor.al_enfocar(move |direccion| {
             if let Some(inner) = debil.upgrade() {
                 Ventanas { inner }.al_enfocar(direccion.to_owned());
             }
@@ -221,7 +219,7 @@ impl Ventanas {
             return false;
         }
         let i = &self.inner;
-        if !i.con_esquina.get() || i.leyendo.get() || i.hyprland.juego_en_foco() {
+        if !i.con_esquina.get() || i.leyendo.get() || i.compositor.juego_en_foco() {
             return false;
         }
         let pedido = i.pedido.get() + 1;
@@ -274,16 +272,12 @@ impl Ventanas {
         }
         // Abierto con el mouse Hyprland nunca entró al submap.
         let submap = submap && !abierta.is_some_and(|v| v.por_esquina.get());
-        let h = self.inner.hyprland.clone();
+        let h = self.inner.compositor.clone();
         let (debil, pedido) = (Rc::downgrade(&self.inner), self.inner.pedido.get());
         glib::MainContext::default().spawn_local(async move {
-            let pedir = format!(
-                "hl.dispatch(hl.dsp.focus({{ window = \"address:{direccion}\" }}))"
-            );
             for _ in 0..REINTENTOS_FOCO {
-                h.eval(&pedir).await;
-                let activa = h.consultar("j/activewindow").await;
-                if activa.is_some_and(|a| modelo::es_la_activa(&a, &direccion)) {
+                h.enfocar(&direccion, false).await;
+                if h.activa().await.is_some_and(|a| a == direccion) {
                     break;
                 }
                 glib::timeout_future(ENTRE_REINTENTOS).await;
@@ -299,30 +293,22 @@ impl Ventanas {
     }
 
     fn salir_del_submap(&self) {
-        let h = self.inner.hyprland.clone();
+        let h = self.inner.compositor.clone();
         glib::MainContext::default().spawn_local(async move {
-            h.eval("hl.dispatch(hl.dsp.submap(\"reset\"))").await;
+            h.salir_del_submap().await;
         });
     }
 
     async fn leer(&self) -> Option<Lienzo> {
-        let h = &self.inner.hyprland;
-        let clientes = h.consultar("j/clients").await?;
-        let monitores = h.consultar("j/monitors").await?;
-        match modelo::leer(&clientes, &monitores) {
-            Ok(l) => {
-                // Las fotos de ventanas que ya no existen no se guardan más.
-                self.inner
-                    .fotos
-                    .borrow_mut()
-                    .retain(|d, _| l.ventanas.iter().any(|v| v.direccion == *d));
-                Some(l)
-            }
-            Err(e) => {
-                eprintln!("morgan: ventanas: j/clients ilegible: {e}");
-                None
-            }
-        }
+        let h = &self.inner.compositor;
+        let (clientes, salidas) = futures_lite::future::zip(h.clientes(), h.salidas()).await;
+        let l = modelo::leer(&clientes?, &salidas?);
+        // Las fotos de ventanas que ya no existen no se guardan más.
+        self.inner
+            .fotos
+            .borrow_mut()
+            .retain(|d, _| l.ventanas.iter().any(|v| v.direccion == *d));
+        Some(l)
     }
 
     fn capturador(&self) -> Option<Rc<Capturador>> {
@@ -349,7 +335,7 @@ impl Ventanas {
             .capturar(&v.direccion, ANCHO_FOTO)
             .await?
             .imagen();
-        let oculta = !self.inner.hyprland.espacios().activo(v.ws);
+        let oculta = !self.inner.compositor.espacios().activo(v.ws);
         self.inner.fotos.borrow_mut().insert(
             v.direccion.clone(),
             Foto {
@@ -371,7 +357,7 @@ impl Ventanas {
         let yo = self.clone();
         glib::timeout_add_local_once(ASENTARSE, move || {
             if yo.inner.enfoque.get() != enfoque
-                || yo.inner.hyprland.juego_en_foco()
+                || yo.inner.compositor.juego_en_foco()
                 || yo.abierto()
             {
                 return;
@@ -471,7 +457,7 @@ impl Vista {
             .collect();
         traza(t0, "celdas");
         let _ = i.hilo.send(Orden::VentanasAbrir(Box::new(VistaVentanas {
-            salida: esquina.or_else(|| i.hyprland.espacios().enfocada),
+            salida: esquina.or_else(|| i.compositor.espacios().enfocada),
             lienzo: lienzo.clone(),
             sel,
             por_esquina,

@@ -5,9 +5,9 @@
 use std::collections::{BTreeSet, HashSet};
 
 use morgan_motor::vello::kurbo::Rect;
-use serde::Deserialize;
 
 use crate::barra::modelo::etiqueta;
+use crate::compositor::{CambioVentanas, Cliente};
 
 pub const CELDA_ANCHO: f64 = 60.0;
 pub const CELDA_ALTO: f64 = 56.0;
@@ -44,39 +44,20 @@ pub struct Abierta {
     pub juego: bool,
 }
 
-/// Las ventanas de `j/clients` que existen de verdad.
-pub fn leer(clientes: &str) -> Result<Vec<Abierta>, serde_json::Error> {
-    #[derive(Deserialize)]
-    struct C {
-        address: String,
-        mapped: bool,
-        hidden: bool,
-        workspace: W,
-        class: String,
-        title: String,
-        #[serde(rename = "focusHistoryID")]
-        historia: i32,
-        #[serde(default, rename = "contentType")]
-        contenido: String,
-    }
-    #[derive(Deserialize)]
-    struct W {
-        id: i64,
-    }
-    let v: Vec<C> = serde_json::from_str(clientes)?;
-    Ok(v.into_iter()
-        .filter(|c| c.mapped && !c.hidden && c.workspace.id != -1 && !c.class.is_empty())
+/// Las que el dock puede mostrar: sin clase no hay app con la que juntarlas.
+pub fn de_clientes(clientes: &[Cliente]) -> Vec<Abierta> {
+    clientes
+        .iter()
+        .filter(|c| !c.clase.is_empty())
         .map(|c| Abierta {
-            juego: c.contenido == "game"
-                || c.class == "gamescope"
-                || c.class.starts_with("steam_app_"),
-            direccion: c.address,
-            clase: c.class,
-            titulo: c.title,
-            ws: c.workspace.id,
+            juego: c.juego,
+            direccion: c.id.clone(),
+            clase: c.clase.clone(),
+            titulo: c.titulo.clone(),
+            ws: c.ws,
             historia: c.historia,
         })
-        .collect())
+        .collect()
 }
 
 /// Una app: `clave` es su `.desktop` o, si no tiene, la clase de sus ventanas.
@@ -305,46 +286,18 @@ impl Contador {
     }
 }
 
-/// Qué eventos de Hyprland obligan a releer las ventanas. Los títulos solo se ven en el globo: una
-/// terminal que cambia el suyo varias veces por segundo no despierta a nadie mientras esté
-/// cerrado. Hyprland repite `activewindowv2` con cada título de la ventana enfocada: sin cambio
-/// de ventana, no cuenta.
+/// Lo que obliga a releer las ventanas. Un título que cambia importa solo con el globo
+/// abierto.
 #[derive(Debug, Default)]
-pub struct Filtro {
-    activa: Option<String>,
-}
+pub struct Filtro;
 
 impl Filtro {
-    pub fn importa(&mut self, linea: &str, globo_abierto: bool) -> bool {
-        let Some((nombre, datos)) = linea.split_once(">>") else {
-            return false;
-        };
-        match nombre {
-            "openwindow" | "closewindow" | "movewindowv2" => true,
-            "windowtitlev2" => globo_abierto,
-            "activewindowv2" => {
-                let cambio = self.activa.as_deref() != Some(datos);
-                if cambio {
-                    self.activa = Some(datos.to_owned());
-                }
-                cambio
-            }
-            _ => false,
+    pub fn importa(&mut self, cambio: &CambioVentanas, globo_abierto: bool) -> bool {
+        match cambio {
+            CambioVentanas::Lista | CambioVentanas::Foco(_) => true,
+            CambioVentanas::Titulo => globo_abierto,
         }
     }
-}
-
-/// Un booleano de `j/getoption`. Si no se entiende, apagado: el valor de fábrica.
-pub fn opcion_activa(json: &str) -> bool {
-    #[derive(Deserialize)]
-    struct O {
-        #[serde(default, alias = "int")]
-        bool: Option<serde_json::Value>,
-    }
-    serde_json::from_str::<O>(json)
-        .ok()
-        .and_then(|o| o.bool)
-        .is_some_and(|v| v == serde_json::json!(true) || v == serde_json::json!(1))
 }
 
 /// Las `n` más usadas que siguen instaladas. `app` dice el nombre de una, o que ya no está. A
@@ -398,16 +351,18 @@ mod tests {
     }
 
     #[test]
-    fn lee_solo_las_ventanas_de_verdad() {
-        let json = r#"[
-          {"address":"0x1","mapped":true,"hidden":false,"workspace":{"id":2},"class":"kitty","title":"a","focusHistoryID":0,"contentType":"none"},
-          {"address":"0x2","mapped":false,"hidden":false,"workspace":{"id":2},"class":"kitty","title":"b","focusHistoryID":1},
-          {"address":"0x3","mapped":true,"hidden":true,"workspace":{"id":2},"class":"kitty","title":"c","focusHistoryID":2},
-          {"address":"0x4","mapped":true,"hidden":false,"workspace":{"id":-1},"class":"kitty","title":"d","focusHistoryID":3},
-          {"address":"0x5","mapped":true,"hidden":false,"workspace":{"id":3},"class":"","title":"e","focusHistoryID":4},
-          {"address":"0x6","mapped":true,"hidden":false,"workspace":{"id":4},"class":"steam_app_1","title":"f","focusHistoryID":5}
-        ]"#;
-        let v = leer(json).unwrap();
+    fn sin_clase_no_entra() {
+        let c = |id: &str, clase: &str| Cliente {
+            id: id.into(),
+            clase: clase.into(),
+            titulo: String::new(),
+            ws: 1,
+            rect: Default::default(),
+            salida: String::new(),
+            historia: 0,
+            juego: clase.starts_with("steam_app_"),
+        };
+        let v = de_clientes(&[c("0x1", "kitty"), c("0x5", ""), c("0x6", "steam_app_1")]);
         assert_eq!(v.iter().map(|a| a.direccion.as_str()).collect::<Vec<_>>(), ["0x1", "0x6"]);
         assert!(!v[0].juego);
         assert!(v[1].juego);
@@ -580,24 +535,11 @@ mod tests {
 
     #[test]
     fn un_titulo_que_cambia_no_despierta_con_el_globo_cerrado() {
-        let mut f = Filtro::default();
-        assert!(f.importa("activewindowv2>>abc", false), "la primera ventana");
-        assert!(!f.importa("windowtitlev2>>abc,uno", false));
-        assert!(!f.importa("activewindowv2>>abc", false), "repetido por el título");
-        assert!(f.importa("windowtitlev2>>abc,dos", true), "con el globo se ve");
-        assert!(f.importa("activewindowv2>>def", false), "otra ventana");
-        assert!(f.importa("openwindow>>x,1,kitty,t", false));
-        assert!(f.importa("closewindow>>x", false));
-        assert!(f.importa("movewindowv2>>x,2,2", false));
-        assert!(!f.importa("focusedmonv2>>DP-3,1", false));
-        assert!(!f.importa("sin formato", false));
-    }
-
-    #[test]
-    fn lee_el_booleano_de_una_opcion() {
-        assert!(opcion_activa(r#"{"option":"x","bool":true,"set":true}"#));
-        assert!(!opcion_activa(r#"{"option":"x","bool":false,"set":false}"#));
-        assert!(!opcion_activa("no es json"));
+        let mut f = Filtro;
+        assert!(f.importa(&CambioVentanas::Foco("abc".into()), false));
+        assert!(!f.importa(&CambioVentanas::Titulo, false));
+        assert!(f.importa(&CambioVentanas::Titulo, true), "con el globo se ve");
+        assert!(f.importa(&CambioVentanas::Lista, false));
     }
 
     #[test]

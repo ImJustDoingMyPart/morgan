@@ -18,7 +18,7 @@ use crate::centro::Centro;
 use crate::centro::hilo::Orden;
 use crate::centro::vista::{EventoFondos, VistaFondos};
 use crate::config;
-use crate::hyprland::Hyprland;
+use crate::compositor::Compositor;
 
 #[derive(Clone)]
 pub struct Fondos {
@@ -26,7 +26,7 @@ pub struct Fondos {
 }
 
 struct Inner {
-    hyprland: Hyprland,
+    compositor: Compositor,
     motor: motor::Motor,
     hilo: Sender<Orden>,
     abierta: Cell<bool>,
@@ -37,15 +37,18 @@ struct Inner {
 }
 
 impl Fondos {
-    pub fn new(hyprland: Hyprland, c: &config::Fondos, centro: &Centro) -> Self {
-        hyprland.al_evento(|linea| {
-            if let Some(salida) = motor::salida_nueva(linea) {
-                motor::pintar_salida(salida.to_owned());
+    pub fn new(compositor: Compositor, c: &config::Fondos, centro: &Centro) -> Self {
+        let antes = RefCell::new(None::<Vec<String>>);
+        compositor.al_salidas(move |ahora| {
+            if let Some(previas) = antes.replace(Some(ahora.to_vec())) {
+                for salida in crate::compositor::nuevas(&previas, ahora) {
+                    motor::pintar_salida(salida.to_owned());
+                }
             }
         });
         let f = Fondos {
             inner: Rc::new(Inner {
-                hyprland,
+                compositor,
                 motor: motor::Motor::new(c),
                 hilo: centro.hilo(),
                 abierta: Cell::new(false),
@@ -128,7 +131,7 @@ impl Fondos {
                 .map(|n| capitalizar(&n.to_string_lossy()))
                 .unwrap_or_default();
             let _ = yo.inner.hilo.send(Orden::FondosAbrir(Box::new(VistaFondos {
-                salida: yo.inner.hyprland.espacios().enfocada,
+                salida: yo.inner.compositor.espacios().enfocada,
                 carpeta,
                 rutas: datos.todos,
                 actual: datos.actual,

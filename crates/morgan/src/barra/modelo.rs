@@ -1,4 +1,4 @@
-use crate::hyprland::Espacios;
+use crate::compositor::Espacios;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Boton {
@@ -9,27 +9,37 @@ pub struct Boton {
     pub urgente: bool,
 }
 
-/// Un fijo que vive en otra salida se ve allá.
+/// Un fijo que vive en otra salida se ve allá. Con workspaces por salida (Umbriel), los fijos
+/// son posiciones en cada salida: el 2 de la segunda es el 102.
 pub fn botones(e: &Espacios, monitor: &str, fijos: &[i64]) -> Vec<Boton> {
     let activo = e
         .activos
         .iter()
         .find(|(m, _)| m == monitor)
         .map(|(_, id)| *id);
+    let base = if e.por_salida {
+        e.espacios
+            .iter()
+            .find(|w| w.monitor == monitor)
+            .map(|w| w.id - w.id.rem_euclid(100))
+    } else {
+        Some(0)
+    };
     let mut v: Vec<Boton> = e
         .espacios
         .iter()
         .filter(|w| w.monitor == monitor)
-        .map(|w| (w.id, w.ventanas == 0))
+        .map(|w| (w.id, w.ventanas == 0, etiqueta_de(&w.nombre, w.id)))
         .chain(
             fijos
                 .iter()
-                .filter(|id| !e.espacios.iter().any(|w| w.id == **id))
-                .map(|id| (*id, true)),
+                .filter_map(|f| Some((base? + f, *f)))
+                .filter(|(id, _)| !e.espacios.iter().any(|w| w.id == *id))
+                .map(|(id, f)| (id, true, etiqueta(f))),
         )
-        .map(|(id, vacio)| Boton {
+        .map(|(id, vacio, etiqueta)| Boton {
             id,
-            etiqueta: etiqueta(id),
+            etiqueta,
             activo: activo == Some(id),
             vacio,
             urgente: e.urgentes.contains(&id),
@@ -38,6 +48,15 @@ pub fn botones(e: &Espacios, monitor: &str, fijos: &[i64]) -> Vec<Boton> {
     v.sort_by_key(|b| b.id);
     v.dedup_by_key(|b| b.id);
     v
+}
+
+/// Un nombre que es un número va en romanos, como los fijos; uno con nombre propio, tal cual.
+fn etiqueta_de(nombre: &str, id: i64) -> String {
+    match nombre.parse::<i64>() {
+        Ok(n) => etiqueta(n),
+        Err(_) if nombre.is_empty() => etiqueta(id),
+        Err(_) => nombre.to_owned(),
+    }
 }
 
 pub fn etiqueta(id: i64) -> String {
@@ -206,13 +225,14 @@ mod tests {
         // A la izquierda pero más abajo: no toca la esquina.
         assert!(esquina_es_tope((0, 0), [(-1920, 500, 1920, 1080)]));
     }
-    use crate::hyprland::Espacio;
+    use crate::compositor::Espacio;
 
     fn espacio(id: i64, monitor: &str, ventanas: u32) -> Espacio {
         Espacio {
             id,
             monitor: monitor.into(),
             ventanas,
+            nombre: id.to_string(),
         }
     }
 
@@ -231,6 +251,7 @@ mod tests {
             activos: vec![("DP-3".into(), 5), ("HDMI-A-1".into(), 4)],
             urgentes: [10].into(),
             enfocada: None,
+            por_salida: false,
         };
         let dp = botones(&e, "DP-3", &[1, 2, 3]);
         assert_eq!(ids(&dp), [1, 2, 3, 5]);
@@ -252,11 +273,33 @@ mod tests {
             activos: vec![("DP-3".into(), 1)],
             urgentes: [10].into(),
             enfocada: None,
+            por_salida: false,
         };
         let b = botones(&e, "DP-3", &[1]);
         assert_eq!(ids(&b), [1, 10]);
         assert!(b[1].urgente && !b[0].urgente);
         assert_eq!(b[1].etiqueta, "X");
+    }
+
+    #[test]
+    fn fijos_en_cada_salida_si_los_workspaces_son_por_salida() {
+        let mut con_nombre = espacio(103, "HDMI-A-1", 1);
+        con_nombre.nombre = "web".into();
+        let mut segundo = espacio(101, "HDMI-A-1", 0);
+        segundo.nombre = "1".into();
+        let e = Espacios {
+            espacios: vec![espacio(1, "DP-3", 1), segundo, con_nombre],
+            activos: vec![("DP-3".into(), 1), ("HDMI-A-1".into(), 101)],
+            por_salida: true,
+            ..Default::default()
+        };
+        let tv = botones(&e, "HDMI-A-1", &[1, 2]);
+        assert_eq!(ids(&tv), [101, 102, 103]);
+        let rotulos: Vec<_> = tv.iter().map(|b| b.etiqueta.as_str()).collect();
+        assert_eq!(rotulos, ["I", "II", "web"]);
+        assert_eq!(ids(&botones(&e, "DP-3", &[1, 2])), [1, 2]);
+        // Una salida sin workspaces todavía no sabe su número: sin fijos.
+        assert!(botones(&e, "DP-1", &[1]).is_empty());
     }
 
     #[test]

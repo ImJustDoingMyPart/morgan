@@ -2,6 +2,11 @@
 # fuente (ver `lib.rs`); el test `tabla_completa` exige que estén todos y ninguno de más.
 # Agrupados por el archivo donde aparecen por primera vez.
 
+# menu/arbol.rs (otros compositores)
+"Solo con Hyprland" = "Hyprland only"
+"en {} se cambia desde su propia config" = "in {} it's changed from its own config"
+"en este compositor se cambia desde su propia config" = "in this compositor it's changed from its own config"
+
 # centro/mod.rs
 "Red" = "Network"
 "Bluetooth" = "Bluetooth"

@@ -97,6 +97,17 @@ pub async fn apariencia(
     (lecturas, nuevas)
 }
 
+/// El nombre del compositor de la sesión si no es Hyprland: lo de Hyprland no se lee ni se
+/// cambia.
+pub fn otro_compositor() -> Option<&'static str> {
+    use morgan_ipc::compositor::Tipo;
+    match morgan_ipc::compositor::actual() {
+        Tipo::Hyprland => None,
+        Tipo::Umbriel => Some("Umbriel"), // no-tr
+        Tipo::Otro => Some(""),
+    }
+}
+
 pub const ALTO_MUESTRA: u32 = 16;
 /// El doble del alto, para achicar en vez de agrandar.
 const LADO_LEIDO: u32 = 32;
@@ -106,6 +117,9 @@ fn escala() -> u32 {
 }
 
 pub async fn compositor(cambios: &Path, reglas: &[crate::config::ReglaApp]) -> Vec<Seccion> {
+    if let Some(nombre) = otro_compositor() {
+        return super::arbol::pagina_solo_hyprland(super::arbol::Categoria::Compositor, nombre);
+    }
     let actuales =
         compositor::de_batch(&leer(&["hyprctl", "--batch", &compositor::pedido_batch()]).await);
     let cambios = compositor::Cambios::leer(cambios).unwrap_or_else(|e| {

@@ -42,11 +42,6 @@ pub fn actual() -> Option<PathBuf> {
     texto.lines().next().filter(|l| !l.is_empty()).map(PathBuf::from)
 }
 
-pub fn salida_nueva(linea: &str) -> Option<&str> {
-    let datos = linea.strip_prefix("monitoraddedv2>>")?;
-    datos.split(',').nth(1).filter(|n| !n.is_empty())
-}
-
 /// awww le crea su capa a una pantalla que se conecta pero no le pinta nada, y su caché es
 /// por salida. Sin transición (un fundido sobre una pantalla que recién prende parece un
 /// parpadeo) y un segundo después: antes, awww todavía no creó la capa.
@@ -335,16 +330,4 @@ pub const LADO_MINIATURA: &str = "256x256";
 
 pub fn cache_miniaturas() -> PathBuf {
     glib::user_cache_dir().join("morgan/fondos").join(LADO_MINIATURA)
-}
-
-#[cfg(test)]
-mod tests_salida {
-    use super::*;
-
-    #[test]
-    fn salida_que_se_conecta() {
-        assert_eq!(salida_nueva("monitoraddedv2>>3,HDMI-A-1,LG TV"), Some("HDMI-A-1"));
-        assert_eq!(salida_nueva("monitoraddedv2>>3,"), None);
-        assert_eq!(salida_nueva("monitorremovedv2>>3,HDMI-A-1,x"), None);
-    }
 }

@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# Umbriel anidado para probar morgan sin tocar la sesión real (como `dev/anidado` con Hyprland).
+#
+#   dev/umbriel arrancar          levanta Umbriel sin ventana (backend headless de wlroots) con
+#                                 bus de sesión propio y una salida del tamaño del monitor real
+#   dev/umbriel ejecutar CMD...   corre CMD adentro (hereda su WAYLAND_DISPLAY y su bus)
+#   dev/umbriel morgan            (re)arranca adentro el morgan de target/debug, con comandos de
+#                                 mentira para lo que toca la sesión real
+#   dev/umbriel puntero ARGS...   el puntero de mentira (`crates/morgan/examples/puntero.rs`)
+#   dev/umbriel parar NOMBRE      termina los procesos NOMBRE del anidado (no los de afuera)
+#   dev/umbriel captura NOMBRE    grim de la salida del anidado
+#   dev/umbriel msg ARGS...       `umbriel` (msg, windows, workspaces…) contra el anidado
+#   dev/umbriel cerrar            sale con `session-quit` (nunca con señales)
+#
+# Sin ventana: el backend headless dibuja con su propio temporizador, así que grim anda y la
+# pantalla de afuera no se entera. El estado vive en $XDG_RUNTIME_DIR/morgan-umbriel.
+#
+# Trampa: lo de adentro hereda `HYPRLAND_INSTANCE_SIGNATURE` de la sesión de afuera, y un
+# `hyprctl` le hablaría al Hyprland real. morgan elige el compositor por XDG_CURRENT_DESKTOP
+# (Umbriel lo pone siempre) y no lanza hyprctl fuera de Hyprland; `morgan` además la borra.
+set -euo pipefail
+
+raiz=$(cd "$(dirname "$0")/.." && pwd)
+estado="${XDG_RUNTIME_DIR:?}/morgan-umbriel"
+
+socket() {
+    [[ -s $estado/display ]] || { echo "umbriel: no está corriendo" >&2; exit 1; }
+    echo "$XDG_RUNTIME_DIR/umbriel-$(cat "$estado/display").sock"
+}
+
+u() { UMBRIEL_SOCKET=$(socket) WAYLAND_DISPLAY=$(cat "$estado/display") umbriel "$@"; }
+
+# Nunca `pkill` por nombre: matchea en toda la máquina y se lleva puesto el de la sesión
+# real. Se elige por el WAYLAND_DISPLAY del anidado.
+parar() {
+    local display pid
+    display=$(cat "$estado/display")
+    for pid in $(pgrep -x "$1" || true); do
+        if tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null | grep -qx "WAYLAND_DISPLAY=$display"; then
+            kill "$pid"
+            while kill -0 "$pid" 2>/dev/null; do sleep 0.05; done
+        fi
+    done
+}
+
+case "${1:-}" in
+arrancar)
+    mkdir -p "$estado"
+    if [[ -s $estado/display ]] && u outputs >/dev/null 2>&1; then
+        echo "umbriel: ya está corriendo ($(cat "$estado/display"))" >&2; exit 1
+    fi
+    antes=$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | sort || true)
+    modo=$(hyprctl -j monitors 2>/dev/null | jq -r '[.[] | select(.focused)][0] | "\(.width)x\(.height)"' || true)
+    [[ $modo =~ ^[0-9]+x[0-9]+$ ]] || modo=2560x1440
+    # La config de prueba incluye la de morgan (`morgan setup` la escribe en
+    # ~/.config/umbriel/morgan.toml); si todavía no existe, es opcional.
+    cat >"$estado/config.toml" <<EOF
+[include.optional]
+files = ["$estado/morgan.toml"]
+
+[general]
+xwayland = false
+mod_key = "Super"
+show_cheatsheet = false
+
+[output.HEADLESS-1]
+mode = "$modo@60"
+
+[keybinds]
+"Mod+Return" = "spawn kitty"
+EOF
+    WLR_BACKENDS=headless WLR_HEADLESS_OUTPUTS=1 setsid dbus-run-session -- \
+        umbriel -c "$estado/config.toml" >"$estado/umbriel.log" 2>&1 </dev/null &
+    for _ in $(seq 50); do
+        sleep 0.1
+        nuevo=$(comm -13 <(echo "$antes") <(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | sort) | head -1)
+        if [[ -n $nuevo && -S $XDG_RUNTIME_DIR/umbriel-$nuevo.sock ]]; then
+            echo "$nuevo" >"$estado/display"
+            u outputs --json | jq -r '.[] | "umbriel: \(.name) \(.logical_size.width)x\(.logical_size.height)"'
+            exit 0
+        fi
+    done
+    echo "umbriel: no arrancó; ver $estado/umbriel.log" >&2; exit 1
+    ;;
+ejecutar)
+    shift
+    u msg spawn "$(printf '%q ' "$@") >>'$estado/ejecutar.log' 2>&1"
+    ;;
+captura)
+    archivo="$estado/${2:?falta el nombre}"
+    rm -f "$archivo"
+    u msg spawn "timeout 5 grim '$archivo.part' && mv '$archivo.part' '$archivo'"
+    for _ in $(seq 60); do [[ -s $archivo ]] && { echo "$archivo"; exit 0; }; sleep 0.1; done
+    echo "umbriel: grim no terminó" >&2; exit 1
+    ;;
+parar)
+    parar "${2:?falta el nombre}"
+    ;;
+morgan)
+    parar morgan
+    display=$(cat "$estado/display")
+    # Lo que morgan lanza y actúa sobre la sesión real se reemplaza por comandos de mentira
+    # que solo anotan en comandos.log (ver dev/anidado).
+    falsos="$estado/falsos"
+    mkdir -p "$falsos"
+    for c in systemctl systemd-run awww uwsm loginctl ddcutil hyprctl hyprsunset \
+        wtype canberra-gtk-play cliphist; do
+        printf '#!/bin/sh\necho "%s $*" >>"%s/comandos.log"\n[ "$1" = status ] && echo off\n[ "$2" = is-active ] && exit 3\nexit 0\n' \
+            "$c" "$estado" >"$falsos/$c"
+        chmod +x "$falsos/$c"
+    done
+    printf '#!/bin/sh\necho "matugen $*" >>"%s/comandos.log"\nexit 1\n' "$estado" >"$falsos/matugen"
+    chmod +x "$falsos/matugen"
+    conf="$estado/config"
+    if [[ ! -d $conf ]]; then
+        mkdir -p "$conf/morgan"
+        for e in "$HOME"/.config/* "$HOME"/.config/.[!.]*; do
+            [[ -e $e && $(basename "$e") != morgan && $(basename "$e") != umbriel ]] && ln -s "$e" "$conf/"
+        done
+        mkdir -p "$conf/umbriel"
+        ln -s "$HOME/.config/morgan/theme.css" "$conf/morgan/theme.css"
+        # El idle del anidado no apaga ni bloquea a mitad de una prueba.
+        printf '[idle]\nscreen_off = 0\nlock = 0\nsuspend = 0\n' >"$conf/morgan/config.toml"
+    fi
+    u msg spawn "env -u HYPRLAND_INSTANCE_SIGNATURE -u HYPRLAND_CMD PATH='$falsos:$raiz/target/debug:$PATH' MORGAN_SIN_LOGIND=1 MORGAN_APARIENCIA_SECO=1 MORGAN_SIN_PORTAL=1 MORGAN_DEV=1 ${MORGAN_TRAZA:+MORGAN_TRAZA=1} GSETTINGS_BACKEND=memory MORGAN_UMBRIEL_CFG='$estado/morgan.toml' XDG_STATE_HOME='$estado/state' XDG_CACHE_HOME='$estado/cache' XDG_CONFIG_HOME='$conf' ${MORGAN_BIN:-$raiz/target/debug/morgan} >>'$estado/morgan.log' 2>&1"
+    for _ in $(seq 50); do
+        sleep 0.1
+        WAYLAND_DISPLAY=$display "$raiz/target/debug/morganctl" ping >/dev/null 2>&1 && exit 0
+    done
+    echo "umbriel: morgan no contesta; ver $estado/morgan.log" >&2; exit 1
+    ;;
+msg)
+    shift; u "$@"
+    ;;
+puntero)
+    shift
+    WAYLAND_DISPLAY=$(cat "$estado/display") "$raiz/target/debug/examples/puntero" "$@"
+    ;;
+cerrar)
+    display=$(cat "$estado/display" 2>/dev/null || true)
+    u msg session-quit skip-confirmation >/dev/null 2>&1 || true
+    for _ in $(seq 50); do
+        [[ -n $display && -S $XDG_RUNTIME_DIR/umbriel-$display.sock ]] || break
+        sleep 0.1
+    done
+    # morgan muere con su compositor sin salida limpia: su socket queda.
+    [[ -n $display ]] && rm -f "$XDG_RUNTIME_DIR/morgan-$display.sock"
+    rm -rf "$estado"
+    ;;
+*)
+    sed -n '2,13p' "$0" >&2; exit 2
+    ;;
+esac

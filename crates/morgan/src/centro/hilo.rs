@@ -2315,6 +2315,11 @@ impl SeatHandler for Hilo {
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
 }
 
+/// Hyprland avisa el soltar de `Mod` por el bind del submap del lienzo.
+static SUBMAP_AVISA: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
+    morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Hyprland
+});
+
 impl KeyboardHandler for Hilo {
     fn enter(
         &mut self,
@@ -2387,6 +2392,13 @@ impl KeyboardHandler for Hilo {
     ) {
         self.mods = m;
         self.layout = layout;
+        // Fuera de Hyprland no hay submap que avise el soltar de `Mod`: lo dice el estado de
+        // los modificadores, que llega al tomar el teclado y con cada cambio. Si al tomarlo ya
+        // no está, fue un toque. En Hyprland ese estado no es confiable (`ventanas/mod.rs`).
+        if self.ventanas.is_some() && !m.logo && !*SUBMAP_AVISA {
+            let v = self.ventanas_ui.soltada(Keysym::Super_L);
+            self.eventos_ventanas(v);
+        }
     }
 
     fn update_keymap(

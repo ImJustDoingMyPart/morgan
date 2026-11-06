@@ -22,7 +22,7 @@ use morgan_motor::vello::peniko::ImageData;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::config;
-use crate::hyprland::Hyprland;
+use crate::compositor::Compositor;
 use crate::launcher::busqueda::Historial;
 use crate::tema::Tema;
 use hilo::{Arranque, Datos, Evento, Orden};
@@ -39,7 +39,7 @@ pub struct Dock {
 
 struct Inner {
     hilo: Sender<Orden>,
-    hyprland: Hyprland,
+    compositor: Compositor,
     frecuentes: Vec<Conocida>,
     usos: RefCell<Historial>,
     archivo: Option<PathBuf>,
@@ -82,7 +82,7 @@ fn nombre_de(id: &str) -> Option<String> {
 }
 
 impl Dock {
-    pub fn new(hyprland: Hyprland, tema: &Tema, c: &config::Dock) -> Self {
+    pub fn new(compositor: Compositor, tema: &Tema, c: &config::Dock) -> Self {
         let (css, opacidad, borde) = tema.actual();
         let (hilo, eventos) = hilo::lanzar(Arranque {
             paleta: Paleta::desde_css(&css),
@@ -103,7 +103,7 @@ impl Dock {
         let dock = Dock {
             inner: Rc::new(Inner {
                 hilo,
-                hyprland: hyprland.clone(),
+                compositor: compositor.clone(),
                 frecuentes,
                 usos: RefCell::new(usos),
                 archivo: Some(archivo),
@@ -118,17 +118,17 @@ impl Dock {
         };
 
         let d = dock.clone();
-        let filtro = RefCell::new(modelo::Filtro::default());
-        hyprland.al_evento(move |linea| {
-            if filtro.borrow_mut().importa(linea, d.inner.globo_abierto.get()) {
+        let filtro = RefCell::new(modelo::Filtro);
+        compositor.al_ventanas(move |cambio| {
+            if filtro.borrow_mut().importa(&cambio, d.inner.globo_abierto.get()) {
                 d.programar();
             }
         });
         let d = dock.clone();
-        hyprland.al_cambiar_espacios(move |_| d.programar());
+        compositor.al_cambiar_espacios(move |_| d.programar());
         let t = dock.inner.hilo.clone();
-        let _ = t.send(Orden::Juego(hyprland.juego_en_foco()));
-        hyprland.al_cambiar(move |juego| {
+        let _ = t.send(Orden::Juego(compositor.juego_en_foco()));
+        compositor.al_cambiar(move |juego| {
             let _ = t.send(Orden::Juego(juego));
         });
 
@@ -164,23 +164,17 @@ impl Dock {
 
     async fn refrescar(&self) {
         let i = &self.inner;
-        let Some(clientes) = i.hyprland.consultar("j/clients").await else {
+        let Some(clientes) = i.compositor.clientes().await else {
             return;
         };
-        let abiertas = match modelo::leer(&clientes) {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("morgan: dock: j/clients ilegible: {e}");
-                return;
-            }
-        };
+        let abiertas = modelo::de_clientes(&clientes);
         self.contar(&abiertas);
         let con_app: Vec<(Conocida, Abierta)> = abiertas
             .into_iter()
             .map(|a| (self.app_de(&a.clase), a))
             .collect();
         let activos: BTreeSet<i64> = i
-            .hyprland
+            .compositor
             .espacios()
             .activos
             .iter()
@@ -284,21 +278,11 @@ impl Dock {
         }
     }
 
-    /// Enfocar una ventana lleva el puntero a su centro: acá el mouse se queda en el dock, así
-    /// que `no_warps` vale solo durante el pedido y vuelve a lo que el usuario tenga puesto.
+    /// El mouse se queda en el dock: el puntero no salta a la ventana.
     fn enfocar(&self, direccion: String) {
-        let h = self.inner.hyprland.clone();
+        let c = self.inner.compositor.clone();
         glib::MainContext::default().spawn_local(async move {
-            let antes = h
-                .consultar("j/getoption cursor:no_warps")
-                .await
-                .is_some_and(|o| modelo::opcion_activa(&o));
-            h.eval(&format!(
-                "hl.config({{ cursor = {{ no_warps = true }} }}) \
-                 hl.dispatch(hl.dsp.focus({{ window = \"address:{direccion}\" }})) \
-                 hl.config({{ cursor = {{ no_warps = {antes} }} }})"
-            ))
-            .await;
+            c.enfocar(&direccion, true).await;
         });
     }
 }

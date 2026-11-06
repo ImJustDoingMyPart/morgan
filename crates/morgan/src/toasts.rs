@@ -14,7 +14,7 @@ use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::centro::hilo::Orden;
 use crate::centro::lista::{self, Lista};
-use crate::hyprland::Hyprland;
+use crate::compositor::Compositor;
 use crate::notificaciones::modelo;
 use crate::notificaciones::{Cambio, Notificaciones};
 
@@ -32,7 +32,7 @@ struct Inner {
     /// La que tiene el puntero encima: no cuenta.
     encima: Cell<Option<u32>>,
     callados: Cell<bool>,
-    hyprland: Hyprland,
+    compositor: Compositor,
     diferidas: RefCell<Vec<u32>>,
 }
 
@@ -40,7 +40,7 @@ impl Toasts {
     pub fn new(
         hilo: Sender<Orden>,
         notificaciones: &Notificaciones,
-        hyprland: &Hyprland,
+        compositor: &Compositor,
         color: [f32; 4],
     ) -> Self {
         let inner = Rc::new(Inner {
@@ -50,7 +50,7 @@ impl Toasts {
             vivas: RefCell::default(),
             encima: Cell::new(None),
             callados: Cell::new(false),
-            hyprland: hyprland.clone(),
+            compositor: compositor.clone(),
             diferidas: RefCell::default(),
         });
         // Una vista previa llega después de decodificarse.
@@ -67,7 +67,7 @@ impl Toasts {
             }
         });
         let weak = Rc::downgrade(&inner);
-        hyprland.al_cambiar(move |juego| {
+        compositor.al_cambiar(move |juego| {
             if let Some(inner) = weak.upgrade() {
                 inner.juego(juego);
             }
@@ -191,7 +191,7 @@ impl Inner {
     }
 
     fn contar(self: &Rc<Self>, id: u32) {
-        if self.hyprland.juego_en_foco() || self.encima.get() == Some(id) {
+        if self.compositor.juego_en_foco() || self.encima.get() == Some(id) {
             return;
         }
         let Some(dur) = self
@@ -228,7 +228,7 @@ impl Inner {
     }
 
     fn quitar(&self, id: u32) {
-        if self.hyprland.juego_en_foco() && self.ids().contains(&id) {
+        if self.compositor.juego_en_foco() && self.ids().contains(&id) {
             self.diferidas.borrow_mut().push(id);
             return;
         }

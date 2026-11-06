@@ -179,9 +179,12 @@ pub fn desplegar(r: &Rutas) -> Informe {
             }
             Aviso::Bat => bat(r),
             Aviso::Starship => starship(&render.join("starship.toml"), &r.config.join("starship.toml")),
-            Aviso::Hyprland => {
+            // Solo si la sesión es de Hyprland: desde otro compositor anidado, `hyprctl`
+            // recargaría el de afuera. Umbriel recarga solo al ver el archivo cambiado.
+            Aviso::Hyprland if morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Hyprland => {
                 lanzar(&["hyprctl", "reload", "config-only"]).map_err(|e| format!("hyprland: {e}"))
             }
+            Aviso::Hyprland => Ok(()),
         };
         anotar(&mut inf, res);
     }

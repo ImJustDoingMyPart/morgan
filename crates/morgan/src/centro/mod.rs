@@ -49,7 +49,7 @@ const CONFIRMAR_TRAS: Duration = Duration::from_millis(320);
 
 pub struct Servicios {
     pub notificaciones: Notificaciones,
-    pub hyprland: crate::hyprland::Hyprland,
+    pub compositor: crate::compositor::Compositor,
     pub osd: Osd,
     pub idle: Idle,
     pub luz: Luz,
@@ -170,7 +170,7 @@ impl Centro {
         let toasts = Toasts::new(
             tx.clone(),
             &s.notificaciones,
-            &s.hyprland,
+            &s.compositor,
             color_texto(&s.tema),
         );
         let (l, ts) = (lista.clone(), toasts.clone());
