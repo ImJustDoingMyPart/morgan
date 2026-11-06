@@ -1486,6 +1486,8 @@ dependencies = [
  "morgan-motor",
  "parley",
  "png",
+ "serde",
+ "serde_json",
  "smithay-client-toolkit",
  "toml",
  "vello",

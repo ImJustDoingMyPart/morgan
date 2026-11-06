@@ -43,13 +43,13 @@ use wayland_client::{Connection, QueueHandle};
 use morgan_ipc::bloqueo::Bloqueo;
 
 use crate::logind::Logind;
-use crate::pam::Resultado;
 use morgan_lock::clave::Clave;
 use morgan_lock::escena::{
     Borde, Cambio, DESTELLO_MS, ENTRADA_MS, Estado, FALLO_MS, Paleta, SALIDA_MS, ahora,
 };
 use morgan_lock::perfil::{self, Rutas};
 use morgan_lock::pintor::{self, Hilo, Orden};
+use morgan_lock::verificar::{Resultado, Verificador};
 
 struct Opciones {
     servicio: String,
@@ -74,7 +74,8 @@ fn opciones() -> Result<Opciones, String> {
 
 /// Lo que llega al hilo principal desde los otros.
 enum Aviso {
-    Pam(Resultado),
+    /// El verificador vuelve con el resultado, listo para el próximo intento.
+    Verificado(Resultado, Box<dyn Verificador>),
     /// `Unlock` de logind o SIGUSR1: quien puede mandarlos ya puede `loginctl unlock-session`.
     Desbloquear,
     Desperto,
@@ -198,8 +199,10 @@ fn main() -> ExitCode {
         generacion: 0,
         saliendo: false,
         estilo,
-        servicio: o.servicio,
-        usuario,
+        verificador: Some(Box::new(pam::Pam {
+            servicio: o.servicio,
+            usuario,
+        })),
         avisos,
         logind: logind.map(|(tx, _)| tx),
         pintor,
@@ -269,8 +272,8 @@ struct App {
     /// Ya empezó la salida: un segundo pedido no desbloquea dos veces.
     saliendo: bool,
     estilo: Bloqueo,
-    servicio: String,
-    usuario: String,
+    /// En su hilo mientras verifica (`ocupado`).
+    verificador: Option<Box<dyn Verificador>>,
     avisos: Sender<Aviso>,
     logind: Option<async_channel::Sender<ALogind>>,
     pintor: Hilo,
@@ -330,7 +333,8 @@ impl App {
 
     fn aviso(&mut self, a: Aviso) {
         match a {
-            Aviso::Pam(r) => {
+            Aviso::Verificado(r, v) => {
+                self.verificador = Some(v);
                 self.ocupado = false;
                 match r {
                     Resultado::Bien => self.desbloquear(),
@@ -410,19 +414,19 @@ impl App {
         if self.clave.is_empty() {
             return;
         }
+        let Some(mut v) = self.verificador.take() else {
+            return;
+        };
         self.ocupado = true;
         let clave = self.clave.tomar();
         let t = ahora();
         self.pintor.cambio(Cambio::Vaciar { t });
         self.generacion += 1;
         self.pintor.cambio(Cambio::Verificando { t });
-        let (s, u, tx) = (
-            self.servicio.clone(),
-            self.usuario.clone(),
-            self.avisos.clone(),
-        );
+        let tx = self.avisos.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(Aviso::Pam(pam::autenticar(&s, &u, clave)));
+            let r = v.verificar(clave);
+            let _ = tx.send(Aviso::Verificado(r, v));
         });
     }
 

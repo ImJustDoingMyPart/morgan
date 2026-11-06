@@ -8,6 +8,8 @@ use std::path::Path;
 use std::ptr;
 
 use morgan_lock::clave::{Secreto, borrar};
+pub use morgan_lock::verificar::Resultado;
+use morgan_lock::verificar::Verificador;
 
 const PAM_SUCCESS: c_int = 0;
 const PAM_BUF_ERR: c_int = 5;
@@ -88,11 +90,16 @@ unsafe extern "C" {
     ) -> c_int;
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Resultado {
-    Bien,
-    Fallo(Vec<String>),
-    Error(String),
+/// La pila `auth` de un servicio, para el usuario de este proceso.
+pub struct Pam {
+    pub servicio: String,
+    pub usuario: String,
+}
+
+impl Verificador for Pam {
+    fn verificar(&mut self, clave: Secreto) -> Resultado {
+        autenticar(&self.servicio, &self.usuario, clave)
+    }
 }
 
 /// El servicio existe en alguna de las dos carpetas que lee Linux-PAM. Sin archivo, PAM usa

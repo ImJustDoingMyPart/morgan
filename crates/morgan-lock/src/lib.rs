@@ -8,9 +8,11 @@ pub mod clave;
 pub mod dibujo;
 pub mod escena;
 pub mod fondo;
+pub mod greetd;
 pub mod hundido;
 pub mod perfil;
 pub mod pintor;
 pub mod sombra;
+pub mod verificar;
 
 pub(crate) use morgan_motor::texto;
