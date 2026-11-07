@@ -379,6 +379,10 @@ impl Umbriel {
         .await;
     }
 
+    pub async fn overview(&self) {
+        self.hacer("overview-toggle", json!({})).await;
+    }
+
     pub async fn dpms(&self, prender: bool) {
         let nombre = if prender { "dpms-on" } else { "dpms-off" };
         self.hacer(nombre, json!({})).await;

@@ -775,6 +775,10 @@ impl Hilo {
     }
 
     fn poner_esquina(&mut self, salida: wl_output::WlOutput) {
+        // La esquina del compositor abre su overview (`umbriel_cfg`).
+        if morgan_ipc::compositor::overview_propio() {
+            return;
+        }
         let Ok(mut pool) = SlotPool::new(4, &self.shm) else {
             eprintln!("morgan: barra: sin memoria para la esquina");
             return;
@@ -1227,7 +1231,9 @@ impl SeatHandler for Hilo {
             if let (Some(m), Some(p)) = (&self.cursor, &self.puntero) {
                 self.forma = Some(m.get_shape_device(p, qh));
             }
-            if let Some(p) = &self.puntero {
+            if let Some(p) = &self.puntero
+                && !morgan_ipc::compositor::overview_propio()
+            {
                 self.relativo = self.relativos.get_relative_pointer(p, qh).ok();
                 if self.relativo.is_none() {
                     eprintln!("morgan: barra: sin movimiento relativo, la esquina no responde");

@@ -40,6 +40,26 @@ pub fn actual() -> Tipo {
     detectar(|k| std::env::var_os(k))
 }
 
+/// Si el compositor trae su overview (Umbriel, niri): ahí morgan no arma el lienzo de ventanas
+/// ni su esquina, y la tecla y la esquina abren el del compositor. niri todavía no tiene driver
+/// (cae en [`Tipo::Otro`]), así que se mira aparte.
+pub fn con_overview(env: impl Fn(&str) -> Option<OsString>) -> bool {
+    let hay = |k: &str| env(k).is_some_and(|v| !v.is_empty());
+    let escritorio = env("XDG_CURRENT_DESKTOP")
+        .map(|v| v.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    match detectar(&env) {
+        Tipo::Umbriel => true,
+        Tipo::Hyprland => false,
+        Tipo::Otro => escritorio.split(':').any(|n| n == "niri") || hay("NIRI_SOCKET"),
+    }
+}
+
+/// [`con_overview`] para este proceso.
+pub fn overview_propio() -> bool {
+    con_overview(|k| std::env::var_os(k))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -67,6 +87,22 @@ mod tests {
             ("HYPRLAND_INSTANCE_SIGNATURE", "abc"),
         ];
         assert_eq!(detectar(env(&hyprland)), Tipo::Hyprland);
+    }
+
+    #[test]
+    fn overview_propio_en_umbriel_y_niri() {
+        assert!(con_overview(env(&[("XDG_CURRENT_DESKTOP", "umbriel")])));
+        assert!(con_overview(env(&[("XDG_CURRENT_DESKTOP", "niri")])));
+        assert!(con_overview(env(&[(
+            "NIRI_SOCKET",
+            "/run/user/1000/niri.sock"
+        )])));
+        let hyprland = [
+            ("XDG_CURRENT_DESKTOP", "Hyprland"),
+            ("HYPRLAND_INSTANCE_SIGNATURE", "abc"),
+        ];
+        assert!(!con_overview(env(&hyprland)));
+        assert!(!con_overview(env(&[("XDG_CURRENT_DESKTOP", "GNOME")])));
     }
 
     #[test]

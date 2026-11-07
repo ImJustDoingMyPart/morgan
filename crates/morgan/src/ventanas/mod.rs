@@ -17,6 +17,9 @@
 //! la vez las que tocan su monitor. Las de un workspace oculto dan siempre el mismo cuadro: con
 //! una foto de después de esconderse, no se piden de nuevo.
 //!
+//! Con un compositor que trae su overview (Umbriel, niri) queda apagado: no saca fotos ni
+//! escucha nada, y un pedido abre el del compositor ([`Ventanas::new`]).
+//!
 //! Se dibuja en el hilo del centro (`centro/dibujo/ventanas.rs`), que lleva la elegida, el
 //! desplazamiento y el anillo; acá quedan lo que dice Hyprland, las fotos, los íconos y enfocar.
 
@@ -78,6 +81,8 @@ pub struct Ventanas {
 
 struct Inner {
     compositor: Compositor,
+    /// El compositor trae su overview: el lienzo no se arma.
+    apagado: bool,
     hilo: Sender<Orden>,
     /// `[shell] hot_corner`.
     con_esquina: Cell<bool>,
@@ -103,6 +108,7 @@ impl Ventanas {
         let v = Ventanas {
             inner: Rc::new(Inner {
                 compositor: compositor.clone(),
+                apagado: morgan_ipc::compositor::overview_propio(),
                 hilo: centro.hilo(),
                 con_esquina: Cell::new(con_esquina),
                 capturador: RefCell::default(),
@@ -117,6 +123,9 @@ impl Ventanas {
                 iconos: RefCell::default(),
             }),
         };
+        if v.inner.apagado {
+            return v;
+        }
         let debil = Rc::downgrade(&v.inner);
         centro.al_ventanas(move |e| {
             if let Some(inner) = debil.upgrade() {
@@ -159,6 +168,10 @@ impl Ventanas {
     }
 
     pub fn pedir(&self) {
+        if self.inner.apagado {
+            self.inner.compositor.overview();
+            return;
+        }
         // Clonada aparte: el préstamo del `if let` duraría todo el bloque.
         let abierta = self.inner.abierta.borrow().clone();
         if let Some(v) = abierta {
@@ -220,7 +233,7 @@ impl Ventanas {
             return false;
         }
         let i = &self.inner;
-        if !i.con_esquina.get() || i.leyendo.get() || i.compositor.juego_en_foco() {
+        if i.apagado || !i.con_esquina.get() || i.leyendo.get() || i.compositor.juego_en_foco() {
             return false;
         }
         let pedido = i.pedido.get() + 1;

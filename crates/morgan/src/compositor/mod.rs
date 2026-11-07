@@ -289,6 +289,17 @@ impl Compositor {
         });
     }
 
+    /// Abre o cierra el overview del compositor, donde lo hay (ver
+    /// `morgan_ipc::compositor::overview_propio`).
+    pub fn overview(&self) {
+        let d = self.driver.clone();
+        glib::MainContext::default().spawn_local(async move {
+            if let Driver::Umbriel(u) = d {
+                u.overview().await;
+            }
+        });
+    }
+
     pub fn dpms(&self, prender: bool) {
         if matches!(self.driver, Driver::Ninguno) || !self.dpms.anotar(prender) {
             return;

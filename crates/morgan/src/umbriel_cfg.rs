@@ -277,6 +277,14 @@ pub fn toml_con(c: &Config, con_grim: bool, tema: &Path, menu: &Menu) -> String 
     crate::umbriel_valores::juntar(&mut t, apariencia(c));
     crate::umbriel_valores::juntar(&mut t, menu.cambios.tabla_toml());
     crate::umbriel_valores::juntar(&mut t, salidas(&menu.monitores));
+    // Umbriel trae su overview y morgan no arma el lienzo: la esquina de `[shell] hot_corner`
+    // abre el de Umbriel. Apagada no se escribe, así queda la que ponga user.toml.
+    if c.shell.esquina {
+        crate::umbriel_valores::juntar(
+            &mut t,
+            tabla("[hot_corners.top_left]\nenabled = true\naction = \"overview-toggle\"\n"), // no-tr
+        );
+    }
     out.push_str(&toml::to_string(&t).expect("TOML de morgan"));
     out.push_str("\n[keybinds]\n"); // no-tr
     for (cabecera, lista) in binds::acciones(a) {
@@ -292,11 +300,10 @@ pub fn toml_con(c: &Config, con_grim: bool, tema: &Path, menu: &Menu) -> String 
             }
         }
     }
-    // El lienzo: cada toque de la tecla pide un paso; soltar el modificador lo ve el lienzo
-    // mismo, que tiene el teclado.
-    if let Some(b) = bind(&a.ventanas, "spawn morganctl windows", &["repeat = false"]) {
+    // La tecla de ventanas abre el overview de Umbriel, no el lienzo de morgan.
+    if let Some(b) = bind(&a.ventanas, "overview-toggle", &["repeat = false"]) {
         // no-tr
-        out.push_str("# Lienzo de ventanas (morgan)\n");
+        out.push_str("# Ventanas: el overview de Umbriel\n");
         out.push_str(&b);
     }
     if a.multimedia {
@@ -481,6 +488,20 @@ mod tests {
         let t = toml_con(&Config::default(), false, Path::new("/t"), &Menu::default());
         assert!(!t.contains("Print"));
         assert_eq!(v["animation"]["windows_in"]["duration_ms"].as_integer(), Some(200));
+    }
+
+    #[test]
+    fn ventanas_y_esquina_abren_el_overview_de_umbriel() {
+        let mut c = Config::default();
+        let v: toml::Table = toml::from_str(&toml_con(&c, false, Path::new("/t"), &Menu::default())).unwrap();
+        assert_eq!(v["keybinds"]["Super+Tab"]["action"].as_str(), Some("overview-toggle"));
+        let esquina = &v["hot_corners"]["top_left"];
+        assert_eq!(esquina["enabled"].as_bool(), Some(true));
+        assert_eq!(esquina["action"].as_str(), Some("overview-toggle"));
+        // Apagada no se escribe: manda la de user.toml, si hay.
+        c.shell.esquina = false;
+        let v: toml::Table = toml::from_str(&toml_con(&c, false, Path::new("/t"), &Menu::default())).unwrap();
+        assert!(v.get("hot_corners").is_none());
     }
 
     #[test]
