@@ -6,9 +6,9 @@
 //!   la ve. Lo que sí se ve es su audio en pulse. El replay (`-r`) no cuenta. Límites: una
 //!   grabación sin pistas de audio no se ve, y una que se arranca con el replay corriendo (la
 //!   hace el mismo proceso, con una señal) tampoco.
-//! - **Pantalla**: el evento `screencast` de Hyprland no se puede consultar, así que lo lleva
-//!   `compositor/hyprland.rs`. Cuenta solo si dura `COMPARTIR_MINIMO`: las fotos de ventanas de morgan
-//!   también lo disparan.
+//! - **Pantalla**: la avisa la capa del compositor. En Hyprland, su evento `screencast`
+//!   (`compositor/hyprland.rs`); en los demás, PipeWire (`compositor/compartir.rs`). Cuenta solo
+//!   si dura `COMPARTIR_MINIMO`: las fotos de ventanas de morgan también disparan el de Hyprland.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;

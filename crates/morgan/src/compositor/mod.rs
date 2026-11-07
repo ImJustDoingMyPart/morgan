@@ -6,6 +6,7 @@
 //! Lo que solo tiene Hyprland (la config desde el menú) el menú lo muestra deshabilitado con el
 //! porqué, nunca escondido (`menu/arbol.rs`, `solo_hyprland`).
 
+pub mod compartir;
 pub mod hyprland;
 pub mod umbriel;
 
@@ -186,6 +187,17 @@ impl Compositor {
             Driver::Ninguno => eprintln!("morgan: compositor desconocido; modo juego apagado"),
             Driver::Hyprland(h) => h.arrancar(&c),
             Driver::Umbriel(u) => u.arrancar(&c),
+        }
+        // Hyprland avisa la pantalla compartida con su evento; los demás, por PipeWire.
+        if !matches!(c.driver, Driver::Hyprland(_)) {
+            let (tx, rx) = async_channel::unbounded();
+            compartir::escuchar(tx);
+            let yo = c.clone();
+            glib::MainContext::default().spawn_local(async move {
+                while let Ok(empieza) = rx.recv().await {
+                    yo.captura(empieza);
+                }
+            });
         }
         c
     }

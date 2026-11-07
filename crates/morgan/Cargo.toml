@@ -32,6 +32,7 @@ wayland-scanner.workspace = true
 wayland-backend.workspace = true
 bitflags.workspace = true
 udev.workspace = true
+pipewire.workspace = true
 libc.workspace = true
 rrule.workspace = true
 chrono.workspace = true
