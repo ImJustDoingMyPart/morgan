@@ -282,7 +282,10 @@ fn lua(s: &str) -> String {
 
 /// La config del Hyprland del greeter: todas las salidas, sin logo ni fondo de Hyprland, el
 /// teclado del sistema, y la pantalla al arrancar; cuando la pantalla termina, Hyprland sale.
-/// Las claves salen de `hl.meta.lua` de Hyprland 0.57.
+/// Las claves salen de `hl.meta.lua` de Hyprland 0.57. `highrr` no está ahí: sale del fuente
+/// de 0.57.1 (`config/shared/monitor/Parser.cpp`, que también lee `hl.monitor`): la frecuencia
+/// más alta de cada salida y, entre esas, la mayor resolución. Con `preferred` el monitor
+/// elige, y uno de 300 Hz suele pedir 60.
 pub fn config_hyprland(pantalla: &[String], t: &Teclado) -> String {
     let cmd = pantalla
         .iter()
@@ -292,7 +295,7 @@ pub fn config_hyprland(pantalla: &[String], t: &Teclado) -> String {
     let cmd = format!("{cmd}; hyprctl dispatch 'hl.dsp.exit()'");
     format!(
         r#"-- Generado por morgan-greet: se reescribe en cada arranque.
-hl.monitor({{ output = "", mode = "preferred", position = "auto", scale = 1 }})
+hl.monitor({{ output = "", mode = "highrr", position = "auto", scale = 1 }})
 hl.config({{
     misc = {{
         disable_hyprland_logo = true,
@@ -417,6 +420,10 @@ mod tests {
         );
         assert!(c.contains(r#"hl.exec_cmd([['/usr/lib/morgan/morgan-greet' 'pantalla' 'it'\''s'; hyprctl dispatch 'hl.dsp.exit()']])"#), "{c}");
         assert!(c.contains("kb_layout = [[latam]]"));
+        assert!(
+            c.contains(r#"mode = "highrr""#),
+            "a la frecuencia más alta, no a la que propone el monitor"
+        );
     }
 
     #[test]
