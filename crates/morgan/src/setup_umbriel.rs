@@ -1,16 +1,32 @@
-//! La parte de Umbriel de `morgan setup`: que su config incluya `morgan.toml` (opcional: si
-//! todavía no existe, Umbriel arranca igual y lo carga cuando morgan lo escriba).
+//! La parte de Umbriel de `morgan setup`: que su `config.toml` sea un cargador que incluye
+//! `user.toml` (la config escrita a mano) y después `morgan.toml` (la de morgan). Umbriel
+//! aplica los incluidos en el orden de la lista y el último que pone una clave gana
+//! (`configuration.md`, «Include»): así lo cambiado desde el menú de morgan pisa lo del
+//! usuario, como `morgan.lua`, que `hyprland.lua` carga al final. Los dos son opcionales: si
+//! uno todavía no existe, Umbriel arranca igual y lo carga cuando aparece.
 //!
-//! Sin config propia se parte de la plantilla del paquete, sin los atajos que llaman a Noctalia
-//! (no está) ni los que chocan con los de morgan: el archivo que incluye se aplica último, y
-//! en la misma tecla ganaría sobre morgan.
+//! Una config que ya existe se mueve entera a `user.toml`. Sin config se parte de la
+//! plantilla del paquete, con comentados los atajos que llaman a Noctalia (no está) y los que
+//! chocan con los de morgan.
 
 use std::path::Path;
 
 use morgan_idioma::trf;
 
 pub const ARCHIVO: &str = "morgan.toml"; // no-tr
+pub const USUARIO: &str = "user.toml"; // no-tr
 const PLANTILLA: &str = "/usr/share/umbriel/config.toml"; // no-tr
+
+/// El `config.toml` que escribe `morgan setup`: solo la lista, en orden.
+pub const CARGADOR: &str = concat!(
+    "# Cargador: solo lista los archivos, en orden. Umbriel aplica los incluidos en el orden de la\n", // no-tr
+    "# lista y el último que pone una clave gana (docs/user/configuration.md, «Include»):\n", // no-tr
+    "#   user.toml   la config escrita a mano.\n", // no-tr
+    "#   morgan.toml la escribe morgan: sus atajos, sus capas, el tema y lo cambiado desde su menú.\n", // no-tr
+    "# Así morgan pisa solo lo que se cambió desde el menú, como morgan.lua en Hyprland.\n\n", // no-tr
+    "[include.optional]\n", // no-tr
+    "files = [\"user.toml\", \"morgan.toml\"]\n", // no-tr
+);
 
 /// `Mod+Space` y `Super+space` son la misma.
 pub fn normalizar(tecla: &str) -> String {
@@ -57,47 +73,41 @@ pub fn desde_plantilla(plantilla: &str, de_morgan: &[String]) -> String {
             out.push('\n');
         }
     }
-    con_include(&out).unwrap_or(out)
+    out
 }
 
-/// El texto con `morgan.toml` entre los opcionales; `None` si ya está.
-pub fn con_include(texto: &str) -> Option<String> {
-    if texto
+/// Ya es el cargador: solo incluye, y `morgan.toml` va último.
+pub fn es_cargador(texto: &str) -> bool {
+    let Ok(t) = toml::from_str::<toml::Table>(texto) else {
+        return false;
+    };
+    let ultimo = t
+        .get("include")
+        .and_then(|i| i.get("optional"))
+        .and_then(|o| o.get("files"))
+        .and_then(|f| f.as_array())
+        .and_then(|f| f.last())
+        .and_then(|f| f.as_str());
+    t.keys().all(|k| k == "include") && ultimo == Some(ARCHIVO) // no-tr
+}
+
+/// La config del usuario sin `morgan.toml` entre sus includes: ahora lo incluye el cargador.
+pub fn sin_morgan(texto: &str) -> String {
+    let entrada = format!("\"{ARCHIVO}\"");
+    texto
         .lines()
-        .any(|l| !l.trim_start().starts_with('#') && l.contains(ARCHIVO))
-    {
-        return None;
-    }
-    let lineas: Vec<&str> = texto.lines().collect();
-    if let Some(i) = lineas.iter().position(|l| l.trim() == "[include.optional]") {
-        // no-tr
-        // El `files = [` de esa tabla, antes de la próxima.
-        let fin = lineas[i + 1..]
-            .iter()
-            .position(|l| l.trim_start().starts_with('['))
-            .map_or(lineas.len(), |p| i + 1 + p);
-        if let Some(j) = (i + 1..fin).find(|&j| lineas[j].trim_start().starts_with("files")) {
-            // no-tr
-            let l = lineas[j];
-            let abre = l.find('[')?;
-            let resto = l[abre + 1..].trim_start();
-            let sep = if resto.starts_with(']') { "" } else { ", " };
-            let nueva = format!("{}[\"{ARCHIVO}\"{sep}{}", &l[..abre], resto);
-            let mut v: Vec<String> = lineas.iter().map(|s| (*s).to_owned()).collect();
-            v[j] = nueva;
-            return Some(v.join("\n") + "\n");
-        }
-        let mut v: Vec<String> = lineas.iter().map(|s| (*s).to_owned()).collect();
-        v.insert(i + 1, format!("files = [\"{ARCHIVO}\"]")); // no-tr
-        return Some(v.join("\n") + "\n");
-    }
-    // Al final: arriba quedaría por encima de claves sueltas y se las llevaría a esta tabla.
-    let mut t = texto.to_owned();
-    if !t.is_empty() && !t.ends_with('\n') {
-        t.push('\n');
-    }
-    t.push_str(&format!("\n# morgan: sus atajos y las reglas de sus capas.\n[include.optional]\nfiles = [\"{ARCHIVO}\"]\n")); // no-tr
-    Some(t)
+        .map(|l| {
+            if l.trim_start().starts_with("files") && l.contains(&entrada) { // no-tr
+                l.replace(&format!("{entrada}, "), "") // no-tr
+                    .replace(&format!(", {entrada}"), "") // no-tr
+                    .replace(&entrada, "")
+            } else {
+                l.to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n"
 }
 
 /// Las teclas que morgan ocupa en Umbriel, de lo que escribiría ahora.
@@ -113,27 +123,55 @@ fn teclas_de_morgan(c: &crate::config::Config) -> Vec<String> {
 pub fn correr(c: &crate::config::Config) -> Result<(), String> {
     let dir = glib::user_config_dir().join("umbriel");
     let ruta = dir.join("config.toml");
-    let (nuevo, que) = match std::fs::read_to_string(&ruta) {
-        Ok(t) => match con_include(&t) {
-            Some(n) => (
-                n,
-                trf!("Agregada la config de morgan a {}.", ruta.display()),
-            ),
-            None => {
-                println!("{}", trf!("{} ya carga morgan.", ruta.display()));
-                return Ok(());
-            }
-        },
-        Err(_) => {
-            let plantilla = std::fs::read_to_string(PLANTILLA).unwrap_or_default();
-            (
-                desde_plantilla(&plantilla, &teclas_de_morgan(c)),
-                trf!("Creada {} con la config de morgan.", ruta.display()),
-            )
-        }
+    let usuario = dir.join(USUARIO);
+    let propia = std::fs::read_to_string(&ruta).ok();
+    if propia.as_deref().is_some_and(es_cargador) {
+        println!("{}", trf!("{} ya carga morgan.", ruta.display()));
+        return Ok(());
+    }
+    let texto = match &propia {
+        Some(t) => sin_morgan(t),
+        None => desde_plantilla(
+            &std::fs::read_to_string(PLANTILLA).unwrap_or_default(),
+            &teclas_de_morgan(c),
+        ),
     };
-    escribir(&dir, &ruta, &nuevo)?;
-    println!("{que}");
+    if toml::from_str::<toml::Table>(&texto).is_ok_and(|t| t.contains_key("drm")) {
+        // La doc pide `[drm]` también en el archivo principal si un incluido lo define.
+        return Err(trf!(
+            "{} tiene [drm]: hay que pasarla a mano a {} y declarar [drm] en el cargador.",
+            ruta.display(),
+            usuario.display()
+        ));
+    }
+    if usuario.exists() {
+        return Err(trf!(
+            "Ya existe {}: no se pisa. Juntalo a mano con {} y volvé a correr morgan setup.",
+            usuario.display(),
+            ruta.display()
+        ));
+    }
+    escribir(&dir, &usuario, &texto)?;
+    escribir(&dir, &ruta, CARGADOR)?;
+    if propia.is_some() {
+        println!(
+            "{}",
+            trf!(
+                "Tu config de Umbriel pasó a {}; {} la carga y después la de morgan.",
+                usuario.display(),
+                ruta.display()
+            )
+        );
+    } else {
+        println!(
+            "{}",
+            trf!(
+                "Creadas {} (de la plantilla) y {}, que la carga y después la de morgan.",
+                usuario.display(),
+                ruta.display()
+            )
+        );
+    }
     Ok(())
 }
 
@@ -154,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn la_plantilla_sin_noctalia_ni_choques_y_con_el_include() {
+    fn la_plantilla_sin_noctalia_ni_choques() {
         let plantilla = "[include]\nfiles = []\n\n[include.optional]\nfiles = []\n\n[keybinds]\n\
             \"Mod+Return\" = { action = \"spawn kitty\", repeat = false }\n\
             \"Mod\" = \"spawn noctalia msg panel-toggle launcher\"\n\
@@ -165,26 +203,33 @@ mod tests {
         assert!(t.contains("# (Noctalia) \"Mod\" ="));
         assert!(t.contains("# (es de morgan) \"Mod+Space\""));
         assert!(t.contains("# (es de morgan) \"Mod+Tab\""));
-        assert!(t.contains("[include.optional]\nfiles = [\"morgan.toml\"]"));
+        assert!(!t.contains(ARCHIVO));
         let v: toml::Table = toml::from_str(&t).unwrap();
         assert_eq!(v["layout"]["mode"].as_str(), Some("scrolling"));
-        assert_eq!(con_include(&t), None);
     }
 
     #[test]
-    fn el_include_en_una_config_propia() {
-        let con_lista = "[include.optional]\nfiles = [\"otro.toml\"]\n[general]\n";
-        let t = con_include(con_lista).unwrap();
-        assert!(t.contains("files = [\"morgan.toml\", \"otro.toml\"]"));
-        let sin = "[general]\nxwayland = false\n";
-        let t = con_include(sin).unwrap();
-        let v: toml::Table = toml::from_str(&t).unwrap();
+    fn el_cargador_y_la_config_propia() {
+        assert!(es_cargador(CARGADOR));
+        let v: toml::Table = toml::from_str(CARGADOR).unwrap();
         assert_eq!(
-            v["include"]["optional"]["files"][0].as_str(),
-            Some("morgan.toml")
+            v["include"]["optional"]["files"].as_array().unwrap().len(),
+            2
+        );
+        // Una config con valores propios no es el cargador, aunque incluya a morgan.
+        let propia = "[include.optional]\nfiles = [\"morgan.toml\", \"otro.toml\"]\n[general]\nxwayland = false\n";
+        assert!(!es_cargador(propia));
+        // Con morgan primero, morgan no gana.
+        assert!(!es_cargador("[include.optional]\nfiles = [\"morgan.toml\", \"user.toml\"]\n"));
+        let sin = sin_morgan(propia);
+        let v: toml::Table = toml::from_str(&sin).unwrap();
+        assert_eq!(
+            v["include"]["optional"]["files"].as_array().unwrap(),
+            &vec![toml::Value::from("otro.toml")]
         );
         assert_eq!(v["general"]["xwayland"].as_bool(), Some(false));
-        // Uno comentado no cuenta.
-        assert!(con_include("# files = [\"morgan.toml\"]\n").is_some());
+        let solo = sin_morgan("[include.optional]\nfiles = [\"morgan.toml\"]\n");
+        assert!(toml::from_str::<toml::Table>(&solo).is_ok());
+        assert!(!solo.contains(ARCHIVO));
     }
 }

@@ -32,6 +32,7 @@ mod compositor;
 mod gama;
 mod setup_umbriel;
 mod umbriel_cfg;
+mod umbriel_valores;
 mod icono;
 mod ical;
 mod idle;

@@ -132,7 +132,7 @@ pub enum Que {
     Carpetas(std::path::PathBuf),
     Config(Cambio),
     Apariencia(crate::apariencia::Cambio),
-    Hypr(String, Option<super::compositor::Valor>),
+    Compositor(String, Option<super::compositor::Valor>),
     Predeterminada(String, Vec<String>),
     Autoarranque(String, bool),
     BorrarRecientes,

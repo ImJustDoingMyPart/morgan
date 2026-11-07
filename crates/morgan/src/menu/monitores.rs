@@ -17,6 +17,11 @@
 //!
 //! El nombre propio (apodo) es solo de morgan: Hyprland sigue nombrando la salida por su
 //! conector.
+//!
+//! Con Umbriel, lo puesto sale de `umbriel outputs --json` ([`de_json_umbriel`]) y lo elegido
+//! va a `morgan.toml` como `[output."DP-3"]` con los mismos campos (`umbriel_cfg.rs`). Umbriel
+//! no tiene un `eval`: la prueba es escribir `morgan.toml` con lo probado encima y volver es
+//! escribirlo sin eso; Umbriel lo relee solo.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -111,6 +116,71 @@ pub fn de_json(texto: &str) -> Vec<Salida> {
                 rotacion: n("transform").unwrap_or(0.0) as u8 % 4,
                 apagada: m.get("disabled").and_then(|x| x.as_bool()).unwrap_or(false),
                 modos,
+                apodo: None,
+                supuesto: None,
+            })
+        })
+        .collect()
+}
+
+/// `umbriel outputs --json`. Una apagada da `0 × 0` y ningún modo `current`, como en Hyprland:
+/// [`completar`] le pone tamaño y lugar.
+pub fn de_json_umbriel(texto: &str) -> Vec<Salida> {
+    let Ok(serde_json::Value::Array(v)) = serde_json::from_str(texto) else {
+        return Vec::new();
+    };
+    v.iter()
+        .filter_map(|m| {
+            let n = |a: &str, b: &str| m.get(a).and_then(|x| x.get(b)).and_then(|x| x.as_f64());
+            let lista: Vec<&serde_json::Value> = m
+                .get("modes") // no-tr
+                .and_then(|x| x.as_array())
+                .map(|a| a.iter().collect())
+                .unwrap_or_default();
+            let de = |x: &serde_json::Value| -> Option<(u32, u32, f64)> {
+                Some((
+                    x.get("width")?.as_u64()? as u32,
+                    x.get("height")?.as_u64()? as u32,
+                    x.get("refresh_mhz")?.as_f64()? / 1000.0, // no-tr
+                ))
+            };
+            let actual = lista
+                .iter()
+                .find(|x| x.get("current").and_then(|c| c.as_bool()) == Some(true)) // no-tr
+                .and_then(|x| de(x));
+            let apagada = m.get("enabled").and_then(|x| x.as_bool()) == Some(false); // no-tr
+            let rotacion = match m.get("transform").and_then(|x| x.as_str()).unwrap_or("") { // no-tr
+                t if t.ends_with("90") => 1,
+                t if t.ends_with("180") => 2,
+                t if t.ends_with("270") => 3,
+                _ => 0,
+            };
+            let (ancho, alto, hz) = match (apagada, actual) {
+                (false, Some(a)) => a,
+                _ => (0, 0, 60.0),
+            };
+            Some(Salida {
+                nombre: m.get("name")?.as_str()?.to_owned(),
+                descripcion: descripcion(m),
+                ancho,
+                alto,
+                hz,
+                escala: m.get("scale").and_then(|x| x.as_f64()).unwrap_or(1.0), // no-tr
+                x: n("position", "x").unwrap_or(0.0) as i32, // no-tr
+                y: n("position", "y").unwrap_or(0.0) as i32, // no-tr
+                rotacion,
+                apagada,
+                // El preferido primero: [`completar`] dibuja con el primero a una nunca vista.
+                modos: lista
+                    .iter()
+                    .filter(|x| x.get("preferred").and_then(|c| c.as_bool()) == Some(true)) // no-tr
+                    .chain(
+                        lista
+                            .iter()
+                            .filter(|x| x.get("preferred").and_then(|c| c.as_bool()) != Some(true)), // no-tr
+                    )
+                    .filter_map(|x| de(x))
+                    .collect(),
                 apodo: None,
                 supuesto: None,
             })
@@ -792,6 +862,32 @@ mod tests {
                 _ => None,
             })
             .unwrap_or_default()
+    }
+
+    #[test]
+    fn lee_lo_que_da_umbriel() {
+        // Recortado de `umbriel outputs --json` (umbriel-git r1525).
+        let json = r#"[
+          {"name":"DP-3","enabled":true,"make":"Shenzhen KTC Technology Group","model":"27GS600",
+           "position":{"x":0,"y":0},"scale":1.0,"transform":"normal",
+           "modes":[{"current":false,"height":1440,"preferred":false,"refresh_mhz":59951,"width":2560},
+                    {"current":true,"height":1440,"preferred":true,"refresh_mhz":300000,"width":2560}]},
+          {"name":"HDMI-A-1","enabled":false,"make":"LG","model":"TV",
+           "position":{"x":0,"y":0},"scale":1.0,"transform":"flipped-90",
+           "modes":[{"current":false,"height":720,"preferred":false,"refresh_mhz":60000,"width":1280},
+                    {"current":false,"height":1080,"preferred":true,"refresh_mhz":60000,"width":1920}]}
+        ]"#;
+        let v = de_json_umbriel(json);
+        assert_eq!(v.len(), 2);
+        assert_eq!((v[0].ancho, v[0].alto), (2560, 1440));
+        assert!(mismo(v[0].hz, 300.0));
+        assert!(!v[0].apagada);
+        assert_eq!(v[0].descripcion, "Shenzhen KTC Technology Group 27GS600");
+        assert!(v[1].apagada);
+        assert_eq!((v[1].ancho, v[1].alto), (0, 0));
+        assert_eq!(v[1].rotacion, 1);
+        // El preferido primero.
+        assert_eq!(v[1].modos[0], (1920, 1080, 60.0));
     }
 
     #[test]

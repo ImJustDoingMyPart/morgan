@@ -1,6 +1,8 @@
 # Plantilla del motor de temas de morgan -> ~/.local/state/morgan/tema/umbriel.toml
-# La incluye ~/.config/umbriel/morgan.toml (la escribe morgan). Umbriel no tiene bordes en
-# degradé: el de la ventana con foco va en primary; el resto, transparente, como en Hyprland.
+# La incluye ~/.config/umbriel/morgan.toml (la escribe morgan). Umbriel pinta el borde liso:
+# el degradé de primary a secondary lo dibuja el efecto de morgan (umbriel_borde.glsl) sobre el
+# anillo de la ventana con foco, que tiene que ser opaco; el resto, transparente, como en
+# Hyprland.
 
 [colors]
 background = "#{{colors.surface_container.default.hex_stripped}}FF"

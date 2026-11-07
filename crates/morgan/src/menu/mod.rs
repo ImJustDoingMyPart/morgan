@@ -500,16 +500,20 @@ impl Menu {
                     f.filas =
                         hora::filas(&hora::leer().await, region.as_deref(), chrono::Utc::now());
                 }
+                let tipo = morgan_ipc::compositor::actual();
                 if cat == Categoria::Pantalla
-                    && let Some(nombre) = lectura::otro_compositor()
+                    && tipo == morgan_ipc::compositor::Tipo::Otro
                     && let Some(m) = p.first_mut()
                 {
-                    m.filas = vec![arbol::solo_hyprland(nombre)];
+                    m.filas = vec![arbol::solo_hyprland("")];
                 } else if cat == Categoria::Pantalla
                     && let Some(m) = p.first_mut()
                 {
-                    let mut salidas =
-                        monitores::de_json(&leer(&["hyprctl", "-j", "monitors", "all"]).await);
+                    let mut salidas = if tipo == morgan_ipc::compositor::Tipo::Umbriel {
+                        monitores::de_json_umbriel(&leer(&["umbriel", "outputs", "--json"]).await)
+                    } else {
+                        monitores::de_json(&leer(&["hyprctl", "-j", "monitors", "all"]).await)
+                    };
                     let reglas =
                         monitores::Reglas::leer(&self.ruta_monitores()).unwrap_or_else(|e| {
                             eprintln!("morgan: menú: {e}");
@@ -537,7 +541,7 @@ impl Menu {
                 arbol::apariencia(&lecturas, &c)
             }
             Categoria::Compositor => {
-                lectura::compositor(&self.ruta_cambios_hypr(), &c.reglas).await
+                lectura::compositor(&self.ruta_cambios(), &c.reglas).await
             }
             Categoria::Atajos => lectura::atajos(&c.atajos).await,
             Categoria::Aplicaciones => lectura::aplicaciones(&c.capturas),
@@ -556,13 +560,29 @@ impl Menu {
     /// Prueba en vivo: si nadie la mantiene, a los `SEGUNDOS_PRUEBA` vuelve sola, con el menú
     /// abierto o no. Una segunda prueba se suma a la primera y reinicia la cuenta.
     async fn probar_monitor(&self, salida: String, campo: monitores::Campo) -> Result<(), String> {
-        comando::salida(&["hyprctl", "eval", &monitores::prueba(&salida, &campo)]).await?;
         let i = &self.inner;
+        let umbriel = morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Umbriel;
+        if !umbriel {
+            comando::salida(&["hyprctl", "eval", &monitores::prueba(&salida, &campo)]).await?;
+        }
         let mut cambios = i.prueba.borrow_mut().take().map(|(c, id)| {
             id.remove();
             c
         });
         cambios.get_or_insert_with(Vec::new).push((salida, campo));
+        // Umbriel no tiene `eval`: se escribe morgan.toml con todo lo probado encima.
+        if umbriel {
+            let config = i.config.borrow().clone();
+            let probado = cambios.clone().unwrap_or_default();
+            if let Err(e) =
+                crate::umbriel_cfg::aplicar_con(&config, &i.s.ruta_config, &probado).await
+            {
+                // Inválida: quedó el archivo de antes, con las pruebas anteriores. Se vuelve a
+                // lo guardado.
+                let _ = self.volver_monitores().await;
+                return Err(e);
+            }
+        }
         let yo = self.clone();
         let id = glib::timeout_add_seconds_local_once(monitores::SEGUNDOS_PRUEBA, move || {
             yo.inner.prueba.borrow_mut().take();
@@ -588,13 +608,17 @@ impl Menu {
             r.poner(salida, campo);
         }
         r.guardar(&ruta)?;
-        self.escribir_hypr(None).await
+        self.escribir_compositor(None).await
     }
 
-    /// Lo de los archivos vuelve con la recarga: la prueba no se guardó en ninguno.
+    /// Lo de los archivos vuelve con la recarga: la prueba no se guardó en ninguno. En Umbriel,
+    /// con `morgan.toml` escrito de nuevo sin lo probado.
     async fn volver_monitores(&self) -> Result<(), String> {
         if let Some((_, id)) = self.inner.prueba.borrow_mut().take() {
             id.remove();
+        }
+        if morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Umbriel {
+            return self.escribir_compositor(None).await;
         }
         comando::salida(&["hyprctl", "reload", "config-only"])
             .await
@@ -610,11 +634,18 @@ impl Menu {
         if matches!(campo, monitores::Campo::Apodo(_)) {
             return Ok(());
         }
-        self.escribir_hypr(None).await
+        self.escribir_compositor(None).await
     }
 
-    fn ruta_cambios_hypr(&self) -> PathBuf {
-        crate::hypr_cfg::ruta_cambios(&self.inner.s.ruta_config)
+    /// Lo cambiado desde Escritorio, del compositor de la sesión: las claves de uno no valen
+    /// en el otro.
+    fn ruta_cambios(&self) -> PathBuf {
+        match morgan_ipc::compositor::actual() {
+            morgan_ipc::compositor::Tipo::Umbriel => {
+                crate::umbriel_cfg::ruta_cambios(&self.inner.s.ruta_config)
+            }
+            _ => crate::hypr_cfg::ruta_cambios(&self.inner.s.ruta_config),
+        }
     }
 
     fn ver_categoria(&self, cat: Categoria, ir_a: Option<(usize, Option<usize>)>) {
@@ -904,22 +935,22 @@ impl Menu {
                     | arbol::Cambio::NuevoModo(_)
                     | arbol::Cambio::ModoUnaVez(..)
                     | arbol::Cambio::QuitarModo(_) => {
-                        return self.escribir_hypr(None).await;
+                        return self.escribir_compositor(None).await;
                     }
-                    arbol::Cambio::Animacion(_) => return self.escribir_hypr(None).await,
+                    arbol::Cambio::Animacion(_) => return self.escribir_compositor(None).await,
                     // El shell sigue a la velocidad: el ritmo y la hoja con sus tiempos.
                     arbol::Cambio::Velocidad(id) => {
                         crate::animaciones::poner(&id);
                         let i = &self.inner;
                         i.s.tema.set_shell(&i.config.borrow().shell);
-                        return self.escribir_hypr(None).await;
+                        return self.escribir_compositor(None).await;
                     }
                     _ => {}
                 }
                 despues_de_cambiar(&c).await;
                 Ok(())
             }
-            Que::Hypr(clave, valor) => self.escribir_hypr(Some((clave, valor))).await,
+            Que::Compositor(clave, valor) => self.escribir_compositor(Some((clave, valor))).await,
             Que::Monitor(salida, campo) if campo.a_prueba() => {
                 self.probar_monitor(salida, campo).await
             }
@@ -974,11 +1005,11 @@ impl Menu {
         });
     }
 
-    async fn escribir_hypr(
+    async fn escribir_compositor(
         &self,
         cambio: Option<(String, Option<compositor::Valor>)>,
     ) -> Result<(), String> {
-        let ruta = self.ruta_cambios_hypr();
+        let ruta = self.ruta_cambios();
         if let Some((clave, valor)) = cambio {
             let mut c = compositor::Cambios::leer(&ruta)?;
             c.poner(&clave, valor);

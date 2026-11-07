@@ -397,15 +397,15 @@ impl Compositor {
     }
 }
 
-/// Escribe la config de morgan para el compositor de la sesión (atajos, capas y, en Hyprland,
-/// lo que se cambia desde el menú) y se la hace releer.
+/// Escribe la config de morgan para el compositor de la sesión (atajos, capas y lo que se
+/// cambia desde el menú) y se la hace releer.
 pub async fn aplicar_config(
     c: &crate::config::Config,
     ruta_config: &std::path::Path,
 ) -> Result<(), String> {
     match morgan_ipc::compositor::actual() {
         Tipo::Hyprland => crate::hypr_cfg::aplicar(c, ruta_config).await,
-        Tipo::Umbriel => crate::umbriel_cfg::aplicar(c).await,
+        Tipo::Umbriel => crate::umbriel_cfg::aplicar(c, ruta_config).await,
         Tipo::Otro => Ok(()),
     }
 }

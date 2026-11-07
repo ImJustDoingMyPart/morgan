@@ -461,5 +461,7 @@
 "Ya la usa {}: Enter la reasigna, Escape cancela" = "{} already uses it: Enter reassigns it, Escape cancels"
 
 # setup_umbriel.rs
-"Agregada la config de morgan a {}." = "Added morgan's config to {}."
-"Creada {} con la config de morgan." = "Created {} with morgan's config."
+"{} tiene [drm]: hay que pasarla a mano a {} y declarar [drm] en el cargador." = "{} has [drm]: move it to {} by hand and declare [drm] in the loader."
+"Ya existe {}: no se pisa. Juntalo a mano con {} y volvé a correr morgan setup." = "{} already exists and won't be overwritten. Merge it with {} by hand and run morgan setup again."
+"Tu config de Umbriel pasó a {}; {} la carga y después la de morgan." = "Your Umbriel config moved to {}; {} loads it and then morgan's."
+"Creadas {} (de la plantilla) y {}, que la carga y después la de morgan." = "Created {} (from the template) and {}, which loads it and then morgan's."

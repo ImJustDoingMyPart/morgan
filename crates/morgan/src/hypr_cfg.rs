@@ -16,8 +16,9 @@ pub const SOMBRAS: &[(&str, &str, &str, &str)] = &[
         "black",
         "Sombra negra",
         "ceñida, solo en la ventana con foco",
+        // Al 80 % (Roberto, 2026-11-07: opaca pesaba un poco; igual en Umbriel).
         "hl.config({ decoration = { shadow = {\n    enabled = true, range = 6, render_power = 2,\n    \
-         color = \"rgba(000000ff)\", color_inactive = \"rgba(00000000)\", offset = { 0, 0 },\n} } })\n",
+         color = \"rgba(000000cc)\", color_inactive = \"rgba(00000000)\", offset = { 0, 0 },\n} } })\n",
     ),
     (
         "glow",
@@ -194,7 +195,7 @@ mod tests {
         let anim = lua.find("-- Animación").unwrap();
         let sombra = lua.find("-- Sombra: Glow colorido").unwrap();
         assert!(anim < sombra);
-        assert!(!lua[sombra..].contains("rgba(000000ff)"));
+        assert!(!lua[sombra..].contains("rgba(000000cc)"));
         // Lo que ya no existe cae en el default.
         c.apariencia = crate::config::Apariencia {
             animacion: "x".into(),

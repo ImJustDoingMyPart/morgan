@@ -1,8 +1,12 @@
-//! morgan no toca los archivos de Hyprland escritos a mano: lo cambiado desde el menú se
-//! guarda en `hyprland.toml` y de ahí se genera entero el bloque de `morgan.lua`, que
-//! `hyprland.lua` carga al final y pisa los valores de los otros archivos. Restablecer es
-//! borrar la clave. Lo que se muestra como puesto sale de `hyprctl getoption`, nunca de lo
-//! guardado.
+//! morgan no toca los archivos del compositor escritos a mano: lo cambiado desde el menú se
+//! guarda aparte y de ahí se genera el archivo de morgan, que el compositor carga al final y
+//! pisa los valores de los otros. Restablecer es borrar la clave.
+//!
+//! - Hyprland: se guarda en `hyprland.toml`, va al bloque de `morgan.lua` (que `hyprland.lua`
+//!   carga al final) y lo puesto sale de `hyprctl getoption`, nunca de lo guardado.
+//! - Umbriel: se guarda en `umbriel.toml` y va a `morgan.toml`, que su `config.toml` incluye
+//!   último. Umbriel no tiene `getoption`: lo puesto se deduce de sus archivos
+//!   (`umbriel_valores.rs`).
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -48,6 +52,15 @@ impl Valor {
         }
     }
 
+    fn toml(&self) -> toml::Value {
+        match self {
+            Valor::Bool(b) => toml::Value::Boolean(*b),
+            Valor::Int(i) => toml::Value::Integer(*i),
+            Valor::Float(f) => toml::Value::Float(*f),
+            Valor::Str(s) => toml::Value::String(s.clone()),
+        }
+    }
+
     /// Dos valores son el mismo aunque uno sea entero y el otro no (`1` y `1.0`).
     fn igual(&self, otro: &Valor) -> bool {
         match (self.numero(), otro.numero()) {
@@ -88,6 +101,32 @@ impl Cambios {
             Some(v) => self.0.insert(clave.to_owned(), v),
             None => self.0.remove(clave),
         };
+    }
+
+    /// Las claves de Umbriel (`appearance.blur.radius`) como tablas anidadas de TOML.
+    pub fn tabla_toml(&self) -> toml::Table {
+        let mut raiz = toml::Table::new();
+        for (clave, valor) in &self.0 {
+            let partes: Vec<&str> = clave.split('.').collect();
+            let Some((hoja, camino)) = partes.split_last() else {
+                continue;
+            };
+            let mut t = &mut raiz;
+            for p in camino {
+                let siguiente = t
+                    .entry((*p).to_owned())
+                    .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+                if !siguiente.is_table() {
+                    *siguiente = toml::Value::Table(toml::Table::new());
+                }
+                let toml::Value::Table(sub) = siguiente else {
+                    unreachable!()
+                };
+                t = sub;
+            }
+            t.insert((*hoja).to_owned(), valor.toml());
+        }
+        raiz
     }
 
     /// La clave `input:touchpad:tap-to-click` es `input.touchpad.tap_to_click` en Lua.
@@ -451,6 +490,234 @@ pub const SECCIONES: &[(&str, &[Opt])] = &[
     ),
 ];
 
+/// Lo mismo para Umbriel, con sus claves (`umbriel config schema`, verificadas contra
+/// `docs/user/*.md` del commit instalado). Falta lo que Umbriel no tiene igual: la separación
+/// con el borde de la pantalla (son `layout.struts`, de a un lado), la opacidad por ventana
+/// activa o no, el desenfoque de los menús de las apps (es por capa), meter las ventanas
+/// nuevas en el grupo enfocado y el click del medio o la rueda sobre la barra de pestañas.
+pub const SECCIONES_UMBRIEL: &[(&str, &[Opt])] = &[
+    (
+        "Ventanas",
+        &[
+            opt(
+                "layout.gap",
+                "Separación entre ventanas",
+                "",
+                Tipo::Valores(
+                    enteros![0 => "0 px", 2 => "2 px", 4 => "4 px", 6 => "6 px", 8 => "8 px", 10 => "10 px", 12 => "12 px", 16 => "16 px", 20 => "20 px"],
+                ),
+            ),
+            opt(
+                "appearance.border_width",
+                "Grosor del borde",
+                "",
+                Tipo::Valores(
+                    enteros![0 => "sin borde", 1 => "1 px", 2 => "2 px", 3 => "3 px", 4 => "4 px"],
+                ),
+            ),
+            opt(
+                "appearance.corner_radius",
+                "Redondeo de las esquinas",
+                "",
+                Tipo::Valores(
+                    enteros![0 => "rectas", 2 => "2 px", 4 => "4 px", 6 => "6 px", 8 => "8 px", 10 => "10 px", 12 => "12 px", 16 => "16 px", 20 => "20 px"],
+                ),
+            ),
+            opt(
+                "animation.dim_unfocused.enabled",
+                "Atenuar las inactivas",
+                "oscurece las ventanas sin foco",
+                Tipo::Casilla,
+            ),
+            opt(
+                "animation.dim_unfocused.dim",
+                "Cuánto se atenúan",
+                "",
+                Tipo::Valores(
+                    reales![0.1 => "10 %", 0.2 => "20 %", 0.3 => "30 %", 0.4 => "40 %", 0.5 => "50 %"],
+                ),
+            ),
+        ],
+    ),
+    (
+        "Desenfoque",
+        &[
+            opt(
+                "appearance.blur.enabled",
+                "Desenfoque detrás de las ventanas",
+                "lo que se ve a través de una ventana transparente",
+                Tipo::Casilla,
+            ),
+            opt(
+                "appearance.blur.radius",
+                "Tamaño",
+                "",
+                Tipo::Valores(
+                    enteros![2 => "2", 4 => "4", 6 => "6", 8 => "8", 10 => "10", 12 => "12"],
+                ),
+            ),
+            opt(
+                "appearance.blur.passes",
+                "Pasadas",
+                "más pasadas, más suave y más costoso",
+                Tipo::Valores(enteros![1 => "1", 2 => "2", 3 => "3", 4 => "4"]),
+            ),
+        ],
+    ),
+    (
+        "Distribución",
+        &[opt(
+            "layout.scrolling.center_focused",
+            "Al enfocar una columna",
+            "",
+            Tipo::Textos(&[
+                ("never", "ajustarla a la vista"),
+                ("always", "centrarla"),
+                ("on_overflow", "centrarla si no entra con la de al lado"),
+            ]),
+        )],
+    ),
+    (
+        "Grupos",
+        &[
+            opt(
+                "appearance.tab_bar.visible",
+                "Barra de pestañas",
+                "",
+                Tipo::Casilla,
+            ),
+            opt(
+                "appearance.tab_bar.hide_when_single",
+                "Sin barra con una sola pestaña",
+                "sigue siendo un grupo",
+                Tipo::Casilla,
+            ),
+            opt(
+                "appearance.tab_bar.height",
+                "Alto de la barra",
+                "",
+                Tipo::Valores(
+                    enteros![14 => "14 px", 16 => "16 px", 18 => "18 px", 20 => "20 px", 22 => "22 px", 24 => "24 px"],
+                ),
+            ),
+            opt(
+                "appearance.tab_bar.style",
+                "Pestañas",
+                "",
+                Tipo::Textos(&[
+                    ("titles", "con el título"),
+                    ("indicator", "solo la marca, sin texto"),
+                ]),
+            ),
+        ],
+    ),
+    (
+        "Foco y cursor",
+        &[
+            opt(
+                "workspaces.back_and_forth",
+                "Volver al workspace anterior",
+                "ir al workspace en que ya se está vuelve al de antes",
+                Tipo::Casilla,
+            ),
+            opt(
+                "general.focus_on_activate",
+                "Enfocar la app que lo pide",
+                "",
+                Tipo::Casilla,
+            ),
+            opt(
+                "input.focus.follows_mouse",
+                "El foco sigue al mouse",
+                "",
+                Tipo::Casilla,
+            ),
+            opt(
+                "input.cursor.hide_timeout_ms",
+                "Esconder el cursor quieto",
+                "",
+                Tipo::Valores(
+                    enteros![0 => "nunca", 3000 => "a los 3 s", 5000 => "a los 5 s", 10000 => "a los 10 s", 20000 => "a los 20 s"],
+                ),
+            ),
+            opt(
+                "input.cursor.hide_when_typing",
+                "Esconder el cursor al tipear",
+                "vuelve al mover el mouse",
+                Tipo::Casilla,
+            ),
+        ],
+    ),
+    (
+        "Teclado",
+        &[
+            opt("input.keyboard.layout", "Distribución", "", Tipo::Leidos),
+            opt(
+                "input.keyboard.repeat_delay",
+                "Espera antes de repetir",
+                "",
+                Tipo::Valores(
+                    enteros![200 => "200 ms", 250 => "250 ms", 300 => "300 ms", 400 => "400 ms", 500 => "500 ms", 600 => "600 ms"],
+                ),
+            ),
+            opt(
+                "input.keyboard.repeat_rate",
+                "Velocidad de repetición",
+                "",
+                Tipo::Valores(
+                    enteros![15 => "15 por segundo", 20 => "20 por segundo", 25 => "25 por segundo", 30 => "30 por segundo", 40 => "40 por segundo", 50 => "50 por segundo"],
+                ),
+            ),
+            opt(
+                "input.keyboard.numlock_toggle",
+                "Bloq Num al arrancar",
+                "",
+                Tipo::Casilla,
+            ),
+        ],
+    ),
+    (
+        "Mouse y touchpad",
+        &[
+            opt(
+                "input.mouse.sensitivity",
+                "Sensibilidad del mouse",
+                "",
+                Tipo::Valores(
+                    reales![-0.5 => "-0,5", -0.25 => "-0,25", 0.0 => "0", 0.25 => "0,25", 0.5 => "0,5"],
+                ),
+            ),
+            opt(
+                "input.mouse.accel_profile",
+                "Aceleración",
+                "",
+                Tipo::Textos(&[
+                    ("adaptive", "adaptativa"),
+                    ("flat", "plana, sin aceleración"),
+                ]),
+            ),
+            opt(
+                "input.touchpad.natural_scroll",
+                "Scroll natural en el touchpad",
+                "",
+                Tipo::Casilla,
+            ),
+            opt(
+                "input.touchpad.tap",
+                "Tocar para hacer click",
+                "",
+                Tipo::Casilla,
+            ),
+        ],
+    ),
+];
+
+pub fn claves_umbriel() -> impl Iterator<Item = &'static str> {
+    SECCIONES_UMBRIEL
+        .iter()
+        .flat_map(|(_, o)| o.iter().map(|o| o.clave))
+}
+
 pub fn claves() -> impl Iterator<Item = &'static str> {
     SECCIONES
         .iter()
@@ -483,20 +750,50 @@ pub fn pagina(
     cambios: &Cambios,
     distribuciones: &[(String, String)],
 ) -> Vec<Seccion> {
-    SECCIONES
+    pagina_de(
+        SECCIONES,
+        actuales,
+        cambios,
+        distribuciones,
+        "Volver a lo de los archivos de Hyprland",
+    )
+}
+
+pub fn pagina_umbriel(
+    actuales: &BTreeMap<String, Valor>,
+    cambios: &Cambios,
+    distribuciones: &[(String, String)],
+) -> Vec<Seccion> {
+    pagina_de(
+        SECCIONES_UMBRIEL,
+        actuales,
+        cambios,
+        distribuciones,
+        "Volver a lo de los archivos de Umbriel",
+    )
+}
+
+fn pagina_de(
+    secciones: &'static [(&'static str, &'static [Opt])],
+    actuales: &BTreeMap<String, Valor>,
+    cambios: &Cambios,
+    distribuciones: &[(String, String)],
+    volver: &str,
+) -> Vec<Seccion> {
+    secciones
         .iter()
         .map(|(titulo, opts)| Seccion {
             titulo,
             filas: opts
                 .iter()
-                .map(|o| fila(o, actuales.get(o.clave), cambios, distribuciones))
+                .map(|o| fila(o, actuales.get(o.clave), cambios, distribuciones, volver))
                 .collect(),
         })
         .collect()
 }
 
 fn poner(clave: &str, v: Valor) -> Que {
-    Que::Hypr(clave.to_owned(), Some(v))
+    Que::Compositor(clave.to_owned(), Some(v))
 }
 
 fn fila(
@@ -504,6 +801,7 @@ fn fila(
     actual: Option<&Valor>,
     cambios: &Cambios,
     distribuciones: &[(String, String)],
+    volver: &str,
 ) -> Fila {
     let cambiada = cambios.0.contains_key(o.clave);
     let marca = |s: String| {
@@ -549,9 +847,9 @@ fn fila(
                 .unwrap_or_default();
             if cambiada {
                 opciones.push(opcion(
-                    "Volver a lo de los archivos de Hyprland",
+                    volver,
                     "",
-                    Que::Hypr(o.clave.to_owned(), None),
+                    Que::Compositor(o.clave.to_owned(), None),
                 ));
             }
             let sub = if o.sub.is_empty() {
@@ -583,9 +881,9 @@ fn fila(
                 .map_or(codigo.to_owned(), |(_, n)| n.clone());
             if cambiada {
                 opciones.push(opcion(
-                    "Volver a lo de los archivos de Hyprland",
+                    volver,
                     "",
-                    Que::Hypr(o.clave.to_owned(), None),
+                    Que::Compositor(o.clave.to_owned(), None),
                 ));
             }
             ajuste(o.titulo, &marca(nombre), Control::Lista(opciones))
@@ -730,7 +1028,7 @@ mod tests {
         // Lo cambiado se puede restablecer.
         assert_eq!(
             v.last().unwrap().que,
-            Que::Hypr("decoration:rounding".into(), None)
+            Que::Compositor("decoration:rounding".into(), None)
         );
         // 1 y 1.0 son el mismo.
         let Fila::Ajuste {
@@ -751,7 +1049,7 @@ mod tests {
         assert!(activa);
         assert_eq!(
             que,
-            Que::Hypr("decoration:blur:enabled".into(), Some(Valor::Bool(false)))
+            Que::Compositor("decoration:blur:enabled".into(), Some(Valor::Bool(false)))
         );
     }
 

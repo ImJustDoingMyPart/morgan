@@ -97,17 +97,6 @@ pub async fn apariencia(
     (lecturas, nuevas)
 }
 
-/// El nombre del compositor de la sesión si no es Hyprland: lo de Hyprland no se lee ni se
-/// cambia.
-pub fn otro_compositor() -> Option<&'static str> {
-    use morgan_ipc::compositor::Tipo;
-    match morgan_ipc::compositor::actual() {
-        Tipo::Hyprland => None,
-        Tipo::Umbriel => Some("Umbriel"), // no-tr
-        Tipo::Otro => Some(""),
-    }
-}
-
 pub const ALTO_MUESTRA: u32 = 16;
 /// El doble del alto, para achicar en vez de agrandar.
 const LADO_LEIDO: u32 = 32;
@@ -117,8 +106,12 @@ fn escala() -> u32 {
 }
 
 pub async fn compositor(cambios: &Path, reglas: &[crate::config::ReglaApp]) -> Vec<Seccion> {
-    if let Some(nombre) = otro_compositor() {
-        return super::arbol::pagina_solo_hyprland(super::arbol::Categoria::Compositor, nombre);
+    match morgan_ipc::compositor::actual() {
+        morgan_ipc::compositor::Tipo::Umbriel => return compositor_umbriel(cambios).await,
+        morgan_ipc::compositor::Tipo::Otro => {
+            return super::arbol::pagina_solo_hyprland(super::arbol::Categoria::Compositor, "");
+        }
+        morgan_ipc::compositor::Tipo::Hyprland => {}
     }
     let actuales =
         compositor::de_batch(&leer(&["hyprctl", "--batch", &compositor::pedido_batch()]).await);
@@ -129,6 +122,27 @@ pub async fn compositor(cambios: &Path, reglas: &[crate::config::ReglaApp]) -> V
     let evdev = std::fs::read_to_string("/usr/share/X11/xkb/rules/evdev.lst").unwrap_or_default();
     let mut p = compositor::pagina(&actuales, &cambios, &compositor::distribuciones(&evdev));
     p.push(super::reglas::seccion(reglas, &crate::aplicacion::todas()));
+    p
+}
+
+/// Lo puesto sale de los archivos de Umbriel (no tiene `getoption`) y los defaults de su
+/// schema. Las reglas por app son de Hyprland: su sección queda a la vista, sin control.
+async fn compositor_umbriel(cambios: &Path) -> Vec<Seccion> {
+    let config = crate::umbriel_valores::cargar(&crate::umbriel_valores::ruta_config());
+    let defaults =
+        crate::umbriel_valores::defaults(&leer(&["umbriel", "config", "schema", "--json"]).await); // no-tr
+    let actuales =
+        crate::umbriel_valores::vigentes(&config, &defaults, compositor::claves_umbriel());
+    let cambios = compositor::Cambios::leer(cambios).unwrap_or_else(|e| {
+        eprintln!("morgan: menú: {e}");
+        Default::default()
+    });
+    let evdev = std::fs::read_to_string("/usr/share/X11/xkb/rules/evdev.lst").unwrap_or_default();
+    let mut p =
+        compositor::pagina_umbriel(&actuales, &cambios, &compositor::distribuciones(&evdev));
+    let mut reglas = super::reglas::seccion(&[], &[]);
+    reglas.filas = vec![super::arbol::solo_hyprland("Umbriel")]; // no-tr
+    p.push(reglas);
     p
 }
 
