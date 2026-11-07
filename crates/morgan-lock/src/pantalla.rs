@@ -210,6 +210,7 @@ pub fn correr(a: Ajustes) -> ExitCode {
         duena: None,
         puntero_visto: false,
         con_teclado: None,
+        greeter: !a.xray,
     };
 
     match app.bloqueos.lock(&qh) {
@@ -291,6 +292,8 @@ struct App {
     duena: Option<u32>,
     puntero_visto: bool,
     con_teclado: Option<u32>,
+    /// En el greeter, si el teclado no entra solo se le pide a Hyprland (`foco.rs`).
+    greeter: bool,
     /// Solo con elección: la forma del puntero (`wp_cursor_shape_v1`).
     cursor: Option<CursorShapeManager>,
     forma: Option<WpCursorShapeDeviceV1>,
@@ -331,6 +334,27 @@ impl App {
             .iter()
             .find(|s| s.lock.wl_surface() == wl)
             .map(|s| s.id)
+    }
+
+    /// Sin teclado todavía: la salida del contenido (o la primera) pasa a ser la enfocada.
+    fn pedir_teclado(&mut self) {
+        if self.con_teclado.is_some() {
+            return;
+        }
+        let s = self
+            .duena
+            .and_then(|d| self.superficies.iter().find(|s| s.id == d))
+            .or_else(|| self.superficies.first());
+        let Some(info) = s.and_then(|s| self.salidas.info(&s.salida)) else {
+            return;
+        };
+        let (Some(nombre), Some((x, y)), Some((w, h))) =
+            (info.name, info.logical_position, info.logical_size)
+        else {
+            return;
+        };
+        eprintln!("morgan-greet: el teclado no entró; se enfoca {nombre}");
+        crate::foco::pedir(&nombre, (x + w / 2, y + h / 2));
     }
 
     fn nombrar(&mut self, id: u32) {
@@ -768,6 +792,16 @@ impl SessionLockHandler for App {
     fn locked(&mut self, _: &Connection, _: &QueueHandle<Self>, _: SessionLock) {
         if let Some(l) = &self.logind {
             let _ = l.send_blocking(ALogind::Marcar(true, None));
+        }
+        if self.greeter {
+            // El tiempo de que las superficies se mapeen y Hyprland reparta el foco.
+            let _ = self.bucle.insert_source(
+                Timer::from_duration(Duration::from_millis(300)),
+                |_, _, app| {
+                    app.pedir_teclado();
+                    TimeoutAction::Drop
+                },
+            );
         }
         if self.cruzado {
             let _ = self.bucle.insert_source(

@@ -11,6 +11,9 @@
 //! 3. En `/etc/greetd/config.toml`, el `command` de `[default_session]` pasa a ser el greeter
 //!    y se saca `[initial_session]` (el inicio automático; Roberto, 2026-11-05). El resto del
 //!    archivo, comentarios incluidos, queda igual.
+//! 4. Si está `pam_gnome_keyring`, lo suma a `/etc/pam.d/greetd` (respaldado junto a la config de greetd): la clave
+//!    del greeter abre el llavero al entrar (Roberto, 2026-11-07). Sin inicio automático,
+//!    nadie más lo abría.
 
 use std::path::{Path, PathBuf};
 
@@ -19,7 +22,11 @@ use toml_edit::{DocumentMut, value};
 pub const BINARIO: &str = "usr/lib/morgan/morgan-greet";
 pub const ESTADO: &str = "var/lib/morgan-greet";
 pub const GREETD: &str = "etc/greetd/config.toml";
+pub const PAM: &str = "etc/pam.d/greetd";
+pub const PAM_LLAVERO: &str = "usr/lib/security/pam_gnome_keyring.so";
 const PREFIJO_RESPALDO: &str = "config.toml.morgan-";
+/// Junto a la config de greetd, no en `/etc/pam.d`: ahí cada archivo es un servicio de PAM.
+const PREFIJO_RESPALDO_PAM: &str = "pam.d-greetd.morgan-";
 
 /// Los compositores que el greeter sabe lanzar, en orden de preferencia, con el programa que
 /// tiene que estar.
@@ -42,24 +49,77 @@ pub fn config_nueva(actual: &str, command: &str) -> Result<String, String> {
     Ok(doc.to_string())
 }
 
-/// El respaldo más nuevo de `dir` (el nombre lleva la fecha, así que ordena solo).
+/// `/etc/pam.d/greetd` con el llavero: `auth` guarda la clave y `session` abre el llavero con
+/// ella (`pam_gnome_keyring(8)`), cada una después de las de su tipo. `None` si ya está.
+pub fn pam_nuevo(actual: &str) -> Option<String> {
+    if actual.contains("pam_gnome_keyring") {
+        return None;
+    }
+    let tipo = |l: &str| l.split_whitespace().next().map(str::to_owned);
+    let mut v: Vec<String> = actual.lines().map(str::to_owned).collect();
+    for (t, linea) in [
+        ("auth", "auth       optional     pam_gnome_keyring.so"),
+        (
+            "session",
+            "session    optional     pam_gnome_keyring.so auto_start",
+        ),
+    ] {
+        let i = v
+            .iter()
+            .rposition(|l| tipo(l).as_deref() == Some(t))
+            .map_or(v.len(), |i| i + 1);
+        v.insert(i, linea.to_owned());
+    }
+    let mut s = v.join("\n");
+    s.push('\n');
+    Some(s)
+}
+
+/// El respaldo más nuevo de `dir` (el nombre lleva la fecha, así que ordena solo) que no
+/// tiene el greeter: con `install` corrido dos veces, el segundo respaldo ya lo trae, y volver
+/// a ese no sería volver.
 pub fn ultimo_respaldo(dir: &Path) -> Option<PathBuf> {
-    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
-        .ok()?
+    let mut v = respaldos(dir, PREFIJO_RESPALDO);
+    while let Some(p) = v.pop() {
+        if std::fs::read_to_string(&p).is_ok_and(|t| !t.contains("morgan-greet")) {
+            return Some(p);
+        }
+    }
+    None
+}
+
+/// El respaldo más nuevo de `/etc/pam.d/greetd` (en `dir`, el de la config de greetd).
+pub fn ultimo_respaldo_pam(dir: &Path) -> Option<PathBuf> {
+    ultimo_con(dir, PREFIJO_RESPALDO_PAM)
+}
+
+fn ultimo_con(dir: &Path, prefijo: &str) -> Option<PathBuf> {
+    respaldos(dir, prefijo).pop()
+}
+
+fn respaldos(dir: &Path, prefijo: &str) -> Vec<PathBuf> {
+    let Ok(d) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut v: Vec<PathBuf> = d
         .flatten()
         .map(|e| e.path())
         .filter(|p| {
             p.file_name()
                 .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with(PREFIJO_RESPALDO))
+                .is_some_and(|n| n.starts_with(prefijo))
         })
         .collect();
     v.sort();
-    v.pop()
+    v
 }
 
 pub fn nombre_respaldo(fecha: &str) -> String {
     format!("{PREFIJO_RESPALDO}{fecha}")
+}
+
+pub fn nombre_respaldo_pam(fecha: &str) -> String {
+    format!("{PREFIJO_RESPALDO_PAM}{fecha}")
 }
 
 /// La fecha local para el respaldo: `20261106-174512`.
@@ -154,6 +214,16 @@ user = "greeter"
             ultimo_respaldo(&d).unwrap(),
             d.join(nombre_respaldo("20261107-090000"))
         );
+        // El de un segundo `install` ya trae el greeter: se saltea.
+        std::fs::write(
+            d.join(nombre_respaldo("20261108-080000")),
+            "command = \"/usr/lib/morgan/morgan-greet\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            ultimo_respaldo(&d).unwrap(),
+            d.join(nombre_respaldo("20261107-090000"))
+        );
         std::fs::remove_dir_all(d).unwrap();
     }
 
@@ -162,6 +232,30 @@ user = "greeter"
         assert!(hay_tty_de_emergencia("[Login]\n#NAutoVTs=6\n"));
         assert!(hay_tty_de_emergencia(""));
         assert!(!hay_tty_de_emergencia("[Login]\nNAutoVTs = 0\n"));
+    }
+
+    const PAM_DE_ARCH: &str = "#%PAM-1.0\n\n\
+        auth       required     pam_securetty.so\n\
+        auth       requisite    pam_nologin.so\n\
+        auth       include      system-local-login\n\
+        account    include      system-local-login\n\
+        session    include      system-local-login\n";
+
+    #[test]
+    fn el_llavero_va_al_final_de_cada_tipo() {
+        let n = pam_nuevo(PAM_DE_ARCH).unwrap();
+        assert_eq!(
+            n,
+            "#%PAM-1.0\n\n\
+             auth       required     pam_securetty.so\n\
+             auth       requisite    pam_nologin.so\n\
+             auth       include      system-local-login\n\
+             auth       optional     pam_gnome_keyring.so\n\
+             account    include      system-local-login\n\
+             session    include      system-local-login\n\
+             session    optional     pam_gnome_keyring.so auto_start\n"
+        );
+        assert_eq!(pam_nuevo(&n), None);
     }
 
     #[test]

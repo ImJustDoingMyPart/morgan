@@ -10,6 +10,7 @@ pub mod dibujo;
 pub mod eleccion;
 pub mod escena;
 pub mod fondo;
+mod foco;
 pub mod greetd;
 pub mod greeter;
 pub mod hundido;

@@ -158,8 +158,18 @@ fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let respaldo = greetd.with_file_name(nombre_respaldo(&fecha()));
+    let f = fecha();
+    let respaldo = greetd.with_file_name(nombre_respaldo(&f));
     let estado = r.join(ESTADO);
+    // El llavero, si está su módulo y no lo tiene ya.
+    let pam = r.join(PAM);
+    let pam_nueva = r
+        .join(PAM_LLAVERO)
+        .exists()
+        .then(|| std::fs::read_to_string(&pam).ok())
+        .flatten()
+        .and_then(|t| pam_nuevo(&t));
+    let respaldo_pam = greetd.with_file_name(nombre_respaldo_pam(&f));
 
     println!("Plan (compositor: {compositor}):");
     if del_paquete {
@@ -176,16 +186,32 @@ fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
         estado.display(),
         estado.display()
     );
-    println!(
-        "  3. respaldar {} en {}",
-        greetd.display(),
-        respaldo.display()
-    );
-    println!(
-        "  4. en {}: [default_session] command = \"{}\", y sin [initial_session] (sin inicio automático)",
-        greetd.display(),
-        binario.display()
-    );
+    // Ya instalado: sin respaldo nuevo, así `restore` sigue volviendo a la de antes del greeter.
+    let config_lista = nueva == actual;
+    if config_lista {
+        println!(
+            "  3-4. {} ya tiene el greeter: no se toca",
+            greetd.display()
+        );
+    } else {
+        println!(
+            "  3. respaldar {} en {}",
+            greetd.display(),
+            respaldo.display()
+        );
+        println!(
+            "  4. en {}: [default_session] command = \"{}\", y sin [initial_session] (sin inicio automático)",
+            greetd.display(),
+            binario.display()
+        );
+    }
+    if pam_nueva.is_some() {
+        println!(
+            "  5. respaldar {} en {} y sumarle pam_gnome_keyring: la clave del greeter abre el llavero",
+            pam.display(),
+            respaldo_pam.display()
+        );
+    }
     let logind = std::fs::read_to_string(r.join("etc/systemd/logind.conf")).unwrap_or_default();
     if hay_tty_de_emergencia(&logind) {
         println!(
@@ -224,18 +250,20 @@ fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
         if raiz.is_none() {
             de_greeter(&estado)?;
         }
-        std::fs::copy(&greetd, &respaldo).map_err(|x| e(&respaldo, x))?;
-        let tmp = greetd.with_extension("toml.nuevo");
-        std::fs::write(&tmp, &nueva).map_err(|x| e(&tmp, x))?;
-        // Con los permisos del original (en Arch, solo root la lee).
-        let modo = std::fs::metadata(&greetd).map_err(|x| e(&greetd, x))?.permissions();
-        std::fs::set_permissions(&tmp, modo).map_err(|x| e(&tmp, x))?;
-        std::fs::rename(&tmp, &greetd).map_err(|x| e(&greetd, x))?;
+        if !config_lista {
+            std::fs::copy(&greetd, &respaldo).map_err(|x| e(&respaldo, x))?;
+            // Con los permisos del original (en Arch, solo root la lee).
+            reemplazar(&greetd, &nueva)?;
+        }
+        if let Some(n) = &pam_nueva {
+            std::fs::copy(&pam, &respaldo_pam).map_err(|x| e(&respaldo_pam, x))?;
+            reemplazar(&pam, n)?;
+        }
         Ok(())
     })();
     match hecho {
         Ok(()) => {
-            println!("Hecho. Respaldo: {}", respaldo.display());
+            println!("Hecho.");
             ExitCode::SUCCESS
         }
         Err(e) => {
@@ -243,6 +271,16 @@ fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Escribe `p` por un temporal que se renombra, con los permisos que tenía.
+fn reemplazar(p: &Path, texto: &str) -> Result<(), String> {
+    let e = |q: &Path, err: std::io::Error| format!("{}: {err}", q.display());
+    let tmp = p.with_extension("morgan-nuevo");
+    std::fs::write(&tmp, texto).map_err(|x| e(&tmp, x))?;
+    let modo = std::fs::metadata(p).map_err(|x| e(p, x))?.permissions();
+    std::fs::set_permissions(&tmp, modo).map_err(|x| e(&tmp, x))?;
+    std::fs::rename(&tmp, p).map_err(|x| e(p, x))
 }
 
 fn permisos(p: &Path, modo: u32) -> Result<(), String> {
@@ -289,24 +327,41 @@ fn restaurar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
         );
         return ExitCode::FAILURE;
     };
+    let pam = r.join(PAM);
+    let respaldo_pam = greetd.parent().and_then(ultimo_respaldo_pam);
     println!(
         "Plan: copiar {} sobre {}",
         respaldo.display(),
         greetd.display()
     );
+    if let Some(rp) = &respaldo_pam {
+        println!(
+            "  y {} sobre {} (sin el llavero)",
+            rp.display(),
+            pam.display()
+        );
+    }
     println!("Vale desde el próximo arranque: greetd no se reinicia.");
     if !aplicar {
         println!("Nada cambió. Para hacerlo: sudo morgan-greet restore --apply");
         return ExitCode::SUCCESS;
     }
-    let tmp = greetd.with_extension("toml.nuevo");
-    match std::fs::copy(&respaldo, &tmp).and_then(|_| std::fs::rename(&tmp, &greetd)) {
+    let volver = |de: &Path, a: &Path| {
+        std::fs::read_to_string(de)
+            .map_err(|e| format!("{}: {e}", de.display()))
+            .and_then(|t| reemplazar(a, &t))
+    };
+    let hecho = volver(&respaldo, &greetd).and_then(|()| match &respaldo_pam {
+        Some(rp) => volver(rp, &pam),
+        None => Ok(()),
+    });
+    match hecho {
         Ok(()) => {
             println!("Hecho.");
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("morgan-greet: {}: {e}", greetd.display());
+            eprintln!("morgan-greet: {e}");
             ExitCode::FAILURE
         }
     }
