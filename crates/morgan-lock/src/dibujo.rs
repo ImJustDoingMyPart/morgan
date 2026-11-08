@@ -227,7 +227,7 @@ pub fn pintar(
     }
 
     if let Some(el) = &e.eleccion {
-        renglon(s, el, rot, textos, &e.paleta, (cx, cy), escala, t);
+        renglon(s, e, el, rot, textos, (cx, cy), escala, t);
     }
 
     // El campo en sus coordenadas: (0, 0) es su esquina, en píxeles lógicos.
@@ -435,21 +435,11 @@ fn campo(
         }
     }
 
-    // Mientras la onda late al verificar no hay texto: lo dice eso.
-    let espera = match (estilo.reaccion, estilo.escritura) {
-        (false, _) => 0.0,
-        (true, Escritura::Onda) => FALLO_TEXTO,
-        // Las × se apagan en 0,45 s y están donde va el texto.
-        (true, Escritura::Simbolos) => 0.45,
-        (true, _) => 0.25,
-    };
+    // El campo no lleva letras (Roberto, 2026-11-07): vacío invita a escribir, el fallo lo
+    // dicen la sacudida, el rojo y las muescas. Solo «Verificando…» con la verificación en
+    // «solo el borde», que si no, no tendría otra señal que el borde invertido.
     let texto = match e.modo {
-        Modo::Normal if e.n == 0 => Some(("Contraseña".to_owned(), 1.0 - e.visible.valor(t))),
         Modo::Verificando if !estilo.verificar.late() => Some(("Verificando…".to_owned(), 1.0)),
-        Modo::Fallo(n) if e.n == 0 => Some((
-            format!("Autenticación fallida ({n})"),
-            acotar((seg(t - e.t_fallo) - espera) / 0.2, 0.0, 1.0),
-        )),
         _ => None,
     };
     if let Some((texto, a)) = texto
@@ -465,11 +455,50 @@ fn campo(
             texto::dibujar(s, l, c.x, c.y, |r| rol(&p, r), a);
         }
     }
+    muescas(s, e, tr_anillo, &p, t);
     if capa {
         s.pop_layer();
     }
     cometas(s, e, tr_anillo, &par, t);
 }
+
+/// Una muesca roja por intento fallido, colgada del borde de abajo y centradas; la última
+/// aparece cuando termina el golpe del fallo. Sobre el borde mismo no se distinguían: el
+/// `error` de muchos temas es casi el `tertiary` del anillo.
+fn muescas(s: &mut Scene, e: &Estado, tr: Affine, p: &Paleta, t: i64) {
+    let n = e.fallos.min(MUESCAS_MAX);
+    if n == 0 {
+        return;
+    }
+    let aparece = acotar((seg(t - e.t_fallo) - 0.45) / 0.25, 0.0, 1.0);
+    let y = ALTO as f64 + ALTO_MUESCA / 2.0;
+    for i in 0..n {
+        let a = if i + 1 == n { aparece } else { 1.0 };
+        if a <= 0.01 {
+            continue;
+        }
+        let x = ANCHO as f64 / 2.0 + (i as f64 - (n - 1) as f64 / 2.0) * PASO_MUESCA;
+        let r = Rect::new(
+            x - ANCHO_MUESCA / 2.0,
+            y - ALTO_MUESCA / 2.0,
+            x + ANCHO_MUESCA / 2.0,
+            y + ALTO_MUESCA / 2.0,
+        );
+        s.draw_blurred_rounded_rect(tr, r, pincel(&con_alfa(&p.error, 0.7 * a)), 1.5, 4.0);
+        s.fill(
+            Fill::NonZero,
+            tr,
+            pincel(&con_alfa(&p.error, a)),
+            None,
+            &RoundedRect::from_rect(r, ALTO_MUESCA / 2.0),
+        );
+    }
+}
+
+const MUESCAS_MAX: u32 = 6;
+const PASO_MUESCA: f64 = 20.0;
+const ANCHO_MUESCA: f64 = 12.0;
+const ALTO_MUESCA: f64 = 3.0;
 
 /// Lo que recorre el borde: el giro de la verificación, las chispas, el destello del acierto
 /// y los de cada avance de la elección.
@@ -569,14 +598,15 @@ fn poner(s: &mut Scene, l: &parley::Layout<u8>, en: Point, ancla: f64, k: f64, c
 #[allow(clippy::too_many_arguments)]
 fn renglon(
     s: &mut Scene,
+    e: &Estado,
     el: &Eleccion,
     rot: &mut Rotulos,
     textos: &mut texto::Textos,
-    p: &Paleta,
     (cx, cy): (f64, f64),
     escala: f64,
     t: i64,
 ) {
+    let p = &e.paleta;
     let esc = escala as f32;
     let arriba = cy - (Y_CAMPO + ALTO as f64 / 2.0) * escala;
     for (k, paso) in el.pasos().iter().enumerate() {
@@ -590,11 +620,23 @@ fn renglon(
             Paso::Clave => "contraseña",
         };
         let l = suelto(rot, textos, nombre, ROL_PRIMARY, texto::pt(9.0), esc);
+        // El rótulo de la clave es la voz del fallo: se tiñe de `error` y sacude con el campo.
+        let (dx, c) = match paso {
+            Paso::Clave => (
+                if e.estilo.sacudida {
+                    morgan_motor::curva::sacudida(seg(t - e.t_fallo) / 0.42) as f64 * escala
+                } else {
+                    0.0
+                },
+                mezclar(&p.primary, &p.error, e.rojo.valor(t)),
+            ),
+            _ => (0.0, p.primary),
+        };
         let en = Point::new(
-            cx,
+            cx + dx,
             arriba - Y_ETIQUETA * escala + (dy / 3.0) as f64 * escala,
         );
-        poner(s, l, en, 0.5, 1.0, p.primary, a);
+        poner(s, l, en, 0.5, 1.0, c, a);
     }
 
     let migas = el.migas(t);

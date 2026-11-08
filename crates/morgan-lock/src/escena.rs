@@ -27,7 +27,6 @@ pub(crate) const LENTO_TECLA: f32 = 4.0;
 pub(crate) const LENTO_EVENTO: f32 = 2.0;
 const LENTO_FALLO: f32 = 1.4;
 pub(crate) const FALLO_ONDA: f32 = 0.7;
-pub(crate) const FALLO_TEXTO: f32 = 0.8;
 
 pub const MS: i64 = 1000;
 
@@ -263,6 +262,10 @@ pub struct Estado {
     pub chispas: Vec<Chispa>,
     lado: f32,
     pub anillo: Tramo<[Color; 2]>,
+    /// 1 mientras dura el fallo: tiñe de `error` el rótulo del paso de la clave.
+    pub rojo: Tramo<f32>,
+    /// Los intentos fallidos: una muesca roja por cada uno en el borde de abajo.
+    pub fallos: u32,
     pub visible: Tramo<f32>,
     pub hora: String,
     pub minutos: String,
@@ -305,6 +308,13 @@ impl Estado {
                 t0: 0,
                 dura: 300 * MS,
             },
+            rojo: Tramo {
+                de: 0.0,
+                a: 0.0,
+                t0: 0,
+                dura: 1,
+            },
+            fallos: 0,
             visible: Tramo {
                 de: 0.0,
                 a: 0.0,
@@ -434,6 +444,7 @@ impl Estado {
             Cambio::Verificando { t } => self.cambiar(Modo::Verificando, t),
             Cambio::Fallo { n, t } => {
                 self.t_fallo = t;
+                self.fallos = n;
                 self.cambiar(Modo::Fallo(n), t);
                 if !self.estilo.reaccion {
                     self.fila.vaciar(t);
@@ -553,6 +564,19 @@ impl Estado {
         self.modo = m;
         self.t_modo = t;
         self.rehacer_anillo(t);
+        let rojo = if matches!(m, Modo::Fallo(_)) {
+            1.0
+        } else {
+            0.0
+        };
+        if rojo != self.rojo.a {
+            self.rojo = Tramo {
+                de: self.rojo.valor(t),
+                a: rojo,
+                t0: t,
+                dura: 300 * MS,
+            };
+        }
     }
 
     pub fn onda(&self) -> bool {
@@ -627,6 +651,7 @@ impl Estado {
             || !self.chispas.is_empty()
             || matches!(self.modo, Modo::Verificando | Modo::Saliendo)
             || t - self.anillo.t0 < self.anillo.dura
+            || t - self.rojo.t0 < self.rojo.dura
             || t - self.visible.t0 < self.visible.dura
             || t - self.t_fallo < 1500 * MS
             || self.presencias.iter().any(|(_, p)| p.moviendo(t))
