@@ -191,8 +191,7 @@ Your **display manager or login screen** (SDDM, GDM, greetd, ly…) is fine: it 
 your session, and morgan's lock screen is a separate thing. If you want, morgan has its own
 (see [Login screen](#login-screen)). uwsm is fine too, and optional.
 
-`morgan setup` (below) warns about the most common of these if they're running, and doesn't
-start morgan while another program owns notifications.
+`morgan setup` (below) looks for these programs, running or set to start, and offers to stop them. It disables their unit, comments out the Hyprland config line that starts them (keeping a copy of the file next to it) or removes them from your startup apps. A line that starts several things at once is left alone, and `setup` tells you which one to change by hand. `morgan setup --undo` brings everything back.
 
 ## Install
 
@@ -219,8 +218,9 @@ Then, **once per user, from inside Hyprland**:
 morgan setup
 ```
 
-It adds one line to the end of `~/.config/hypr/hyprland.lua`, enables the user service,
-warns about anything that competes with morgan, and starts it.
+It adds one line to the end of `~/.config/hypr/hyprland.lua`, enables the user service, offers to stop whatever competes with morgan and to install what's recommended, and starts it. It shows the list and asks before touching anything, and `morgan setup --dry-run` shows what it would do without doing it.
+
+What's recommended is whatever is missing from [What morgan is built around](#what-morgan-is-built-around), plus bluez and power-profiles-daemon when they apply. They're installed with pacman, except `papirus-folders`, which is in the AUR and goes through yay or paru. Switching what manages your network, audio or power is never done on its own. If it finds iwd, PulseAudio or TLP, for example, it writes out the steps to move to NetworkManager, PipeWire or power-profiles-daemon.
 
 ## Using it
 
@@ -259,10 +259,7 @@ text login to run the `restore` from.
 
 ## Uninstall
 
-Remove the package (`pacman -R morgan-bin` or `morgan-git`), or run
-`./install.sh --desinstalar` if you installed from source. Then delete the line
-`pcall(require, "morgan")` from `~/.config/hypr/hyprland.lua`, and re-enable whatever you
-stopped before installing. Your config in `~/.config/morgan` is left in place.
+Before removing the package, `morgan setup --undo` removes the line from `hyprland.lua`, disables the service and brings back what `morgan setup` stopped, which starts again the next time you log in. Then remove the package (`pacman -R morgan-bin` or `morgan-git`). If you installed from source, `./install.sh --desinstalar` does both. Your config in `~/.config/morgan` and the programs `setup` installed stay.
 
 ## License
 

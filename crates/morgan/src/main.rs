@@ -53,6 +53,8 @@ mod privacidad;
 mod red;
 mod reproductor;
 mod setup;
+mod setup_paquetes;
+mod setup_parar;
 mod sistema;
 mod sonidos;
 mod teclas;

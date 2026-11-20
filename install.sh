@@ -15,8 +15,8 @@
 #     notificaciones (en ~/.local/share, que se busca antes que la de los paquetes);
 #   - instala el servicio PAM de morgan-lock en /etc/pam.d (pide sudo);
 #   - corre `morgan setup`: agrega `pcall(require, "morgan")` al final de
-#     ~/.config/hypr/hyprland.lua, habilita morgan.service, avisa qué compite con morgan y, si
-#     no hay otro servidor de notificaciones, lo arranca.
+#     ~/.config/hypr/hyprland.lua, habilita morgan.service, ofrece parar lo que compite con
+#     morgan e instalar lo recomendado y, si no hay otro servidor de notificaciones, lo arranca.
 set -euo pipefail
 
 raiz=$(cd "$(dirname "$0")" && pwd)
@@ -160,6 +160,10 @@ instalar() {
 # --- Desinstalar -------------------------------------------------------------------------
 
 desinstalar() {
+    if [[ -x $bin/morgan ]]; then
+        paso "Lo que paró morgan setup"
+        sistema "$bin/morgan" setup --deshacer || true
+    fi
     paso "Servicios"
     sistema systemctl --user disable --now morgan.service || true
 

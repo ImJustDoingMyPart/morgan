@@ -197,8 +197,7 @@ sesión, y la pantalla de bloqueo de morgan es otra cosa. Si se quiere, morgan t
 (ver [Pantalla de inicio de sesión](#pantalla-de-inicio-de-sesión)). uwsm tampoco molesta, y
 es opcional.
 
-`morgan setup` (más abajo) avisa de los más comunes si están corriendo, y no arranca morgan
-mientras otro programa tenga las notificaciones.
+`morgan setup` (más abajo) busca estos programas, corriendo o configurados para arrancar, y ofrece pararlos. Deshabilita su unidad, comenta la línea de la config de Hyprland que los lanza (con una copia del archivo al lado) o los saca de las apps de inicio. Una línea que lanza varias cosas a la vez queda como está, y `setup` dice cuál cambiar a mano. `morgan setup --deshacer` devuelve todo.
 
 ## Instalación
 
@@ -225,8 +224,9 @@ Después, **una vez por usuario y desde Hyprland**:
 morgan setup
 ```
 
-Agrega una línea al final de `~/.config/hypr/hyprland.lua`, habilita el servicio del
-usuario, avisa qué compite con morgan y lo arranca.
+Agrega una línea al final de `~/.config/hypr/hyprland.lua`, habilita el servicio del usuario, ofrece parar lo que compite con morgan e instalar lo recomendado, y lo arranca. Antes de tocar nada muestra la lista y pregunta, y `morgan setup --seco` muestra lo que haría sin hacer nada.
+
+Lo recomendado son los programas de [Sobre qué está hecho](#sobre-qué-está-hecho) que falten, más bluez y power-profiles-daemon cuando corresponde. Se instalan con pacman, salvo `papirus-folders`, que está en el AUR y va con yay o paru. Cambiar quién maneja la red, el audio o la energía no lo hace solo. Si encuentra iwd, PulseAudio o TLP, por ejemplo, escribe los pasos para pasar a NetworkManager, PipeWire o power-profiles-daemon.
 
 ## Uso
 
@@ -265,10 +265,7 @@ desde donde correr el `restore`.
 
 ## Desinstalar
 
-Quitar el paquete (`pacman -R morgan-bin` o `morgan-git`), o correr
-`./install.sh --desinstalar` si se instaló desde el código. Después, borrar la línea
-`pcall(require, "morgan")` de `~/.config/hypr/hyprland.lua` y volver a habilitar lo que se
-paró antes de instalar. La config de `~/.config/morgan` queda.
+Antes de quitar el paquete, `morgan setup --deshacer` saca la línea de `hyprland.lua`, deshabilita el servicio y devuelve lo que paró `morgan setup`, que vuelve a arrancar la próxima vez que se entra. Después se quita el paquete (`pacman -R morgan-bin` o `morgan-git`). Si se instaló desde el código, `./install.sh --desinstalar` hace las dos cosas. Quedan la config de `~/.config/morgan` y los programas que instaló `setup`.
 
 ## Licencia
 

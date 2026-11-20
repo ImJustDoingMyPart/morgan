@@ -12,6 +12,8 @@ const TRADUCIDOS: &[&str] = &[
     "morgan/src/centro/mod.rs",
     "morgan/src/setup.rs",
     "morgan/src/setup_umbriel.rs",
+    "morgan/src/setup_parar.rs",
+    "morgan/src/setup_paquetes.rs",
     "morgan/src/polkit/mod.rs",
     "morgan/src/polkit/ayudante.rs",
     "morgan/src/polkit/secreto.rs",
