@@ -105,8 +105,24 @@ pub fn correr() -> ExitCode {
     } else {
         println!("{}", tr!("Listo: morgan arranca la próxima vez que entres a Hyprland o a Umbriel."));
     }
-    println!("{}", tr!("Para conocer a Morgan: morgan about"));
+    presentar_a_morgan(interactivo);
     ExitCode::SUCCESS
+}
+
+/// La primera vez que un usuario termina el setup en una terminal, `morgan about` se muestra
+/// solo (Roberto, 2026-11-20); las siguientes, una línea dice cómo verlo.
+fn presentar_a_morgan(interactivo: bool) {
+    let marca = glib::user_state_dir().join("morgan/acerca-visto");
+    if !interactivo || marca.exists() {
+        println!("{}", tr!("Para conocer a Morgan: morgan about"));
+        return;
+    }
+    if let Some(dir) = marca.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&marca, "");
+    println!();
+    crate::acerca::correr();
 }
 
 /// Lo que hace lo mismo que morgan: se lista y, con permiso, se para y se saca de donde arranca.
