@@ -3,6 +3,7 @@
 extern crate morgan_idioma;
 
 mod acerca;
+mod ayuda;
 mod agenda;
 mod apariencia;
 mod animaciones;
@@ -85,11 +86,15 @@ fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
         Some("about") => return acerca::correr(),
         Some("setup") => return setup::correr(),
+        // Interno: lo lanza la luz nocturna (`luz.rs`), por eso no está en la ayuda.
         Some("nightlight") => {
             let k = std::env::args().nth(2).and_then(|t| t.parse().ok()).unwrap_or(4000.0);
             return gama::correr(k);
         }
-        _ => {}
+        Some("--help" | "-h" | "help") => return ayuda::ayuda(),
+        Some("--version" | "-V" | "version") => return ayuda::version(),
+        Some(otro) => return ayuda::desconocido(otro),
+        None => {}
     }
     // Evita intentos fallidos de conexión a at-spi en canberra y GTK.
     unsafe {

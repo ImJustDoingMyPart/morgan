@@ -530,3 +530,7 @@
 "sacar {} de las apps de inicio" = "remove {} from the startup apps"
 "shell completo" = "full shell"
 "volver a activar las líneas de {}" = "re-enable the lines in {}"
+
+# ayuda.rs
+"uso: morgan [comando]\n\nSin comando arranca el shell; de eso se encarga el servicio morgan.service.\n\n  setup             lo prepara para este usuario: lo suma a Hyprland, habilita el servicio y lo arranca\n  setup --seco      muestra lo que haría, sin hacer nada\n  setup --deshacer  devuelve todo como estaba (antes de quitar el paquete)\n  about             la versión, y quién fue Morgan\n  --version         la versión\n  --help            esta ayuda\n\nPara manejarlo mientras corre (volumen, fondos, el centro…): morganctl." = "usage: morgan [command]\n\nWith no command it starts the shell; the morgan.service unit takes care of that.\n\n  setup             sets it up for this user: adds it to Hyprland, enables the service and starts it\n  setup --dry-run   shows what it would do, without doing it\n  setup --undo      puts everything back (before removing the package)\n  about             the version, and who Morgan was\n  --version         the version\n  --help            this help\n\nTo control it while it runs (volume, wallpapers, the center…): morganctl."
+"morgan: no existe el comando «{}»." = "morgan: there's no command «{}»."
