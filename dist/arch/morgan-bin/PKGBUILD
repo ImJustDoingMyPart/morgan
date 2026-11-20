@@ -54,7 +54,7 @@ backup=('etc/pam.d/morgan-lock')
 options=('!strip' '!debug')
 install=morgan.install
 source=("$_nombre-$pkgver-x86_64.tar.gz::$url/releases/download/v$pkgver/$_nombre-$pkgver-x86_64.tar.gz")
-sha256sums=('00a4617a8bdfc846bf3aa386b46dcbf3abe6798cd96985a8f16dade74f9b10fe')
+sha256sums=('cd35185fa3ad4d330e37caba2437de6c0cd12b24898cbc84bd01a7bf2ffbb516')
 
 package() {
     cp -a --no-preserve=ownership "$_nombre-$pkgver-x86_64"/. "$pkgdir/"
