@@ -201,14 +201,19 @@ es opcional.
 
 ## Instalación
 
-Desde el AUR, compilado desde el último commit o ya compilado desde la última versión:
+La forma más rápida es `morgan-bin`, del AUR. Trae la última versión ya compilada y no necesita Rust:
 
 ```sh
-yay -S morgan-git     # o: yay -S morgan-bin
+yay -S morgan-bin
 ```
 
-`morgan-bin` sigue las versiones publicadas, así que puede ir atrás de `main`; el
-[registro de cambios](CHANGELOG.es.md) dice qué trae cada versión.
+`morgan-git` compila en tu máquina el último commit de `main`. Necesita además `cargo`, `clang` y `hyprland-protocols`, y es la opción para probar lo que todavía no salió en una versión o para instalar en `aarch64`, porque `morgan-bin` existe solo para `x86_64`:
+
+```sh
+yay -S morgan-git
+```
+
+El [registro de cambios](CHANGELOG.es.md) dice qué trae cada versión.
 
 O desde el código, en `~/.local` (revisa las dependencias y dice qué falta):
 

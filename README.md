@@ -195,14 +195,19 @@ your session, and morgan's lock screen is a separate thing. If you want, morgan 
 
 ## Install
 
-From the AUR, built from the latest commit or prebuilt from the latest release:
+The quickest way is `morgan-bin`, from the AUR. It ships the latest release already built and doesn't need Rust:
 
 ```sh
-yay -S morgan-git     # or: yay -S morgan-bin
+yay -S morgan-bin
 ```
 
-`morgan-bin` follows releases, so it can be behind `main`; the
-[changelog](CHANGELOG.md) says what each version brings.
+`morgan-git` builds the latest commit on `main` on your machine. It also needs `cargo`, `clang` and `hyprland-protocols`, and it's the one to use if you want what hasn't made it into a release yet, or if you're on `aarch64`, since `morgan-bin` is only built for `x86_64`:
+
+```sh
+yay -S morgan-git
+```
+
+The [changelog](CHANGELOG.md) says what each version brings.
 
 Or from source, into `~/.local` (it checks dependencies and tells you what's missing):
 
