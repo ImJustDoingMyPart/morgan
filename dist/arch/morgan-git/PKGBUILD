@@ -20,6 +20,7 @@ license=('GPL-3.0-or-later' 'MIT')
 depends=(
     'hyprland>=0.56'
     'libpulse'
+    'libpipewire'
     'glib2'
     'libxkbcommon'
     'fontconfig'
@@ -30,7 +31,7 @@ depends=(
     'curl'
     'wl-clipboard'
 )
-makedepends=('cargo' 'git' 'hyprland-protocols')
+makedepends=('cargo' 'git' 'hyprland-protocols' 'clang')
 optdepends=(
     'matugen: temas (también los curados: las plantillas pasan por matugen)'
     'awww: fondos de pantalla'

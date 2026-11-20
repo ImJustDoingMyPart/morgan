@@ -25,8 +25,9 @@ jobs:
       ETIQUETA: ${{ inputs.etiqueta || github.ref_name }}
     steps:
       - name: Dependencias
+        # libpipewire y clang: el crate pipewire (bindgen) de la pantalla compartida.
         # noto-fonts: los tests del motor miden texto, y el contenedor no trae ninguna fuente.
-        run: pacman -Syu --noconfirm --needed git rust glib2 wayland libxkbcommon fontconfig noto-fonts libpulse pam hyprland-protocols github-cli
+        run: pacman -Syu --noconfirm --needed git rust glib2 wayland libxkbcommon fontconfig noto-fonts libpulse libpipewire clang pam hyprland-protocols github-cli
 
       - uses: actions/checkout@v4
         with:

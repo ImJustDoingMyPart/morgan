@@ -19,6 +19,7 @@ license=('GPL-3.0-or-later' 'MIT')
 depends=(
     'hyprland>=0.56'
     'libpulse'
+    'libpipewire'
     'glib2'
     'libxkbcommon'
     'fontconfig'
