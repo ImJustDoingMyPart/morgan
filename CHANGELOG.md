@@ -2,6 +2,16 @@
 
 **English** · [Español](CHANGELOG.es.md)
 
+## 0.3.1 · 2026-11-20
+
+### `morgan setup` gets your system ready
+
+`morgan setup` no longer just warns about what competes with morgan. It looks for 21 programs (bars, notification daemons, idle daemons, lockers, full shells, polkit agents, wallpaper and night light tools), running or set to start, and offers to stop them. It disables their systemd unit, comments out the Hyprland config line that starts them (keeping a copy of the file next to it) or removes them from your startup apps.
+
+It also offers to install whatever is missing from the recommended programs, with pacman, and `papirus-folders` with yay or paru. If you have Bluetooth or no power profiles, those join the list. Switching what manages your network, audio or power is never done on its own: with iwd, PulseAudio or TLP, for example, it writes out the steps to move to NetworkManager, PipeWire or power-profiles-daemon.
+
+Everything is shown in a list before it happens. `morgan setup --dry-run` shows what it would do without doing it, and `morgan setup --undo` brings back what was stopped and removes morgan from startup.
+
 ## 0.3.0 · 2026-11-20
 
 ### A screen to log in: morgan-greet

@@ -2,6 +2,16 @@
 
 [English](CHANGELOG.md) · **Español**
 
+## 0.3.1 · 2026-11-20
+
+### `morgan setup` prepara el equipo
+
+`morgan setup` ya no solo avisa qué compite con morgan. Busca 21 programas (barras, servidores de notificaciones, idle, bloqueos, shells completos, agentes de polkit, fondos y luz nocturna), corriendo o configurados para arrancar, y ofrece pararlos. Deshabilita su unidad de systemd, comenta la línea de la config de Hyprland que los lanza (con una copia del archivo al lado) o los saca de las apps de inicio.
+
+También ofrece instalar lo que falte de los programas recomendados, con pacman, y `papirus-folders` con yay o paru. Si hay Bluetooth o no hay perfiles de energía, los agrega a la lista. Cambiar quién maneja la red, el audio o la energía no lo hace solo: con iwd, PulseAudio o TLP, por ejemplo, escribe los pasos para pasar a NetworkManager, PipeWire o power-profiles-daemon.
+
+Todo se muestra en una lista antes de hacerse. `morgan setup --seco` muestra lo que haría sin hacer nada, y `morgan setup --deshacer` devuelve lo que se paró y saca morgan del arranque.
+
 ## 0.3.0 · 2026-11-20
 
 ### Una pantalla para entrar: morgan-greet
