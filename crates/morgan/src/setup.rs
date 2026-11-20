@@ -105,6 +105,7 @@ pub fn correr() -> ExitCode {
     } else {
         println!("{}", tr!("Listo: morgan arranca la próxima vez que entres a Hyprland o a Umbriel."));
     }
+    println!("{}", tr!("Para conocer a Morgan: morgan about"));
     ExitCode::SUCCESS
 }
 
