@@ -593,10 +593,11 @@ mod tests {
 
     #[test]
     fn lo_largo_baja_de_renglon_sin_pasar_el_tope() {
-        let t = "Cachy-Update\nEl sistema está actualizado";
+        // Largo de sobra para cualquier fuente: el test corre también con las Noto del release.
+        let t = "Cachy-Update\nEl sistema está actualizado y no hay paquetes nuevos para instalar";
         let l = armar_globo(&mut Textos::new(), t, 1.0);
         assert!(globo_caja(&l, 1.0).0 <= GLOBO_MAX);
-        assert_eq!(l.lines().count(), 3, "el nombre y dos de texto");
+        assert!(l.lines().count() >= 3, "el nombre y al menos dos de texto");
     }
 
     #[test]
