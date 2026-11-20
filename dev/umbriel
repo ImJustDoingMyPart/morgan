@@ -3,6 +3,7 @@
 #
 #   dev/umbriel arrancar          levanta Umbriel sin ventana (backend headless de wlroots) con
 #                                 bus de sesión propio y una salida del tamaño del monitor real
+#                                 (o MORGAN_MODO=1366x768 y MORGAN_ESCALA=1.5, para probar otras)
 #   dev/umbriel ejecutar CMD...   corre CMD adentro (hereda su WAYLAND_DISPLAY y su bus)
 #   dev/umbriel morgan            (re)arranca adentro el morgan de target/debug, con comandos de
 #                                 mentira para lo que toca la sesión real
@@ -49,8 +50,9 @@ arrancar)
     if [[ -s $estado/display ]] && u outputs >/dev/null 2>&1; then
         echo "umbriel: ya está corriendo ($(cat "$estado/display"))" >&2; exit 1
     fi
-    modo=$(hyprctl -j monitors 2>/dev/null | jq -r '[.[] | select(.focused)][0] | "\(.width)x\(.height)"' || true)
+    modo=${MORGAN_MODO:-$(hyprctl -j monitors 2>/dev/null | jq -r '[.[] | select(.focused)][0] | "\(.width)x\(.height)"' || true)}
     [[ $modo =~ ^[0-9]+x[0-9]+$ ]] || modo=2560x1440
+    escala=${MORGAN_ESCALA:-1}
     # La config de prueba incluye la de morgan (`morgan setup` la escribe en
     # ~/.config/umbriel/morgan.toml); si todavía no existe, es opcional.
     cat >"$estado/config.toml" <<EOF
@@ -64,6 +66,7 @@ show_cheatsheet = false
 
 [output.HEADLESS-1]
 mode = "$modo@60"
+scale = $escala
 
 [keybinds]
 "Mod+Return" = "spawn kitty"
@@ -72,7 +75,8 @@ EOF
         umbriel -c "$estado/config.toml" >"$estado/umbriel.log" 2>&1 </dev/null &
     for _ in $(seq 50); do
         sleep 0.1
-        nuevo=$(grep -o 'running on WAYLAND_DISPLAY=[^ ]*' "$estado/umbriel.log" 2>/dev/null | head -1 | cut -d= -f2)
+        # Con pipefail, un grep que todavía no encuentra nada cortaría el script entero.
+        nuevo=$(grep -o 'running on WAYLAND_DISPLAY=[^ ]*' "$estado/umbriel.log" 2>/dev/null | head -1 | cut -d= -f2 || true)
         if [[ -n $nuevo && -S $XDG_RUNTIME_DIR/umbriel-$nuevo.sock ]]; then
             echo "$nuevo" >"$estado/display"
             u outputs --json | jq -r '.[] | "umbriel: \(.name) \(.logical_size.width)x\(.logical_size.height)"'
