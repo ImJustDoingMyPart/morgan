@@ -2,6 +2,59 @@
 
 **English** · [Español](CHANGELOG.es.md)
 
+## 0.3.0 · 2026-11-20
+
+### A screen to log in: morgan-greet
+
+morgan now has its own login screen. It's the lock screen, with the same clock, wallpaper and
+theme, but for logging in: it runs on [greetd](https://sr.ht/~kennylevinsen/greetd/) and lets
+you pick the user and the session one thing at a time, with the password last. Every monitor
+starts at its highest refresh rate, and the password also unlocks the GNOME keyring if it's
+installed.
+
+It's **optional** and doesn't install itself. `sudo morgan-greet install` shows what it would
+change without touching anything; with `--apply` it does it, backing up greetd's config and
+its PAM file first. It takes effect on the next boot. To go back: `sudo morgan-greet restore
+--apply`, also from a text login (Ctrl+Alt+F2) if the greeter ever fails to start. Each
+account's theme and wallpaper are copied to `/var/lib/morgan-greet` whenever they change;
+nothing else leaves the account.
+
+### Beyond Hyprland: Umbriel (experimental)
+
+Everything morgan asked of Hyprland now goes through a common layer with one driver per
+compositor. The first one besides Hyprland is
+[Umbriel](https://github.com/noctalia-dev/umbriel): workspaces, windows, idle and screens,
+night light (no hyprsunset needed outside Hyprland), thumbnails, screen sharing, and the
+theme's colors, borders, shadows and animations. `morgan setup` writes its config. In the
+system menu, Hyprland-only settings show as disabled and say why. With a compositor that has
+its own overview, the key and the hot corner open that one.
+
+Hyprland is still the main compositor; on Umbriel morgan works, but may still have gaps.
+
+### New
+
+- **Dock**: at the bottom, with your most used and open apps, a dot per window and a tooltip
+  with the titles on hover. It can auto-hide and never shows over a game.
+- **Window overview from the corner**: moving the mouse to the top-left corner opens it, with
+  an animation that unfolds from the middle. Pick a window with a click. Turn it off in
+  General › Preferences.
+- **Hear myself**: in the control center's microphone list, listen to your own mic, with your
+  voice level on the slider.
+- **Lock screen**: with several monitors, the field follows the pointer and the others show
+  only the wallpaper. The field no longer has text in it: a failed attempt shows as a shake,
+  red, and a notch per attempt.
+- **Menus**: the tray menu and the bar and dock tooltips share one look, fit their content and
+  get the bar's blur.
+
+### Fixed
+
+- A monitor that reconnects while idle has the screens off is turned off again.
+- Picking a window from the overview (or with Mod+Tab) takes you to that window, not just its
+  workspace.
+- Grey thumbnails without icons in the window overview (a vello bug that affected every
+  surface).
+- The dock no longer moves the pointer when jumping to a window.
+
 ## 0.2.0 · 2026-10-25
 
 ### Goodbye, GTK4

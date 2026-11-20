@@ -2,6 +2,59 @@
 
 [English](CHANGELOG.md) · **Español**
 
+## 0.3.0 · 2026-11-20
+
+### Una pantalla para entrar: morgan-greet
+
+morgan ahora tiene su propia pantalla de inicio de sesión. Es la del bloqueo, con el mismo
+reloj, el mismo fondo y el mismo tema, pero para entrar: corre en
+[greetd](https://sr.ht/~kennylevinsen/greetd/) y deja elegir el usuario y la sesión de a una
+cosa, con la clave al final. Cada monitor arranca en su frecuencia más alta, y la clave abre
+también el llavero de GNOME si está instalado.
+
+Es **opcional** y no se instala sola. `sudo morgan-greet install` muestra qué va a cambiar sin
+tocar nada; con `--apply` lo hace, respaldando antes la config de greetd y su PAM. Vale desde
+el próximo arranque. Para volver atrás: `sudo morgan-greet restore --apply`, también desde un
+login de texto (Ctrl+Alt+F2) si el greeter no arrancara. El tema y el fondo de cada cuenta se
+copian a `/var/lib/morgan-greet` cada vez que cambian; nada más de la cuenta sale de ella.
+
+### Más allá de Hyprland: Umbriel (experimental)
+
+Lo que morgan le pedía a Hyprland pasa por una capa común con un driver por compositor. El
+primero además de Hyprland es [Umbriel](https://github.com/noctalia-dev/umbriel): workspaces,
+ventanas, el idle y las pantallas, la luz nocturna (ahora sin hyprsunset fuera de Hyprland),
+las miniaturas, la pantalla compartida y los colores, bordes, sombras y animaciones del tema.
+`morgan setup` le arma la config. En el menú de sistema, lo que es solo de Hyprland aparece
+deshabilitado y dice por qué. Con un compositor que trae su propia vista de ventanas, la tecla
+y la esquina abren esa.
+
+Hyprland sigue siendo el compositor principal; en Umbriel, morgan anda pero todavía puede
+tener huecos.
+
+### Nuevo
+
+- **Dock**: abajo, con las apps más usadas y las abiertas, un punto por ventana y un globo con
+  los títulos al pasar el mouse. Puede ocultarse solo y nunca aparece sobre un juego.
+- **Vista de ventanas desde la esquina**: llevar el mouse a la esquina superior izquierda la
+  abre, con una animación que se despliega desde el medio. Se elige con un click. Se apaga en
+  General › Preferencias.
+- **Escucharme**: en la lista de micrófonos del centro de control, oír tu propio micrófono,
+  con el nivel de la voz en el slider.
+- **Bloqueo**: con varios monitores, el campo sigue al puntero y los demás muestran solo el
+  fondo. El campo ya no tiene letras: un intento fallido se ve en la sacudida, el rojo y una
+  muesca por intento.
+- **Menús**: el de la bandeja y los globos de la barra y el dock comparten un mismo aspecto,
+  se ajustan a su contenido y tienen el blur de la barra.
+
+### Arreglado
+
+- Un monitor que se reconecta con las pantallas apagadas por el idle se vuelve a apagar.
+- Elegir una ventana desde la vista de ventanas (o con Mod+Tab) lleva a esa ventana, no solo a
+  su workspace.
+- Miniaturas grises y sin ícono en la vista de ventanas (un error de vello que afectaba a toda
+  superficie).
+- El dock ya no mueve el puntero al saltar a una ventana.
+
 ## 0.2.0 · 2026-10-25
 
 ### Adiós a GTK4

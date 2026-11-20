@@ -55,6 +55,8 @@ lo que ves acá es lo que querés, bienvenido.
 - **Pantalla de bloqueo e idle** (`morgan-lock`): reemplaza a hyprlock y a hypridle. Bloquea
   a través de logind, así que `loginctl lock-session` funciona, y puede bloquear antes de
   suspender.
+- **Pantalla de inicio de sesión** (`morgan-greet`, opcional): la del bloqueo, para entrar,
+  sobre greetd. [Más abajo](#pantalla-de-inicio-de-sesión).
 - **OSD** de volumen, brillo y Bloq Mayús; una **vista de ventanas** (`Super+Tab` o el mouse en la esquina superior izquierda); un
   **selector de fondos**; un **calendario** que lee las URL iCal de cada uno.
 - **Temas**: nueve paletas incluidas (morgan, Catppuccin, Dracula, Everforest, Gruvbox,
@@ -116,7 +118,8 @@ más allá del borde de la pantalla, y si no entra se desplaza por dentro.
 - **Arch Linux** o una derivada (en otras distros, compilar desde el código con
   `install.sh`).
 - **Hyprland 0.56 o más nuevo, con la config en Lua** (`~/.config/hypr/hyprland.lua`).
-  morgan no funciona con un `hyprland.conf`.
+  morgan no funciona con un `hyprland.conf`. También corre en
+  [Umbriel](https://github.com/noctalia-dev/umbriel), por ahora de forma experimental.
 - glib 2.84 o más nuevo.
 - Una GPU con un driver de Vulkan que funcione (`vulkan-radeon` o `vulkan-intel` de Mesa, o el
   de NVIDIA): morgan dibuja todo en la GPU.
@@ -190,7 +193,9 @@ que se bloquea dos veces.
 | Un programa de fondos: **hyprpaper, swaybg** | Lo mismo, si se quiere el selector de fondos de morgan (usa awww). |
 
 El **gestor de inicio de sesión** (SDDM, GDM, greetd, ly…) no molesta: corre antes de la
-sesión, y la pantalla de bloqueo de morgan es otra cosa. uwsm tampoco, y es opcional.
+sesión, y la pantalla de bloqueo de morgan es otra cosa. Si se quiere, morgan trae la suya
+(ver [Pantalla de inicio de sesión](#pantalla-de-inicio-de-sesión)). uwsm tampoco molesta, y
+es opcional.
 
 `morgan setup` (más abajo) avisa de los más comunes si están corriendo, y no arranca morgan
 mientras otro programa tenga las notificaciones.
@@ -242,6 +247,21 @@ usuario, avisa qué compite con morgan y lo arranca.
 Todos los atajos se cambian desde el menú de sistema o en `~/.config/morgan/config.toml`.
 `morganctl` maneja morgan desde scripts y atajos propios (`morganctl` sin argumentos lista
 todo).
+
+## Pantalla de inicio de sesión
+
+`morgan-greet` es la pantalla de bloqueo de morgan hecha pantalla de inicio de sesión: elige
+usuario y sesión, y la clave también abre el llavero. Corre sobre
+[greetd](https://sr.ht/~kennylevinsen/greetd/), que tiene que estar instalado y habilitado.
+
+```sh
+sudo morgan-greet install            # muestra qué va a cambiar, sin tocar nada
+sudo morgan-greet install --apply    # lo hace, con respaldo de la config de greetd
+sudo morgan-greet restore --apply    # vuelve a la config de antes
+```
+
+Vale desde el próximo arranque. Si el greeter no arrancara, Ctrl+Alt+F2 da un login de texto
+desde donde correr el `restore`.
 
 ## Desinstalar
 

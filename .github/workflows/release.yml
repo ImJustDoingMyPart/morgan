@@ -52,7 +52,7 @@ jobs:
         run: |
           raiz=morgan-$VERSION-x86_64
           dist/empaquetar "$raiz" target/release
-          strip "$raiz"/usr/bin/morgan "$raiz"/usr/bin/morganctl "$raiz"/usr/bin/morgan-lock
+          strip "$raiz"/usr/bin/morgan "$raiz"/usr/bin/morganctl "$raiz"/usr/bin/morgan-lock "$raiz"/usr/bin/morgan-greet
           tar --owner=0 --group=0 --sort=name -czf "$raiz.tar.gz" "$raiz"
           sha256sum "$raiz.tar.gz" >"$raiz.tar.gz.sha256"
 
@@ -61,6 +61,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          # Las notas: la sección de esta versión en CHANGELOG.md, y debajo la lista de commits.
+          awk -v v="## $VERSION " 'index($0, v) == 1 {en = 1; next} en && /^## / {exit} en' \
+            CHANGELOG.md >notas.md
           gh release create "$ETIQUETA" --verify-tag --title "morgan $VERSION" \
-            --generate-notes \
+            --notes-file notas.md --generate-notes \
             "morgan-$VERSION-x86_64.tar.gz" "morgan-$VERSION-x86_64.tar.gz.sha256"

@@ -53,6 +53,8 @@ here is what you want, welcome.
   size, opacity).
 - **Lock screen and idle** (`morgan-lock`): replaces hyprlock and hypridle. It locks through
   logind, so `loginctl lock-session` works, and it can lock before suspending.
+- **Login screen** (`morgan-greet`, optional): the lock screen, for logging in, on greetd.
+  [See below](#login-screen).
 - **OSD** for volume, brightness and Caps Lock; a **window overview** (`Super+Tab` or the mouse in the top left corner); a
   **wallpaper picker**; a **calendar** that reads your iCal URLs.
 - **Themes**: nine built-in palettes (morgan, Catppuccin, Dracula, Everforest, Gruvbox, Kanagawa,
@@ -111,7 +113,8 @@ holds, never past the edge of the screen, and scrolls inside when it has to.
 
 - **Arch Linux** or a derivative (other distros: build from source with `install.sh`).
 - **Hyprland 0.56 or newer, with its config in Lua** (`~/.config/hypr/hyprland.lua`).
-  morgan does not work with a `hyprland.conf`.
+  morgan does not work with a `hyprland.conf`. It also runs on
+  [Umbriel](https://github.com/noctalia-dev/umbriel), experimentally for now.
 - glib 2.84 or newer.
 - A GPU with a working Vulkan driver (Mesa's `vulkan-radeon` or `vulkan-intel`, or NVIDIA's):
   morgan draws everything on the GPU.
@@ -185,7 +188,8 @@ with your session**:
 | A wallpaper daemon: **hyprpaper, swaybg** | Same, if you want morgan's wallpaper picker (it uses awww). |
 
 Your **display manager or login screen** (SDDM, GDM, greetd, ly…) is fine: it runs before
-your session, and morgan's lock screen is a separate thing. uwsm is fine too, and optional.
+your session, and morgan's lock screen is a separate thing. If you want, morgan has its own
+(see [Login screen](#login-screen)). uwsm is fine too, and optional.
 
 `morgan setup` (below) warns about the most common of these if they're running, and doesn't
 start morgan while another program owns notifications.
@@ -237,6 +241,21 @@ warns about anything that competes with morgan, and starts it.
 All keybinds can be changed from the system menu or in `~/.config/morgan/config.toml`.
 `morganctl` controls morgan from scripts and your own binds (`morganctl` with no arguments
 lists everything).
+
+## Login screen
+
+`morgan-greet` is morgan's lock screen turned into a login screen: pick a user and a session,
+and the password also unlocks your keyring. It runs on
+[greetd](https://sr.ht/~kennylevinsen/greetd/), which has to be installed and enabled.
+
+```sh
+sudo morgan-greet install            # shows what it would change, touches nothing
+sudo morgan-greet install --apply    # does it, backing up greetd's config
+sudo morgan-greet restore --apply    # goes back to the previous config
+```
+
+It takes effect on the next boot. If the greeter ever fails to start, Ctrl+Alt+F2 gives you a
+text login to run the `restore` from.
 
 ## Uninstall
 

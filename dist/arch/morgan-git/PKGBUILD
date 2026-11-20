@@ -10,7 +10,7 @@
 
 pkgname=morgan-git
 _nombre=morgan
-pkgver=0.2.0.r0.g0000000
+pkgver=0.3.0.r0.g0000000
 pkgrel=1
 pkgdesc='Shell de escritorio para Hyprland: barra, centro de control, notificaciones, launcher, OSD y bloqueo'
 arch=('x86_64' 'aarch64')
@@ -46,6 +46,7 @@ optdepends=(
     'uwsm: lanzar apps como unidades de systemd'
     'gpu-screen-recorder-ui: indicador y control de grabación'
     'papirus-folders: color de las carpetas del tema de íconos'
+    'greetd: morgan-greet, la pantalla de inicio de sesión'
     'jq: morgan-cuota (cuotas de Claude Code y Antigravity)'
 )
 provides=('morgan' 'notification-daemon')
