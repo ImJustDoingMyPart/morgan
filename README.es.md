@@ -161,6 +161,7 @@ la lista es además un buen punto de partida.
 | `libcanberra` y un tema de sonidos | Los sonidos del sistema |
 | Íconos Papirus y `papirus-folders` | El color de las carpetas, que sigue al tema |
 | `uwsm` | Lanzar las apps como unidades de systemd (sin él, morgan usa un scope propio) |
+| `xdg-desktop-portal-gtk` | Que los navegadores y las apps de Electron sigan el modo claro u oscuro del tema |
 
 **Apps que siguen al tema**: morgan trae plantillas para kitty, GTK, Qt, btop, yazi,
 starship, Vesktop (Discord) y Obsidian. Cuáles aplica se elige en Apariencia. Los temas

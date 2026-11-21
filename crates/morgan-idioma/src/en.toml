@@ -503,6 +503,7 @@
 "grabar la pantalla, con el contador en la barra" = "screen recording, with the timer in the bar"
 "íconos" = "icons"
 "color de las carpetas según el tema" = "folder colors that follow the theme"
+"que navegadores y apps de Electron sigan el modo claro u oscuro" = "browsers and Electron apps follow light or dark mode"
 "Instalá con el gestor de paquetes de tu distribución: {}" = "Install with your distribution's package manager: {}"
 "pacman no terminó. Probá de nuevo con: sudo pacman -S --needed {}" = "pacman didn't finish. Try again with: sudo pacman -S --needed {}"
 "{} no terminó. Probá de nuevo con: {} -S --needed {}" = "{} didn't finish. Try again with: {} -S --needed {}"

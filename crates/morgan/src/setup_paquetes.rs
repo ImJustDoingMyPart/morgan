@@ -36,6 +36,7 @@ pub const RECOMENDADOS: &[Recomendado] = &[
     r("gpu-screen-recorder-ui", tr_const!("grabar la pantalla, con el contador en la barra")), // no-tr
     r("papirus-icon-theme", tr_const!("íconos")), // no-tr
     r("papirus-folders", tr_const!("color de las carpetas según el tema")), // no-tr
+    r("xdg-desktop-portal-gtk", tr_const!("que navegadores y apps de Electron sigan el modo claro u oscuro")), // no-tr
 ];
 
 /// Los que no están en los repos oficiales de Arch: van por el ayudante de AUR.

@@ -143,6 +143,10 @@ fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
     } else {
         Path::new("/").join(BINARIO)
     };
+    if let Some(m) = falta_greetd(&r) {
+        eprintln!("morgan-greet: {m}");
+        return ExitCode::FAILURE;
+    }
     let greetd = r.join(GREETD);
     let actual = match std::fs::read_to_string(&greetd) {
         Ok(t) => t,
@@ -225,6 +229,9 @@ fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
         println!("Ojo: logind tiene NAutoVTs=0: sin login de texto de emergencia. Se sigue igual.");
     }
     println!("Vale desde el próximo arranque: greetd no se reinicia.");
+    if let Some(m) = aviso_gestor(&r) {
+        println!("{m}");
+    }
     if !aplicar {
         println!(
             "Nada cambió. Para hacerlo: sudo {} install --apply",

@@ -116,6 +116,12 @@ fn ajustes_matugen(r: &Rutas) -> [String; 3] {
     [leer("tipo", "scheme-tonal-spot"), leer("modo", "dark"), leer("contraste", "0")]
 }
 
+/// `dark` o `light`, lo que se le pide a matugen.
+pub fn modo_matugen(r: &Rutas) -> String {
+    let [_, modo, _] = ajustes_matugen(r);
+    modo
+}
+
 fn wallpaper(r: &Rutas) -> Option<PathBuf> {
     if let Ok(s) = std::fs::read_to_string(r.estado.join("wallpaper"))
         && let Some(l) = s.lines().next().filter(|l| !l.is_empty())

@@ -32,6 +32,33 @@ const PREFIJO_RESPALDO_PAM: &str = "pam.d-greetd.morgan-";
 /// tiene que estar.
 pub const COMPOSITORES: &[(&str, &str)] = &[("hyprland", "start-hyprland")];
 
+/// Si greetd no está: el greeter corre sobre él. `None` si está (su config existe).
+pub fn falta_greetd(raiz: &Path) -> Option<String> {
+    (!raiz.join(GREETD).is_file()).then(|| {
+        "greetd no está instalado: el greeter corre sobre él. Instalalo (en Arch, `sudo pacman -S greetd`) y volvé a correr esto.".to_owned()
+    })
+}
+
+/// El gestor de inicio que arranca la máquina, por el alias `display-manager.service` que
+/// `systemctl enable` deja en `/etc/systemd/system`: `None` si es greetd.
+pub fn aviso_gestor(raiz: &Path) -> Option<String> {
+    let alias = raiz.join("etc/systemd/system/display-manager.service");
+    let destino = std::fs::read_link(&alias).ok();
+    let nombre = destino
+        .as_deref()
+        .and_then(Path::file_name)
+        .and_then(|n| n.to_str())
+        .and_then(|n| n.strip_suffix(".service"))
+        .map(str::to_owned);
+    match nombre.as_deref() {
+        Some("greetd") => None,
+        Some(otro) => Some(format!(
+            "Ojo: el inicio de sesión lo maneja {otro}, no greetd. Para ver el greeter: sudo systemctl disable {otro} && sudo systemctl enable greetd"
+        )),
+        None => Some("Ojo: greetd no está habilitado. Para ver el greeter: sudo systemctl enable greetd".to_owned()),
+    }
+}
+
 /// La config de greetd con el greeter: `command` del greeter y sin inicio automático.
 pub fn config_nueva(actual: &str, command: &str) -> Result<String, String> {
     let mut doc: DocumentMut = actual
@@ -157,6 +184,26 @@ pub fn hay_tty_de_emergencia(logind_conf: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn greetd_instalado_y_habilitado() {
+        let raiz = std::env::temp_dir().join(format!("morgan-greet-gestor-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&raiz);
+        let sys = raiz.join("etc/systemd/system");
+        std::fs::create_dir_all(&sys).unwrap();
+        assert!(falta_greetd(&raiz).unwrap().contains("pacman -S greetd"));
+        assert!(aviso_gestor(&raiz).unwrap().contains("systemctl enable greetd"));
+        let alias = sys.join("display-manager.service");
+        std::os::unix::fs::symlink("/usr/lib/systemd/system/sddm.service", &alias).unwrap();
+        assert!(aviso_gestor(&raiz).unwrap().contains("disable sddm"));
+        std::fs::remove_file(&alias).unwrap();
+        std::os::unix::fs::symlink("/usr/lib/systemd/system/greetd.service", &alias).unwrap();
+        assert_eq!(aviso_gestor(&raiz), None);
+        std::fs::create_dir_all(raiz.join("etc/greetd")).unwrap();
+        std::fs::write(raiz.join(GREETD), "").unwrap();
+        assert_eq!(falta_greetd(&raiz), None);
+        let _ = std::fs::remove_dir_all(&raiz);
+    }
 
     const ESTA_MAQUINA: &str = r#"[terminal]
 # The VT to run the greeter on. Can be "next", "current" or a number

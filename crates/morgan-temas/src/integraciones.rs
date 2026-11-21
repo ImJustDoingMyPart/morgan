@@ -415,9 +415,77 @@ fn gtk(r: &Rutas) -> Result<(), String> {
     Ok(())
 }
 
+/// El modo claro u oscuro para las apps: `color-scheme` de GNOME (GTK 4, libadwaita y, por el
+/// portal de Settings, los navegadores, Electron y Qt 6) y `gtk-application-prefer-dark-theme`
+/// en los `settings.ini` de GTK (lo que no lee dconf, como una app en Flatpak). Se apaga con
+/// `disabled = ["color-scheme"]` en themes.toml.
+pub fn esquema(r: &Rutas, oscuro: bool, inf: &mut Informe) {
+    if del_usuario(r, &mut Informe::default()).apagadas.iter().any(|a| a == "color-scheme") {
+        return;
+    }
+    if hay_programa("gsettings") {
+        let valor = if oscuro { "prefer-dark" } else { "prefer-light" };
+        let res = Command::new("gsettings")
+            .args(["set", "org.gnome.desktop.interface", "color-scheme", valor])
+            .status()
+            .map_err(|e| format!("gsettings: {e}"))
+            .and_then(|s| if s.success() { Ok(()) } else { Err(format!("gsettings color-scheme: {s}")) });
+        anotar(inf, res);
+    }
+    for ini in ["gtk-3.0/settings.ini", "gtk-4.0/settings.ini"] {
+        let ruta = r.config.join(ini);
+        let antes = std::fs::read_to_string(&ruta).unwrap_or_default();
+        let nuevo = ini_oscuro(&antes, oscuro);
+        if nuevo != antes {
+            let res = ruta
+                .parent()
+                .map_or(Ok(()), std::fs::create_dir_all)
+                .and_then(|()| std::fs::write(&ruta, &nuevo))
+                .map_err(|e| format!("{}: {e}", ruta.display()));
+            anotar(inf, res);
+        }
+    }
+}
+
+/// `settings.ini` con `gtk-application-prefer-dark-theme` puesto en `[Settings]`, sin tocar
+/// lo demás.
+fn ini_oscuro(texto: &str, oscuro: bool) -> String {
+    const CLAVE: &str = "gtk-application-prefer-dark-theme";
+    let linea = format!("{CLAVE}={}", u8::from(oscuro));
+    let mut lineas: Vec<String> = texto.lines().map(str::to_owned).collect();
+    if let Some(l) = lineas.iter_mut().find(|l| l.split('=').next().is_some_and(|k| k.trim() == CLAVE)) {
+        *l = linea;
+    } else if let Some(i) = lineas.iter().position(|l| l.trim() == "[Settings]") {
+        lineas.insert(i + 1, linea);
+    } else {
+        if !lineas.is_empty() {
+            lineas.push(String::new());
+        }
+        lineas.push("[Settings]".to_owned());
+        lineas.push(linea);
+    }
+    lineas.join("\n") + "\n"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn el_modo_en_settings_ini() {
+        assert_eq!(ini_oscuro("", true), "[Settings]\ngtk-application-prefer-dark-theme=1\n");
+        assert_eq!(
+            ini_oscuro("[Settings]\ngtk-theme-name=x\ngtk-application-prefer-dark-theme=1\n", false),
+            "[Settings]\ngtk-theme-name=x\ngtk-application-prefer-dark-theme=0\n"
+        );
+        assert_eq!(
+            ini_oscuro("[Settings]\ngtk-theme-name=x\n", true),
+            "[Settings]\ngtk-application-prefer-dark-theme=1\ngtk-theme-name=x\n"
+        );
+        // Igual que estaba: no se reescribe.
+        let t = "[Settings]\ngtk-application-prefer-dark-theme=1\n";
+        assert_eq!(ini_oscuro(t, true), t);
+    }
 
     fn tmp(nombre: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("morgan-temas-{nombre}-{}", std::process::id()));

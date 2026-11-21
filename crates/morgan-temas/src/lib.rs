@@ -140,8 +140,8 @@ pub struct Informe {
 
 pub fn aplicar(r: &Rutas, tema: &str, imagen: Option<&Path>) -> Result<Informe, String> {
     let _lock = Lock::tomar(r)?;
-    let datos = if tema == MATUGEN {
-        render::datos_matugen(r, imagen)?
+    let (datos, oscuro) = if tema == MATUGEN {
+        (render::datos_matugen(r, imagen)?, render::modo_matugen(r) != "light")
     } else {
         let paleta = r
             .fuentes("themes")
@@ -150,7 +150,8 @@ pub fn aplicar(r: &Rutas, tema: &str, imagen: Option<&Path>) -> Result<Informe, 
             .find(|p| p.is_file())
             .ok_or_else(|| format!("no existe el tema '{tema}'"))?;
         let texto = std::fs::read_to_string(&paleta).map_err(|e| format!("{}: {e}", paleta.display()))?;
-        paleta::json_curado(&paleta::roles_curado(&texto).map_err(|e| format!("{tema}: {e}"))?)
+        let roles = paleta::roles_curado(&texto).map_err(|e| format!("{tema}: {e}"))?;
+        (paleta::json_curado(&roles), paleta::es_oscura(&roles))
     };
     let plantillas = render::plantillas(r);
     if plantillas.is_empty() {
@@ -158,7 +159,9 @@ pub fn aplicar(r: &Rutas, tema: &str, imagen: Option<&Path>) -> Result<Informe, 
     }
     render::renderizar(r, &plantillas, &datos)?;
     escribir(&r.archivo_activo(), &format!("{tema}\n"))?;
-    Ok(integraciones::desplegar(r))
+    let mut inf = integraciones::desplegar(r);
+    integraciones::esquema(r, oscuro, &mut inf);
+    Ok(inf)
 }
 
 pub fn recargar(r: &Rutas) -> Result<Informe, String> {

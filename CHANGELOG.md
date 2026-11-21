@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+### Umbriel without Hyprland leftovers, and apps in the theme's mode
+
+On Umbriel, the Shortcuts page of the menu, the launcher's Shortcuts mode and recording a new key read Umbriel's own keybinds. They used to ask Hyprland and came up empty. Per-app rules in Desktop are written for Umbriel, except "No animation", which Umbriel doesn't have. The cursor picked in Appearance changes right away, and System info shows the Umbriel version.
+
+Apps follow the theme's mode. morgan sets GNOME's `color-scheme` and `gtk-application-prefer-dark-theme` to dark with dark themes and to light with light ones, Matugen's light variant included. Browsers and Electron apps read it through `xdg-desktop-portal-gtk`, which `morgan setup` now offers. It's turned off with `disabled = ["color-scheme"]` in `themes.toml`.
+
+If Bluetooth is soft-blocked (rfkill), turning it on from the control center unblocks it. If a hardware switch blocks it, the tile says so instead of bouncing back. `morgan-greet install` warns when greetd is missing or another login manager is in charge, with the command to switch.
+
 ### Window shortcuts, and fewer broken first runs
 
 `morgan setup` now offers the window shortcuts morgan was built with: focus and column movement, workspaces, monitors, scrolling layout, apps that cycle and screen recording. It writes them for Hyprland (`morgan-atajos.lua`) and for Umbriel (`morgan-atajos.toml`) from one table, as separate files you can edit. Keys you already use are left alone. `morgan setup --undo` moves them aside as `.bak`. On Umbriel, the cycling keys use the new `umbriel-ciclar` script, which needs `jq`.

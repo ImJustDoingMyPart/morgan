@@ -156,6 +156,7 @@ list is also a good set of tools to start from.
 | `libcanberra` and a sound theme | System sounds |
 | Papirus icons and `papirus-folders` | Folder colors that follow the theme |
 | `uwsm` | Launching apps as systemd units (without it, morgan uses a scope of its own) |
+| `xdg-desktop-portal-gtk` | Browsers and Electron apps following the theme's light or dark mode |
 
 **Apps that follow the theme**: morgan ships templates for kitty, GTK, Qt, btop, yazi,
 starship, Vesktop (Discord) and Obsidian. You choose which ones it applies in Appearance.

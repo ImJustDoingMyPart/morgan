@@ -172,6 +172,20 @@ pub fn roles_curado(texto: &str) -> Result<BTreeMap<String, String>, String> {
 
 /// Un tema curado es oscuro: las variantes `light` que piden algunos templates reciben los
 /// mismos colores.
+/// Si el fondo es oscuro: su luminancia relativa (sRGB, WCAG) por debajo de 0,18, donde el
+/// texto blanco y el negro contrastan igual. Un tema curado claro del usuario sale claro sin
+/// tener que declararlo.
+pub fn es_oscura(roles: &BTreeMap<String, String>) -> bool {
+    let Some(hex) = roles.get("background").map(|h| h.trim_start_matches('#')) else {
+        return true;
+    };
+    let canal = |i: usize| {
+        let c = f64::from(u8::from_str_radix(hex.get(i..i + 2).unwrap_or("00"), 16).unwrap_or(0)) / 255.0;
+        if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+    };
+    0.2126 * canal(0) + 0.7152 * canal(2) + 0.0722 * canal(4) < 0.18
+}
+
 pub fn json_curado(roles: &BTreeMap<String, String>) -> Value {
     let colores: serde_json::Map<String, Value> = roles
         .iter()
@@ -201,6 +215,17 @@ pub fn json_matugen(mut volcado: Value) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn oscuro_o_claro_por_el_fondo() {
+        let con = |f: &str| BTreeMap::from([("background".to_owned(), f.to_owned())]);
+        assert!(es_oscura(&con("#2e3440")));
+        assert!(es_oscura(&con("#1e1e2e")));
+        assert!(!es_oscura(&con("#eff1f5")));
+        assert!(!es_oscura(&con("#fdf6e3")));
+        // Sin fondo, como los curados de siempre: oscuro.
+        assert!(es_oscura(&BTreeMap::new()));
+    }
 
     const NORD: &str = r##"
 fondo0 = "#2e3440"

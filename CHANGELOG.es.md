@@ -4,6 +4,14 @@
 
 ## Sin publicar
 
+### Umbriel sin restos de Hyprland, y las apps en el modo del tema
+
+En Umbriel, la página Atajos del menú, el modo Atajos del launcher y la grabación de una tecla nueva leen los atajos de Umbriel. Antes le preguntaban a Hyprland y quedaban vacíos. Las reglas por app de Escritorio se escriben para Umbriel, salvo «Sin animación», que Umbriel no tiene. El cursor elegido en Apariencia cambia en el momento, y Información del sistema muestra la versión de Umbriel.
+
+Las apps siguen el modo del tema. morgan pone `color-scheme` de GNOME y `gtk-application-prefer-dark-theme` en oscuro con los temas oscuros y en claro con los claros, incluida la variante clara de Matugen. Los navegadores y las apps de Electron lo leen por `xdg-desktop-portal-gtk`, que `morgan setup` ahora ofrece. Se apaga con `disabled = ["color-scheme"]` en `themes.toml`.
+
+Si el Bluetooth está bloqueado por software (rfkill), prenderlo desde el centro lo desbloquea. Si lo bloquea un interruptor del equipo, la tarjeta lo dice en vez de rebotar. `morgan-greet install` avisa si falta greetd o si el inicio de sesión lo maneja otro gestor, con el comando para cambiarlo.
+
 ### Atajos de ventanas, y menos primeros arranques rotos
 
 `morgan setup` ahora ofrece los atajos de ventanas con los que se armó morgan: foco y movimiento de columnas, workspaces, monitores, layout scrolling, apps que ciclan y grabación de pantalla. Los escribe para Hyprland (`morgan-atajos.lua`) y para Umbriel (`morgan-atajos.toml`) desde una sola tabla, como archivos aparte que se pueden editar. Las teclas que ya usás no se tocan. `morgan setup --deshacer` los aparta como `.bak`. En Umbriel, las teclas que ciclan usan el script nuevo `umbriel-ciclar`, que necesita `jq`.
