@@ -49,7 +49,7 @@ pub fn bluetooth(e: &bluetooth::Estado) -> Resumen {
     if !e.encendido {
         return Resumen {
             glifo: "󰂲",
-            estado: "Apagado".to_owned(),
+            estado: e.motivo.clone().unwrap_or_else(|| "Apagado".to_owned()),
             encendida: false,
         };
     }
@@ -181,8 +181,11 @@ mod tests {
             adaptador: Some(ruta("/hci0")),
             encendido: false,
             dispositivos: vec![d("Auris", true)],
+            motivo: None,
         };
         assert_eq!(bluetooth(&e).estado, "Apagado");
+        e.motivo = Some("Bloqueado".into());
+        assert_eq!(bluetooth(&e).estado, "Bloqueado");
         e.encendido = true;
         assert_eq!(bluetooth(&e).estado, "Auris");
         e.dispositivos.push(d("Joystick", true));

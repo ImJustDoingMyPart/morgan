@@ -44,6 +44,8 @@ pub struct Estado {
     /// Sin emparejar, con nombre y vistos en esta búsqueda (con `RSSI`): los que BlueZ
     /// recuerda de antes y ya no están, no.
     pub cercanos: Vec<Dispositivo>,
+    /// Por qué no prendió el último intento, mientras siga apagado.
+    pub motivo: Option<String>,
 }
 
 pub fn interpretar(objetos: &Objetos) -> Estado {
@@ -100,6 +102,7 @@ pub fn interpretar(objetos: &Objetos) -> Estado {
         encendido,
         dispositivos,
         cercanos,
+        motivo: None,
     }
 }
 
@@ -118,6 +121,7 @@ struct Inner {
     buscando: RefCell<Option<OwnedObjectPath>>,
     al_pedido: RefCell<Option<AlPedido>>,
     agente: Cell<bool>,
+    motivo: RefCell<Option<String>>,
 }
 
 type AlPedido = Rc<dyn Fn(Pedido)>;
@@ -219,13 +223,17 @@ impl Bluetooth {
     }
 
     async fn releer(&self) {
-        let e = match leer(false).await {
+        let mut e = match leer(false).await {
             Ok(e) => e,
             Err(e) => {
                 eprintln!("morgan: bluetooth: {e}");
                 Estado::default()
             }
         };
+        if e.encendido {
+            self.inner.motivo.replace(None);
+        }
+        e.motivo = self.inner.motivo.borrow().clone();
         self.seguir_buscando(&e);
         if *self.inner.estado.borrow() != e {
             self.inner.estado.replace(e);
@@ -240,9 +248,18 @@ impl Bluetooth {
         let encendido = self.inner.estado.borrow().encendido;
         let yo = self.clone();
         glib::MainContext::default().spawn_local(async move {
-            if let Err(e) = encender(!encendido).await {
-                eprintln!("morgan: bluetooth: {e}");
-            }
+            let motivo = match encender(!encendido).await {
+                Ok(()) => None,
+                Err(e) => {
+                    eprintln!("morgan: bluetooth: {e}");
+                    Some(match e {
+                        Error::Hardware => tr!("Bloqueado por el interruptor del equipo"),
+                        _ => tr!("No se pudo encender"),
+                    }
+                    .to_owned())
+                }
+            };
+            yo.inner.motivo.replace(motivo);
             yo.releer().await;
         });
     }
@@ -512,7 +529,95 @@ async fn leer(activar: bool) -> zbus::Result<Estado> {
     Ok(interpretar(&objetos))
 }
 
-async fn encender(v: bool) -> zbus::Result<()> {
+#[derive(Debug)]
+enum Error {
+    /// La radio la apaga un interruptor o una tecla del equipo: desde acá no se prende.
+    Hardware,
+    Bus(zbus::Error),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Hardware => f.write_str("rfkill: bloqueado por hardware"), // no-tr
+            Error::Bus(e) => e.fmt(f),
+        }
+    }
+}
+
+impl From<zbus::Error> for Error {
+    fn from(e: zbus::Error) -> Self {
+        Error::Bus(e)
+    }
+}
+
+/// Cómo tiene el kernel las radios de bluetooth (`/sys/class/rfkill`): con una bloqueada,
+/// BlueZ no prende el adaptador ("Blocked through rfkill").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Bloqueo {
+    Ninguno,
+    Software,
+    Hardware,
+}
+
+/// Cada radio: su tipo y si está bloqueada por software y por hardware.
+fn bloqueo_de(radios: &[(String, bool, bool)]) -> Bloqueo {
+    let bt = radios.iter().filter(|(t, _, _)| t == "bluetooth"); // no-tr
+    let mut b = Bloqueo::Ninguno;
+    for (_, soft, hard) in bt {
+        if *hard {
+            return Bloqueo::Hardware;
+        }
+        if *soft {
+            b = Bloqueo::Software;
+        }
+    }
+    b
+}
+
+fn radios() -> Vec<(String, bool, bool)> {
+    let Ok(dir) = std::fs::read_dir("/sys/class/rfkill") else {
+        return Vec::new();
+    };
+    let leer = |p: &std::path::Path, f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
+    dir.flatten()
+        .map(|e| {
+            let p = e.path();
+            (
+                leer(&p, "type").trim().to_owned(),
+                leer(&p, "soft").trim() == "1",
+                leer(&p, "hard").trim() == "1",
+            )
+        })
+        .collect()
+}
+
+/// `struct rfkill_event` de `linux/rfkill.h` (la de 8 bytes, que todo kernel acepta):
+/// `RFKILL_OP_CHANGE_ALL` (3) para `RFKILL_TYPE_BLUETOOTH` (2), sin bloqueo por software.
+const DESBLOQUEAR: [u8; 8] = [0, 0, 0, 0, 2, 3, 0, 0];
+
+/// Lo mismo que `rfkill unblock bluetooth`. `/dev/rfkill` lo puede escribir el usuario de la
+/// sesión (logind le da acceso, `uaccess`).
+fn desbloquear() -> std::io::Result<()> {
+    use std::io::Write;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/rfkill")?
+        .write_all(&DESBLOQUEAR)
+}
+
+async fn encender(v: bool) -> Result<(), Error> {
+    let mut desbloqueado = false;
+    if v {
+        match bloqueo_de(&radios()) {
+            Bloqueo::Hardware => return Err(Error::Hardware),
+            Bloqueo::Software => {
+                desbloquear().map_err(|e| zbus::Error::Failure(format!("rfkill: {e}")))?;
+                desbloqueado = true;
+            }
+            Bloqueo::Ninguno => {}
+        }
+    }
     let mut adaptador = leer(v).await?.adaptador;
     // Recién arrancado, `bluetoothd` tarda en publicar el adaptador.
     for _ in 0..20 {
@@ -523,19 +628,42 @@ async fn encender(v: bool) -> zbus::Result<()> {
         adaptador = leer(true).await?.adaptador;
     }
     let Some(a) = adaptador else {
-        return Err(zbus::Error::Failure("no hay adaptador".into()));
+        return Err(zbus::Error::Failure("no hay adaptador".into()).into());
     };
-    sistema::proxy(BLUEZ, a, ADAPTADOR)
-        .await?
-        .set_property("Powered", v)
-        .await
-        .map_err(zbus::Error::from)
+    let proxy = sistema::proxy(BLUEZ, a, ADAPTADOR).await?;
+    // Recién desbloqueado, BlueZ puede tardar en enterarse.
+    let intentos = if desbloqueado { 8 } else { 1 };
+    let mut ultimo = Ok(());
+    for n in 0..intentos {
+        if n > 0 {
+            glib::timeout_future(Duration::from_millis(250)).await;
+        }
+        ultimo = proxy.set_property("Powered", v).await.map_err(zbus::Error::from);
+        if ultimo.is_ok() {
+            break;
+        }
+    }
+    Ok(ultimo?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use zbus::zvariant::Value;
+
+    #[test]
+    fn el_bloqueo_de_las_radios() {
+        let r = |t: &str, soft, hard| (t.to_owned(), soft, hard);
+        assert_eq!(bloqueo_de(&[]), Bloqueo::Ninguno);
+        // El wifi bloqueado no cuenta.
+        assert_eq!(bloqueo_de(&[r("wlan", true, true), r("bluetooth", false, false)]), Bloqueo::Ninguno);
+        assert_eq!(bloqueo_de(&[r("bluetooth", true, false)]), Bloqueo::Software);
+        // Una del equipo y otra del driver (ideapad_bluetooth y hci0): manda el hardware.
+        assert_eq!(bloqueo_de(&[r("bluetooth", true, false), r("bluetooth", true, true)]), Bloqueo::Hardware);
+        // `struct rfkill_event`: idx (u32), type, op, soft, hard.
+        assert_eq!(DESBLOQUEAR.len(), 8);
+        assert_eq!((DESBLOQUEAR[4], DESBLOQUEAR[5], DESBLOQUEAR[6]), (2, 3, 0));
+    }
 
     fn props(pares: &[(&str, Value<'static>)]) -> HashMap<String, OwnedValue> {
         pares

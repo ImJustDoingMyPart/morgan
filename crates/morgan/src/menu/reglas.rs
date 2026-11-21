@@ -69,6 +69,39 @@ pub fn lua(reglas: &[ReglaApp], buscar: &dyn Fn(&str) -> Option<App>) -> String 
     format!("\n-- ─── Reglas por app (menú) ───\n{out}") // no-tr
 }
 
+/// Las mismas reglas para Umbriel, como `[[window_rule]]` de `morgan.toml`. Umbriel no tiene
+/// una clave para «sin animación»: esa parte no se escribe (`window-rules.md`). Un flotante
+/// sin posición abre centrado.
+pub fn toml(reglas: &[ReglaApp], buscar: &dyn Fn(&str) -> Option<App>) -> String {
+    let mut out = String::new();
+    for r in reglas {
+        let Some(app) = buscar(&r.app) else { continue };
+        let mut campos = Vec::new();
+        if r.workspace > 0 {
+            campos.push(format!("default_workspace = {}", r.workspace)); // no-tr
+        }
+        if r.flotante {
+            campos.push("default_floating = true".to_owned()); // no-tr
+            if r.tamano > 0 {
+                let f = f64::from(r.tamano) / 100.0;
+                campos.push(format!("default_floating_size = {{ width = {f}, height = {f} }}")); // no-tr
+            }
+        }
+        if r.opacidad > 0.0 {
+            campos.push(format!("opacity = {}", r.opacidad)); // no-tr
+        }
+        if campos.is_empty() {
+            continue;
+        }
+        let patron = serde_json::to_string(&aplicacion::patron(&app.clases)).unwrap_or_default();
+        out.push_str(&format!("\n[[window_rule]]\nmatch.app_id = {patron}\n{}\n", campos.join("\n"))); // no-tr
+    }
+    if out.is_empty() {
+        return out;
+    }
+    format!("\n# Reglas por app (menú)\n{}", out.trim_start_matches('\n')) // no-tr
+}
+
 fn porcentaje(v: f64) -> String {
     format!("{} %", (v * 100.0).round())
 }
@@ -115,7 +148,8 @@ pub fn resumen(r: &ReglaApp) -> String {
 
 /// Una regla es un renglón con todo en su lista: cada valor marcado es el puesto, y elegir
 /// otro lo cambia; «Quitar la regla» la borra.
-fn fila(n: usize, r: &ReglaApp, nombre: &str) -> Fila {
+/// `animacion`: si el compositor puede sacarle la animación (Umbriel no).
+fn fila(n: usize, r: &ReglaApp, nombre: &str, animacion: bool) -> Fila {
     let cambio = |c: Campo| Que::Config(Cambio::Regla(n, c));
     let mut o: Vec<Opcion> = Vec::new();
     for w in 0..=10 {
@@ -149,14 +183,16 @@ fn fila(n: usize, r: &ReglaApp, nombre: &str) -> Fila {
             .activa(r.opacidad == op),
         );
     }
-    o.push(
-        opcion(
-            tr!("Sin animación"),
-            "",
-            cambio(Campo::SinAnimacion(!r.sin_animacion)),
-        )
-        .activa(r.sin_animacion),
-    );
+    if animacion {
+        o.push(
+            opcion(
+                tr!("Sin animación"),
+                "",
+                cambio(Campo::SinAnimacion(!r.sin_animacion)),
+            )
+            .activa(r.sin_animacion),
+        );
+    }
     o.push(opcion(
         tr!("Quitar la regla"),
         "",
@@ -167,6 +203,10 @@ fn fila(n: usize, r: &ReglaApp, nombre: &str) -> Fila {
 
 /// `apps`: id y nombre de las que muestra el launcher.
 pub fn filas(reglas: &[ReglaApp], apps: &[(String, String)]) -> Vec<Fila> {
+    filas_con(reglas, apps, true)
+}
+
+fn filas_con(reglas: &[ReglaApp], apps: &[(String, String)], animacion: bool) -> Vec<Fila> {
     let nombre = |id: &str| {
         apps.iter().find(|(i, _)| i == id).map_or_else(
             || id.trim_end_matches(".desktop").to_owned(),
@@ -176,7 +216,7 @@ pub fn filas(reglas: &[ReglaApp], apps: &[(String, String)]) -> Vec<Fila> {
     let mut v: Vec<Fila> = reglas
         .iter()
         .enumerate()
-        .map(|(n, r)| fila(n, r, &nombre(&r.app)))
+        .map(|(n, r)| fila(n, r, &nombre(&r.app), animacion))
         .collect();
     let libres: Vec<Opcion> = apps
         .iter()
@@ -195,6 +235,14 @@ pub fn seccion(reglas: &[ReglaApp], apps: &[(String, String)]) -> Seccion {
     Seccion {
         titulo: morgan_idioma::t(tr_const!("Reglas por app")),
         filas: filas(reglas, apps),
+    }
+}
+
+/// En Umbriel, sin «Sin animación».
+pub fn seccion_umbriel(reglas: &[ReglaApp], apps: &[(String, String)]) -> Seccion {
+    Seccion {
+        titulo: morgan_idioma::t(tr_const!("Reglas por app")),
+        filas: filas_con(reglas, apps, false),
     }
 }
 
@@ -246,6 +294,35 @@ mod tests {
             )]
         );
         assert_eq!(lua(&[], &app), "");
+    }
+
+    #[test]
+    fn toml_de_las_reglas() {
+        let reglas = vec![
+            ReglaApp {
+                app: "mpv.desktop".into(),
+                workspace: 3,
+                flotante: true,
+                tamano: 60,
+                opacidad: 0.9,
+                sin_animacion: true,
+            },
+            ReglaApp { app: "mpv.desktop".into(), sin_animacion: true, ..Default::default() },
+            ReglaApp { app: "ya-no.desktop".into(), flotante: true, ..Default::default() },
+        ];
+        let t = toml(&reglas, &app);
+        assert_eq!(
+            t,
+            "\n# Reglas por app (menú)\n[[window_rule]]\nmatch.app_id = \"^(mpv)$\"\ndefault_workspace = 3\ndefault_floating = true\ndefault_floating_size = { width = 0.6, height = 0.6 }\nopacity = 0.9\n"
+        );
+        // Lo lee cualquier TOML (y `umbriel config validate`, en `umbriel_cfg`).
+        let v: ::toml::Table = ::toml::from_str(&t).unwrap();
+        assert_eq!(v["window_rule"].as_array().unwrap().len(), 1);
+        assert_eq!(toml(&[], &app), "");
+        // Sin «Sin animación» en Umbriel; en Hyprland sí.
+        let tiene = |f: &[Fila]| format!("{f:?}").contains(tr!("Sin animación"));
+        assert!(!tiene(&filas_con(&reglas[..1], &[], false)));
+        assert!(tiene(&filas(&reglas[..1], &[])));
     }
 
     #[test]

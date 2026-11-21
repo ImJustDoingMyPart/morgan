@@ -764,10 +764,10 @@ impl Menu {
         self.mandar(Orden::AjustesGrabando(true));
         self.pintar_pagina(false, None);
         let yo = self.clone();
+        let atajos = i.config.borrow().atajos.clone();
         glib::MainContext::default().spawn_local(async move {
-            let ocupadas = comando::salida(&["hyprctl", "-j", "binds"])
+            let ocupadas = crate::launcher::fuentes::ocupadas_vigentes(&atajos)
                 .await
-                .and_then(|j| crate::launcher::fuentes::ocupadas(&j))
                 .unwrap_or_else(|e| {
                     eprintln!("morgan: menú: {e}");
                     Vec::new()
@@ -962,7 +962,14 @@ impl Menu {
             Que::Hora(c) => hora::aplicar(c).await,
             Que::MantenerMonitores => self.mantener_monitores().await,
             Que::VolverMonitores => self.volver_monitores().await,
-            Que::Apariencia(c) => crate::apariencia::aplicar(c).await,
+            Que::Apariencia(c) => {
+                let cursor = matches!(c, crate::apariencia::Cambio::Cursor(..));
+                crate::apariencia::aplicar(c).await?;
+                if cursor && morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Umbriel {
+                    return self.escribir_compositor(None).await;
+                }
+                Ok(())
+            }
             Que::Predeterminada(id, mimes) => {
                 let app = gio_unix::DesktopAppInfo::new(&id).ok_or(format!("no existe {id}"))?;
                 mimes.iter().try_for_each(|m| {

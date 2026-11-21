@@ -21,6 +21,8 @@
 # centro/bt.rs
 "Emparejando…" = "Pairing…"
 "No se pudo emparejar" = "Couldn't pair"
+"Bloqueado por el interruptor del equipo" = "Blocked by the hardware switch"
+"No se pudo encender" = "Couldn't turn on"
 "¿Es el mismo código que muestra el dispositivo?" = "Is it the same code the device shows?"
 "Se escribe en el dispositivo, seguido de Enter" = "Type it on the device, then Enter"
 "Código" = "Code"

@@ -43,7 +43,7 @@ pub fn secciones() -> &'static [&'static str] {
     &T
 }
 
-fn grupo_de(cabecera: &str) -> usize {
+pub fn grupo_de(cabecera: &str) -> usize {
     let c = cabecera.to_lowercase();
     GRUPOS
         .iter()
@@ -454,7 +454,7 @@ bind(mod .. " + Z", x, { desc = "Zeta" })
         Atajo {
             descripcion: d.into(),
             teclas: t.into(),
-            referencia: None,
+            disparo: None,
         }
     }
 

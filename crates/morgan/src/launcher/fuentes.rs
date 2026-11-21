@@ -64,8 +64,51 @@ pub fn recortes(texto: &str) -> Vec<Recorte> {
 pub struct Atajo {
     pub descripcion: String,
     pub teclas: String,
-    /// Todo bind escrito con `hl.bind` la tiene. Vale hasta que Hyprland relee la config.
-    pub referencia: Option<u32>,
+    pub disparo: Option<Disparo>,
+}
+
+/// Cómo se corre un atajo elegido en el launcher.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Disparo {
+    /// La referencia de un bind de `hl.bind` en el registro de Lua. Vale hasta que Hyprland
+    /// relee la config.
+    Lua(u32),
+    /// La acción de `[keybinds]`, para `umbriel msg`.
+    Umbriel(String),
+}
+
+/// Los atajos con descripción del compositor de la sesión, por descripción.
+pub async fn vigentes() -> Result<Vec<Atajo>, String> {
+    if morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Umbriel {
+        let config = crate::config::path()
+            .ok()
+            .and_then(|p| crate::config::load(&p).ok())
+            .unwrap_or_default();
+        let mut v: Vec<Atajo> = super::umbriel_atajos::leer(&config.atajos)
+            .await?
+            .into_iter()
+            .map(|(a, _)| a)
+            .collect();
+        v.sort_by(|a, b| a.descripcion.cmp(&b.descripcion));
+        return Ok(v);
+    }
+    atajos(&crate::comando::salida(&["hyprctl", "-j", "binds"]).await?)
+}
+
+/// Las teclas que ya usa el compositor de la sesión, fuera de los submaps.
+pub async fn ocupadas_vigentes(a: &crate::config::Atajos) -> Result<Vec<Atajo>, String> {
+    if morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Umbriel {
+        return Ok(super::umbriel_atajos::leer(a).await?.into_iter().map(|(a, _)| a).collect());
+    }
+    ocupadas(&crate::comando::salida(&["hyprctl", "-j", "binds"]).await?)
+}
+
+/// El comando que corre el atajo.
+pub fn comando_disparo(d: &Disparo) -> Vec<String> {
+    match d {
+        Disparo::Lua(r) => vec!["hyprctl".into(), "eval".into(), ejecutar_bind(*r)], // no-tr
+        Disparo::Umbriel(accion) => super::umbriel_atajos::mensaje(accion),
+    }
 }
 
 #[derive(Deserialize)]
@@ -98,7 +141,9 @@ pub fn binds(json: &str) -> Result<Vec<Atajo>, String> {
             Atajo {
                 descripcion: b.description,
                 teclas: teclas.join(" + "),
-                referencia: (b.dispatcher == "__lua").then(|| b.arg.parse().ok()).flatten(),
+                disparo: (b.dispatcher == "__lua")
+                    .then(|| b.arg.parse().ok().map(Disparo::Lua))
+                    .flatten(),
             }
         })
         .collect())
@@ -115,7 +160,7 @@ pub fn ocupadas(json: &str) -> Result<Vec<Atajo>, String> {
             Atajo {
                 descripcion: b.description,
                 teclas: teclas.join(" + "),
-                referencia: None,
+                disparo: None,
             }
         })
         .collect())
@@ -189,12 +234,12 @@ mod tests {
                 Atajo {
                     descripcion: "Calculadora".into(),
                     teclas: "ALT + SUPER + C".into(),
-                    referencia: None,
+                    disparo: None,
                 },
                 Atajo {
                     descripcion: "Launcher".into(),
                     teclas: "SUPER + space".into(),
-                    referencia: Some(5),
+                    disparo: Some(Disparo::Lua(5)),
                 },
             ]
         );

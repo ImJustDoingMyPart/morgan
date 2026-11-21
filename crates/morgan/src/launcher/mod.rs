@@ -8,6 +8,7 @@
 pub(crate) mod busqueda;
 pub mod binds;
 pub mod fuentes;
+pub mod umbriel_atajos;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -549,11 +550,14 @@ impl Launcher {
         let carga = self.inner.carga.get();
         let yo = self.clone();
         glib::MainContext::default().spawn_local(async move {
-            let args: &[&str] = match modo {
-                Modo::Portapapeles => &["cliphist", "list"],
-                _ => &["hyprctl", "-j", "binds"],
+            enum Leido {
+                Recortes(String),
+                Atajos(Vec<fuentes::Atajo>),
+            }
+            let leido = match modo {
+                Modo::Portapapeles => comando::salida(&["cliphist", "list"]).await.map(Leido::Recortes),
+                _ => fuentes::vigentes().await.map(Leido::Atajos),
             };
-            let salida = comando::salida(args).await;
             if yo.inner.carga.get() != carga {
                 return;
             }
@@ -561,8 +565,8 @@ impl Launcher {
                 cargado: true,
                 ..Default::default()
             };
-            match (modo, salida) {
-                (Modo::Portapapeles, Ok(t)) => {
+            match leido {
+                Ok(Leido::Recortes(t)) => {
                     for r in fuentes::recortes(&t).into_iter().take(250) {
                         yo.agregar(
                             &mut c,
@@ -574,22 +578,19 @@ impl Launcher {
                         );
                     }
                 }
-                (_, Ok(t)) => match fuentes::atajos(&t) {
-                    Ok(v) => {
-                        for a in v {
-                            yo.agregar(
-                                &mut c,
-                                Entrada::new(&a.descripcion, &a.descripcion, &[&a.teclas]),
-                                Icono::Nombre("input-keyboard"),
-                                a.descripcion.clone(),
-                                Some(a.teclas.clone()),
-                                Accion::Atajo(a.descripcion, a.teclas),
-                            );
-                        }
+                Ok(Leido::Atajos(v)) => {
+                    for a in v {
+                        yo.agregar(
+                            &mut c,
+                            Entrada::new(&a.descripcion, &a.descripcion, &[&a.teclas]),
+                            Icono::Nombre("input-keyboard"),
+                            a.descripcion.clone(),
+                            Some(a.teclas.clone()),
+                            Accion::Atajo(a.descripcion, a.teclas),
+                        );
                     }
-                    Err(e) => eprintln!("morgan: launcher: {e}"),
-                },
-                (_, Err(e)) => eprintln!("morgan: launcher: {e}"),
+                }
+                Err(e) => eprintln!("morgan: launcher: {e}"),
             }
             yo.catalogo(modo).replace(c);
             yo.filtrar();
@@ -922,18 +923,20 @@ impl Launcher {
                 self.volver_al_menu(ParaElMenu::Calendario);
             }
             Accion::Calendario(_) | Accion::Carpeta(_) | Accion::Ninguna => {}
-            // Releídos al ejecutar: entre abrir y elegir, Hyprland pudo releer la config y
+            // Releídos al ejecutar: entre abrir y elegir, el compositor pudo releer la config y
             // la referencia de entonces ser de otra acción.
             Accion::Atajo(descripcion, teclas) => {
                 glib::timeout_add_local_once(DEVOLVER_FOCO, move || {
                     glib::MainContext::default().spawn_local(async move {
-                        let binds = comando::salida(&["hyprctl", "-j", "binds"]).await;
-                        let atajo = binds.and_then(|t| fuentes::binds(&t)).ok().and_then(|v| {
+                        let atajo = fuentes::vigentes().await.ok().and_then(|v| {
                             v.into_iter()
                                 .find(|a| a.descripcion == descripcion && a.teclas == teclas)
                         });
-                        match atajo.and_then(|a| a.referencia) {
-                            Some(r) => comando::lanzar(&["hyprctl", "eval", &fuentes::ejecutar_bind(r)]),
+                        match atajo.and_then(|a| a.disparo) {
+                            Some(d) => {
+                                let cmd = fuentes::comando_disparo(&d);
+                                comando::lanzar(&cmd.iter().map(String::as_str).collect::<Vec<_>>());
+                            }
                             None => eprintln!("morgan: launcher: {descripcion}: el bind ya no está"),
                         }
                     });

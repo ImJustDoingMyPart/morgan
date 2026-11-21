@@ -242,15 +242,25 @@ fn salidas(reglas: &Reglas) -> toml::Table {
 pub struct Menu {
     pub cambios: Cambios,
     pub monitores: Reglas,
+    /// El tema de cursor y su tamaño (Apariencia), si el tema está instalado. Umbriel lo toma
+    /// de `[input.cursor]` y lo cambia al releer: no hay `hyprctl setcursor`.
+    pub cursor: Option<(String, u32)>,
 }
 
 impl Menu {
     pub fn leer(ruta_config: &Path) -> Result<Menu, String> {
+        let (tema, tamano) = crate::apariencia::cursores::actual();
+        let instalado = crate::apariencia::cursores::listar().contains(&tema);
         Ok(Menu {
             cambios: Cambios::leer(&ruta_cambios(ruta_config))?,
             monitores: Reglas::leer(&crate::hypr_cfg::ruta_monitores(ruta_config))?,
+            cursor: instalado.then_some((tema, tamano)),
         })
     }
+}
+
+fn cursor(c: &(String, u32)) -> toml::Table {
+    tabla(&format!("[input.cursor]\ntheme = {}\nsize = {}\n", cadena(&c.0), c.1)) // no-tr
 }
 
 pub fn toml(c: &Config, con_grim: bool) -> String {
@@ -277,6 +287,9 @@ pub fn toml_con(c: &Config, con_grim: bool, tema: &Path, menu: &Menu) -> String 
     crate::umbriel_valores::juntar(&mut t, apariencia(c));
     crate::umbriel_valores::juntar(&mut t, menu.cambios.tabla_toml());
     crate::umbriel_valores::juntar(&mut t, salidas(&menu.monitores));
+    if let Some(c) = &menu.cursor {
+        crate::umbriel_valores::juntar(&mut t, cursor(c));
+    }
     // Umbriel trae su overview y morgan no arma el lienzo: la esquina de `[shell] hot_corner`
     // abre el de Umbriel. Apagada no se escribe, así queda la que ponga user.toml.
     if c.shell.esquina {
@@ -390,6 +403,7 @@ pub fn toml_con(c: &Config, con_grim: bool, tema: &Path, menu: &Menu) -> String 
             binds::SUBMAP_GRABAR
         ))  // no-tr
     ));
+    out.push_str(&crate::menu::reglas::toml(&c.reglas, &crate::aplicacion::buscar));
     out.push_str(CAPAS);
     out
 }
@@ -568,6 +582,56 @@ mod tests {
         assert_eq!(tv["enabled"].as_bool(), Some(false));
         assert_eq!(v["output"]["DP-3"]["transform"].as_str(), Some("90"));
         assert!(v["keybinds"].as_table().is_some());
+    }
+
+    #[test]
+    fn el_cursor_y_las_reglas() {
+        let mut menu = Menu::default();
+        let sin: toml::Table =
+            toml::from_str(&toml_con(&Config::default(), false, Path::new("/t"), &menu)).unwrap();
+        assert!(sin.get("input").is_none());
+        menu.cursor = Some(("Bibata-Modern-Ice".into(), 32));
+        let mut c = Config::default();
+        // Una app que no está no deja regla.
+        c.reglas.push(crate::config::ReglaApp { app: "ya-no.desktop".into(), flotante: true, ..Default::default() });
+        let v: toml::Table = toml::from_str(&toml_con(&c, false, Path::new("/t"), &menu)).unwrap();
+        assert_eq!(v["input"]["cursor"]["theme"].as_str(), Some("Bibata-Modern-Ice"));
+        assert_eq!(v["input"]["cursor"]["size"].as_integer(), Some(32));
+        assert!(v.get("window_rule").is_none());
+        assert!(v["layer_rule"].as_array().is_some());
+    }
+
+    /// Lo que se escribe lo acepta el Umbriel instalado (si está).
+    #[test]
+    fn umbriel_lo_valida() {
+        if glib::find_program_in_path("umbriel").is_none() {
+            return;
+        }
+        let menu = Menu { cursor: Some(("Adwaita".into(), 24)), ..Default::default() };
+        let mut t = toml_con(&Config::default(), false, Path::new("/no-esta.toml"), &menu);
+        t.push_str(&crate::menu::reglas::toml(
+            &[crate::config::ReglaApp {
+                app: "x.desktop".into(),
+                workspace: 3,
+                flotante: true,
+                tamano: 60,
+                opacidad: 0.9,
+                sin_animacion: true,
+            }],
+            &|_| Some(crate::aplicacion::App { nombre: "x".into(), clases: vec!["x".into()], lanzar: String::new() }),
+        ));
+        let dir = std::env::temp_dir().join(format!("morgan-umbriel-valida-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let ruta = dir.join("config.toml");
+        std::fs::write(&ruta, &t).unwrap();
+        std::fs::write(dir.join(SHADER), shader(&Config::default())).unwrap();
+        let s = std::process::Command::new("umbriel")
+            .args(["config", "validate", "-c"])
+            .arg(&ruta)
+            .output()
+            .unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(s.status.success(), "{}\n{}", String::from_utf8_lossy(&s.stdout), String::from_utf8_lossy(&s.stderr));
     }
 
     #[test]

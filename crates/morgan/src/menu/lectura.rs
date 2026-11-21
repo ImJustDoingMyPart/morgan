@@ -107,7 +107,7 @@ fn escala() -> u32 {
 
 pub async fn compositor(cambios: &Path, reglas: &[crate::config::ReglaApp]) -> Vec<Seccion> {
     match morgan_ipc::compositor::actual() {
-        morgan_ipc::compositor::Tipo::Umbriel => return compositor_umbriel(cambios).await,
+        morgan_ipc::compositor::Tipo::Umbriel => return compositor_umbriel(cambios, reglas).await,
         morgan_ipc::compositor::Tipo::Otro => {
             return super::arbol::pagina_solo_hyprland(super::arbol::Categoria::Compositor, "");
         }
@@ -126,8 +126,8 @@ pub async fn compositor(cambios: &Path, reglas: &[crate::config::ReglaApp]) -> V
 }
 
 /// Lo puesto sale de los archivos de Umbriel (no tiene `getoption`) y los defaults de su
-/// schema. Las reglas por app son de Hyprland: su sección queda a la vista, sin control.
-async fn compositor_umbriel(cambios: &Path) -> Vec<Seccion> {
+/// schema.
+async fn compositor_umbriel(cambios: &Path, reglas: &[crate::config::ReglaApp]) -> Vec<Seccion> {
     let config = crate::umbriel_valores::cargar(&crate::umbriel_valores::ruta_config());
     let defaults =
         crate::umbriel_valores::defaults(&leer(&["umbriel", "config", "schema", "--json"]).await); // no-tr
@@ -140,13 +140,23 @@ async fn compositor_umbriel(cambios: &Path) -> Vec<Seccion> {
     let evdev = std::fs::read_to_string("/usr/share/X11/xkb/rules/evdev.lst").unwrap_or_default();
     let mut p =
         compositor::pagina_umbriel(&actuales, &cambios, &compositor::distribuciones(&evdev));
-    let mut reglas = super::reglas::seccion(&[], &[]);
-    reglas.filas = vec![super::arbol::solo_hyprland("Umbriel")]; // no-tr
-    p.push(reglas);
+    p.push(super::reglas::seccion_umbriel(reglas, &crate::aplicacion::todas()));
     p
 }
 
 pub async fn atajos(c: &crate::config::Atajos) -> Vec<Seccion> {
+    if morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Umbriel {
+        let v = crate::launcher::umbriel_atajos::leer(c).await.unwrap_or_else(|e| {
+            eprintln!("morgan: menú: {e}");
+            Vec::new()
+        });
+        let grupos: Vec<_> = v
+            .iter()
+            .map(|(a, cabecera)| (a.descripcion.clone(), false, atajos::grupo_de(cabecera)))
+            .collect();
+        let binds: Vec<_> = v.into_iter().map(|(a, _)| a).collect();
+        return atajos::pagina(&binds, &grupos, c, &crate::aplicacion::todas());
+    }
     let json = leer(&["hyprctl", "-j", "binds"]).await;
     let binds = crate::launcher::fuentes::binds(&json).unwrap_or_else(|e| {
         eprintln!("morgan: menú: {e}");
@@ -329,8 +339,14 @@ pub async fn sistema() -> Vec<Seccion> {
     .join(" ")
     .trim()
     .to_owned();
+    let umbriel = morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Umbriel;
+    let pedir_version: &[&str] = if umbriel {
+        &["umbriel", "--version"]
+    } else {
+        &["hyprctl", "version", "-j"]
+    };
     let mut s = comando::salidas(&[
-        &["hyprctl", "version", "-j"],
+        pedir_version,
         &["lspci", "-mm"],
         &["cliphist", "list"],
         &[
@@ -355,10 +371,7 @@ pub async fn sistema() -> Vec<Seccion> {
     );
     // Sin permiso, snapper sale con error ("Sin permisos.").
     let snapshots = sistema::snapshots(sig().as_deref());
-    let hyprland = serde_json::from_str::<serde_json::Value>(&version)
-        .ok()
-        .and_then(|v| v.get("tag")?.as_str().map(str::to_owned))
-        .unwrap_or_default();
+    let (compositor, version) = sistema::compositor(umbriel, &version);
     // En una PC armada, el equipo es la placa: se dice una vez.
     let placa = if placa == equipo {
         String::new()
@@ -377,7 +390,7 @@ pub async fn sistema() -> Vec<Seccion> {
             sistema::distribucion(&archivo("/etc/os-release")),
         ),
         ("Kernel", una("/proc/sys/kernel/osrelease")),
-        ("Hyprland", hyprland),
+        (compositor, version),
         ("morgan", env!("CARGO_PKG_VERSION").to_owned()),
         (
             "Encendida hace",

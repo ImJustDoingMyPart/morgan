@@ -1,7 +1,8 @@
 //! El cursor no tiene una sola fuente de verdad, así que se escribe en cuatro lugares: el env
 //! de uwsm si se usa (lo heredan Hyprland y todo lo que se lance, completo en el próximo login),
-//! `hyprctl setcursor` (el compositor, en caliente), gsettings (las apps GTK, en caliente) y los
-//! `settings.ini` de GTK (una app en Flatpak puede ver `~/.config` sin ver dconf).
+//! el compositor en caliente (`hyprctl setcursor`; en Umbriel, `[input.cursor]` de
+//! `morgan.toml`), gsettings (las apps GTK, en caliente) y los `settings.ini` de GTK (una app
+//! en Flatpak puede ver `~/.config` sin ver dconf).
 
 use std::path::PathBuf;
 
@@ -73,7 +74,10 @@ pub async fn aplicar(tema: &str, tamano: u32) -> Result<(), String> {
             &[("XCURSOR_THEME", tema), ("XCURSOR_SIZE", &n), ("HYPRCURSOR_SIZE", &n)],
         )
     });
-    if let Err(e) = crate::comando::salida(&["hyprctl", "setcursor", tema, &n]).await {
+    // En Umbriel va en `morgan.toml` (`umbriel_cfg`): lo reescribe el menú después de esto.
+    if morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Hyprland
+        && let Err(e) = crate::comando::salida(&["hyprctl", "setcursor", tema, &n]).await
+    {
         eprintln!("morgan: apariencia: {e}");
     }
     let s = interfaz();

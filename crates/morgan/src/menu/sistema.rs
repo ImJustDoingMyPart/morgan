@@ -185,6 +185,20 @@ pub fn equipo(datos: &[(&'static str, String)]) -> Vec<Fila> {
         .collect()
 }
 
+/// El compositor y su versión: el `tag` de `hyprctl version -j`, o lo que sigue al nombre en
+/// `umbriel --version` (`umbriel 0.1.0 (adc3fd3a08a4)`).
+pub fn compositor(umbriel: bool, salida: &str) -> (&'static str, String) {
+    if umbriel {
+        let v = salida.lines().next().unwrap_or_default().trim();
+        return ("Umbriel", v.strip_prefix("umbriel ").unwrap_or(v).to_owned()); // no-tr
+    }
+    let tag = serde_json::from_str::<serde_json::Value>(salida)
+        .ok()
+        .and_then(|v| v.get("tag")?.as_str().map(str::to_owned))
+        .unwrap_or_default();
+    ("Hyprland", tag) // no-tr
+}
+
 pub const COLUMNAS_SNAPPER: &str = "number,date,description,pre-number";
 const SNAPSHOTS: usize = 15;
 
@@ -411,6 +425,20 @@ mod tests {
             equipo(&[("Kernel", "7.2".into()), ("Vacío", String::new())]).len(),
             1
         );
+    }
+
+    #[test]
+    fn la_version_del_compositor() {
+        assert_eq!(
+            compositor(true, "umbriel 0.1.0 (adc3fd3a08a4)\n"),
+            ("Umbriel", "0.1.0 (adc3fd3a08a4)".to_owned())
+        );
+        assert_eq!(
+            compositor(false, r#"{"branch": "", "tag": "v0.56.2"}"#),
+            ("Hyprland", "v0.56.2".to_owned())
+        );
+        // Sin respuesta, la fila no se muestra (`equipo` saca las vacías).
+        assert_eq!(compositor(false, ""), ("Hyprland", String::new()));
     }
 
     #[test]
