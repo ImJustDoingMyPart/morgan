@@ -6,7 +6,7 @@ use std::io::{IsTerminal, Write};
 use std::path::Path;
 use std::process::{Command, ExitCode};
 
-use crate::{setup_paquetes, setup_parar};
+use crate::{setup_atajos, setup_paquetes, setup_parar};
 
 use morgan_idioma::{tr, trf};
 
@@ -69,17 +69,25 @@ pub fn correr() -> ExitCode {
         }
         return ExitCode::FAILURE;
     }
+    let interactivo = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    let atajos = paso_atajos_pregunta(&hypr_dir, hypr.is_file(), umbriel, interactivo, seco);
     if umbriel && !seco {
         let c = crate::config::path()
             .ok()
             .and_then(|p| crate::config::load(&p).ok())
             .unwrap_or_default();
-        if let Err(e) = crate::setup_umbriel::correr(&c) {
+        if let Err(e) = crate::setup_umbriel::correr(&c, &setup_atajos::teclas_umbriel(&atajos.iter().collect::<Vec<_>>())) {
             eprintln!("{e}");
             return ExitCode::FAILURE;
         }
     }
-    let interactivo = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    if !atajos.is_empty() {
+        let refs: Vec<&setup_atajos::Destino> = atajos.iter().collect();
+        if let Err(e) = setup_atajos::instalar(&refs, &hypr_dir, seco) {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    }
     paso_competidores(&hypr_dir, interactivo, seco);
     paso_recomendados(interactivo, seco);
     if seco {
@@ -123,6 +131,32 @@ fn presentar_a_morgan(interactivo: bool) {
     let _ = std::fs::write(&marca, "");
     println!();
     crate::acerca::correr();
+}
+
+/// Los atajos de ventanas de morgan, uno por compositor, para elegir. Solo se ofrecen los
+/// archivos que todavía no existen.
+fn paso_atajos_pregunta(hypr_dir: &Path, hay_hypr: bool, umbriel: bool, interactivo: bool, seco: bool) -> Vec<setup_atajos::Destino> {
+    let mut pendientes = setup_atajos::pendientes(hypr_dir, hay_hypr, umbriel);
+    if pendientes.is_empty() {
+        return pendientes;
+    }
+    println!();
+    println!("{}", tr!("Atajos de ventanas de morgan (foco y movimiento de columnas, workspaces, monitores, layout scrolling, apps que ciclan):"));
+    if !interactivo && !seco {
+        for d in &pendientes {
+            println!("  - {}", d.resumen());
+        }
+        println!("{}", tr!("Para elegirlos, corré morgan setup en una terminal."));
+        return Vec::new();
+    }
+    let lineas: Vec<String> = pendientes.iter().map(setup_atajos::Destino::resumen).collect();
+    let elegidos = elegir(&lineas, tr!("¿Los escribo? (son archivos aparte que se editan; lo que ya tenés en tu config no se pisa)"), seco);
+    let mut i = 0;
+    pendientes.retain(|_| {
+        i += 1;
+        elegidos.contains(&(i - 1))
+    });
+    pendientes
 }
 
 /// Lo que hace lo mismo que morgan: se lista y, con permiso, se para y se saca de donde arranca.
@@ -182,6 +216,7 @@ fn paso_recomendados(interactivo: bool, seco: bool) {
 fn correr_deshacer(hypr_dir: &Path, hypr: &Path, seco: bool) -> ExitCode {
     println!("{}", tr!("Devolviendo lo que paró morgan setup (vuelve la próxima vez que entres):"));
     setup_parar::deshacer(hypr_dir, seco);
+    setup_atajos::deshacer(hypr_dir, seco);
     let verbo = if seco { tr!("haría") } else { tr!("hecho") };
     println!("  {verbo}: systemctl --user disable morgan.service"); // no-tr
     if !seco {

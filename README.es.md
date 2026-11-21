@@ -123,6 +123,7 @@ más allá del borde de la pantalla, y si no entra se desplaza por dentro.
 - glib 2.84 o más nuevo.
 - Una GPU con un driver de Vulkan que funcione (`vulkan-radeon` o `vulkan-intel` de Mesa, o el
   de NVIDIA): morgan dibuja todo en la GPU.
+- La **JetBrainsMono Nerd Font** (`ttf-jetbrains-mono-nerd` en Arch): los íconos de la interfaz son glifos de ella y sin la fuente salen como cuadros vacíos. Los paquetes dependen de ella; con `install.sh`, `morgan setup` la ofrece.
 
 ## Sobre qué está hecho
 
@@ -138,7 +139,7 @@ la lista es además un buen punto de partida.
 |---|---|
 | PipeWire con `pipewire-pulse` y WirePlumber | Volumen, audio por app, micrófono, el indicador de privacidad |
 | NetworkManager | La tarjeta de red (iwd o systemd-networkd solos no aparecen) |
-| BlueZ | La tarjeta de Bluetooth |
+| BlueZ | La tarjeta de Bluetooth (sin `bluez` y su `bluetooth.service` activo el interruptor no hace nada; `morgan setup` los instala y los activa) |
 | power-profiles-daemon | La tarjeta de energía |
 | systemd-logind | Bloquear, suspender, apagar |
 
@@ -229,9 +230,31 @@ Después, **una vez por usuario y desde Hyprland**:
 morgan setup
 ```
 
-Agrega una línea al final de `~/.config/hypr/hyprland.lua`, habilita el servicio del usuario, ofrece parar lo que compite con morgan e instalar lo recomendado, y lo arranca. Antes de tocar nada muestra la lista y pregunta, y `morgan setup --seco` muestra lo que haría sin hacer nada.
+Agrega una línea al final de `~/.config/hypr/hyprland.lua`, habilita el servicio del usuario, ofrece parar lo que compite con morgan, instalar lo recomendado y escribir los [atajos de ventanas de morgan](#atajos-de-ventanas), y lo arranca. Antes de tocar nada muestra la lista y pregunta, y `morgan setup --seco` muestra lo que haría sin hacer nada.
 
 Lo recomendado son los programas de [Sobre qué está hecho](#sobre-qué-está-hecho) que falten, más bluez y power-profiles-daemon cuando corresponde. Se instalan con pacman, salvo `papirus-folders`, que está en el AUR y va con yay o paru. Cambiar quién maneja la red, el audio o la energía no lo hace solo. Si encuentra iwd, PulseAudio o TLP, por ejemplo, escribe los pasos para pasar a NetworkManager, PipeWire o power-profiles-daemon.
+
+### Atajos de ventanas
+
+`morgan setup` también ofrece los atajos de ventanas con los que se armó morgan, para Hyprland (`~/.config/hypr/morgan-atajos.lua`) y para Umbriel (`~/.config/umbriel/morgan-atajos.toml`). Los dos salen de una misma tabla, así que los compositores reciben las mismas teclas. Son archivos aparte que se pueden editar, se escriben una vez y no se reescriben, y `morgan setup --seco` los muestra antes de que existan. Las teclas que ya usás siguen siendo tuyas: Hyprland deja afuera las que tu config ya tiene y Umbriel carga tu `user.toml` después. En Hyprland dejan el layout en scrolling, que es el que suponen.
+
+| Teclas | |
+|---|---|
+| `Super` + flechas o `H` `J` `K` `L` | Foco a la izquierda, abajo, arriba, derecha |
+| `Super+Shift` + `Left` `Right` | Mover la columna |
+| `Super+Shift` + `Up` `Down` | Mover la ventana al workspace de arriba o de abajo |
+| `Super+Ctrl` + flechas, sumando `Shift` | Foco en otro monitor, mover la ventana a él |
+| `Super+1` a `9`, `Super+0` | Workspaces (el `0` es el 10, el de los juegos); con `Ctrl` o `Shift`, mover la ventana ahí |
+| `Super+U` `Super+I`, `Super` + rueda | Workspace siguiente y anterior |
+| `Super+Q` | Cerrar la ventana |
+| `Super+F` `Super+Shift+F` `Super+T` `Super+W` `Super+C` | Maximizar la columna, pantalla completa, flotante, pestañas, centrar |
+| `Super+minus` `Super+plus` | Columna más angosta y más ancha |
+| `Super+Return` `B` `E` `Z` `S` `O` | Kitty, Brave, Yazi, Vesktop, Steam, Obsidian: enfoca la siguiente ventana de la app, o la abre si no tiene |
+| `Super+Shift+Return` `Super+Shift+B` | Una ventana nueva de Kitty o de Brave |
+| `Super+Shift+M` | Silenciar el micrófono |
+| `Super+G` `R` `Alt+R` `Alt+Shift+G` | Grabar, guardar el replay, búfer de replay, overlay (con `gpu-screen-recorder-ui`) |
+
+En Umbriel las teclas que ciclan llaman a `umbriel-ciclar`, que necesita `jq`. Las apps se cambian editando el archivo.
 
 ## Uso
 

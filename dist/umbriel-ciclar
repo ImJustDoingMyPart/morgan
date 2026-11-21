@@ -1,0 +1,15 @@
+#!/bin/sh
+# umbriel-ciclar CLASE COMANDO...: enfoca la siguiente ventana de CLASE (por id, con vuelta) o,
+# si no hay ninguna, corre COMANDO. Es el run_or_cycle de morgan-atajos.lua (Hyprland) para
+# Umbriel, que no lo trae. Necesita jq.
+clase=$1
+shift
+activa=$(umbriel focused-window --json 2>/dev/null | jq -r '.id // ""')
+siguiente=$(umbriel windows --json | jq -r --arg c "$clase" --arg a "$activa" '
+    [.[] | select(.app_id == $c) | .id] | sort as $v
+    | if ($v | length) == 0 then ""
+      else (($v | index($a)) // -1) as $i | $v[($i + 1) % ($v | length)] end')
+if [ -z "$siguiente" ]; then
+    exec sh -c "$*"
+fi
+exec umbriel msg window-focus "$siguiente"

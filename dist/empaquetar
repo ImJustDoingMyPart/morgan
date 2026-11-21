@@ -11,7 +11,7 @@ binarios=${2:-target/release}
 [ -f dist/morgan.service ] || { echo 'dist/empaquetar: correrlo desde la raíz del repo' >&2; exit 1; }
 
 install -Dm755 "$binarios/morgan" "$binarios/morganctl" "$binarios/morgan-lock" "$binarios/morgan-greet" -t "$destino/usr/bin/"
-install -Dm755 dist/morgan-captura dist/morgan-cuota -t "$destino/usr/bin/"
+install -Dm755 dist/morgan-captura dist/morgan-cuota dist/umbriel-ciclar -t "$destino/usr/bin/"
 
 install -dm755 "$destino/usr/lib/systemd/user"
 for u in morgan.service morgan-lock.service; do

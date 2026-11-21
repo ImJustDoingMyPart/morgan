@@ -21,11 +21,12 @@ const PLANTILLA: &str = "/usr/share/umbriel/config.toml"; // no-tr
 pub const CARGADOR: &str = concat!(
     "# Cargador: solo lista los archivos, en orden. Umbriel aplica los incluidos en el orden de la\n", // no-tr
     "# lista y el último que pone una clave gana (docs/user/configuration.md, «Include»):\n", // no-tr
-    "#   user.toml   la config escrita a mano.\n", // no-tr
+    "#   morgan-atajos.toml  los atajos de ventanas de morgan, si se eligieron en morgan setup.\n", // no-tr
+    "#   user.toml   la config escrita a mano; pisa a los atajos.\n", // no-tr
     "#   morgan.toml la escribe morgan: sus atajos, sus capas, el tema y lo cambiado desde su menú.\n", // no-tr
     "# Así morgan pisa solo lo que se cambió desde el menú, como morgan.lua en Hyprland.\n\n", // no-tr
     "[include.optional]\n", // no-tr
-    "files = [\"user.toml\", \"morgan.toml\"]\n", // no-tr
+    "files = [\"morgan-atajos.toml\", \"user.toml\", \"morgan.toml\"]\n", // no-tr
 );
 
 /// `Mod+Space` y `Super+space` son la misma.
@@ -76,6 +77,16 @@ pub fn desde_plantilla(plantilla: &str, de_morgan: &[String]) -> String {
     out
 }
 
+/// Un cargador sin los atajos de morgan, con el archivo agregado antes que `user.toml`; `None`
+/// si ya lo tiene o no hay dónde ponerlo.
+pub fn con_atajos(texto: &str) -> Option<String> {
+    let atajos = format!("\"{}\"", crate::setup_atajos::TOML);
+    if texto.contains(&atajos) || !texto.contains(&format!("\"{USUARIO}\"")) {
+        return None;
+    }
+    Some(texto.replacen(&format!("\"{USUARIO}\""), &format!("{atajos}, \"{USUARIO}\""), 1)) // no-tr
+}
+
 /// Ya es el cargador: solo incluye, y `morgan.toml` va último.
 pub fn es_cargador(texto: &str) -> bool {
     let Ok(t) = toml::from_str::<toml::Table>(texto) else {
@@ -120,7 +131,8 @@ fn teclas_de_morgan(c: &crate::config::Config) -> Vec<String> {
         .unwrap_or_default()
 }
 
-pub fn correr(c: &crate::config::Config) -> Result<(), String> {
+/// `extra` son teclas de más que la plantilla deja comentadas (las de los atajos de morgan).
+pub fn correr(c: &crate::config::Config, extra: &[String]) -> Result<(), String> {
     let dir = glib::user_config_dir().join("umbriel");
     let ruta = dir.join("config.toml");
     let usuario = dir.join(USUARIO);
@@ -133,7 +145,7 @@ pub fn correr(c: &crate::config::Config) -> Result<(), String> {
         Some(t) => sin_morgan(t),
         None => desde_plantilla(
             &std::fs::read_to_string(PLANTILLA).unwrap_or_default(),
-            &teclas_de_morgan(c),
+            &[teclas_de_morgan(c), extra.to_vec()].concat(),
         ),
     };
     if toml::from_str::<toml::Table>(&texto).is_ok_and(|t| t.contains_key("drm")) {
@@ -213,9 +225,15 @@ mod tests {
         assert!(es_cargador(CARGADOR));
         let v: toml::Table = toml::from_str(CARGADOR).unwrap();
         assert_eq!(
-            v["include"]["optional"]["files"].as_array().unwrap().len(),
-            2
+            v["include"]["optional"]["files"].as_array().unwrap(),
+            &["morgan-atajos.toml", "user.toml", "morgan.toml"].map(toml::Value::from)
         );
+        // Un cargador anterior a los atajos los recibe antes que user.toml, y una sola vez.
+        let viejo = "[include.optional]\nfiles = [\"user.toml\", \"morgan.toml\"]\n";
+        let nuevo = con_atajos(viejo).unwrap();
+        assert!(nuevo.contains("[\"morgan-atajos.toml\", \"user.toml\", \"morgan.toml\"]"));
+        assert!(es_cargador(&nuevo));
+        assert_eq!(con_atajos(&nuevo), None);
         // Una config con valores propios no es el cargador, aunque incluya a morgan.
         let propia = "[include.optional]\nfiles = [\"morgan.toml\", \"otro.toml\"]\n[general]\nxwayland = false\n";
         assert!(!es_cargador(propia));

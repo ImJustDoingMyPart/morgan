@@ -19,6 +19,7 @@ const fn r(paquete: &'static str, para: &'static str) -> Recomendado {
 
 /// Los `optdepends` de `dist/arch/*/PKGBUILD`, más los íconos y el tema de sonidos que esperan.
 pub const RECOMENDADOS: &[Recomendado] = &[
+    r("ttf-jetbrains-mono-nerd", tr_const!("la fuente de la interfaz y sus íconos")), // no-tr
     r("matugen", tr_const!("temas")), // no-tr
     r("awww", tr_const!("fondos de pantalla")), // no-tr
     r("libvips", tr_const!("miniaturas del selector de fondos")), // no-tr

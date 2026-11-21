@@ -2,6 +2,14 @@
 
 [English](CHANGELOG.md) · **Español**
 
+## Sin publicar
+
+### Atajos de ventanas, y menos primeros arranques rotos
+
+`morgan setup` ahora ofrece los atajos de ventanas con los que se armó morgan: foco y movimiento de columnas, workspaces, monitores, layout scrolling, apps que ciclan y grabación de pantalla. Los escribe para Hyprland (`morgan-atajos.lua`) y para Umbriel (`morgan-atajos.toml`) desde una sola tabla, como archivos aparte que se pueden editar. Las teclas que ya usás no se tocan. `morgan setup --deshacer` los aparta como `.bak`. En Umbriel, las teclas que ciclan usan el script nuevo `umbriel-ciclar`, que necesita `jq`.
+
+Los íconos son glifos de JetBrainsMono Nerd Font y sin ella salían como cuadros vacíos. `morgan-bin` y `morgan-git` ahora dependen de `ttf-jetbrains-mono-nerd`, `install.sh` avisa si falta y `morgan setup` la ofrece. El README también dice que el interruptor de Bluetooth necesita `bluez` y su servicio, que `morgan setup` instala y activa.
+
 ## 0.3.1 · 2026-11-20
 
 ### `morgan setup` prepara el equipo

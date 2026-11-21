@@ -2,6 +2,14 @@
 
 **English** · [Español](CHANGELOG.es.md)
 
+## Unreleased
+
+### Window shortcuts, and fewer broken first runs
+
+`morgan setup` now offers the window shortcuts morgan was built with: focus and column movement, workspaces, monitors, scrolling layout, apps that cycle and screen recording. It writes them for Hyprland (`morgan-atajos.lua`) and for Umbriel (`morgan-atajos.toml`) from one table, as separate files you can edit. Keys you already use are left alone. `morgan setup --undo` moves them aside as `.bak`. On Umbriel, the cycling keys use the new `umbriel-ciclar` script, which needs `jq`.
+
+The icons are glyphs from JetBrainsMono Nerd Font, and without it they showed as empty boxes. `morgan-bin` and `morgan-git` now depend on `ttf-jetbrains-mono-nerd`, `install.sh` warns when it's missing and `morgan setup` offers it. The README also says that the Bluetooth switch needs `bluez` and its service, which `morgan setup` installs and enables.
+
 ## 0.3.1 · 2026-11-20
 
 ### `morgan setup` gets your system ready

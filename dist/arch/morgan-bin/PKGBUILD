@@ -23,6 +23,8 @@ depends=(
     'glib2'
     'libxkbcommon'
     'fontconfig'
+    # Los íconos de la interfaz son glifos de esta fuente.
+    'ttf-jetbrains-mono-nerd'
     # El motor dibuja con wgpu, que carga Vulkan al arrancar.
     'vulkan-icd-loader'
     'pam'
@@ -46,7 +48,7 @@ optdepends=(
     'gpu-screen-recorder-ui: indicador y control de grabación'
     'papirus-folders: color de las carpetas del tema de íconos'
     'greetd: morgan-greet, la pantalla de inicio de sesión'
-    'jq: morgan-cuota (cuotas de Claude Code y Antigravity)'
+    'jq: morgan-cuota (cuotas de Claude Code y Antigravity) y umbriel-ciclar (atajos que ciclan apps en Umbriel)'
 )
 provides=("morgan=$pkgver" 'notification-daemon')
 conflicts=('morgan' 'morgan-git')

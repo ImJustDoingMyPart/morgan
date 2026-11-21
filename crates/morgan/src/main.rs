@@ -3,6 +3,7 @@
 extern crate morgan_idioma;
 
 mod acerca;
+mod atajos_base;
 mod ayuda;
 mod agenda;
 mod apariencia;
@@ -54,6 +55,7 @@ mod privacidad;
 mod red;
 mod reproductor;
 mod setup;
+mod setup_atajos;
 mod setup_paquetes;
 mod setup_parar;
 mod sistema;

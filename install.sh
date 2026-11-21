@@ -8,7 +8,8 @@
 #
 # Lo que hace:
 #   - compila morgan, morganctl, morgan-lock y morgan-greet (cargo, --release --locked);
-#   - instala los binarios y los scripts de dist/ (morgan-captura, morgan-cuota);
+#   - instala los binarios y los scripts de dist/ (morgan-captura, morgan-cuota,
+#     umbriel-ciclar);
 #   - instala el tema propio y sus plantillas en ~/.local/share/morgan (se elige en el menú
 #     de sistema, Apariencia; mientras no se elige ninguno, morgan usa esos colores);
 #   - instala las unidades de systemd --user y la activación por D-Bus de las
@@ -75,7 +76,7 @@ opcionales=(
     "uwsm|uwsm|lanzar apps como unidades de systemd (sin uwsm, en un scope propio)"
     "gsr-ui-cli|gpu-screen-recorder-ui|indicador y control de grabación"
     "papirus-folders|papirus-folders|color de las carpetas del tema de íconos"
-    "jq|jq|morgan-cuota (cuotas de Claude Code y Antigravity)"
+    "jq|jq|morgan-cuota (cuotas de Claude Code y Antigravity) y umbriel-ciclar (atajos que ciclan apps en Umbriel)"
 )
 
 revisar_dependencias() {
@@ -98,6 +99,9 @@ revisar_dependencias() {
         error "morgan necesita Hyprland 0.56 o más nuevo (hay $v)"
     fi
     [[ -f $hypr ]] || error "morgan necesita la config de Hyprland en Lua ($hypr)"
+
+    fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd Font" ||
+        aviso "falta la fuente JetBrainsMono Nerd Font: sin ella los íconos de morgan salen como cuadros vacíos (Arch: sudo pacman -S ttf-jetbrains-mono-nerd)"
 
     local o p paquete para falta=0
     for o in "${opcionales[@]}"; do
@@ -124,6 +128,7 @@ instalar() {
     done
     install -Dm755 "$raiz/dist/morgan-captura" "$bin/morgan-captura"
     install -Dm755 "$raiz/dist/morgan-cuota" "$bin/morgan-cuota"
+    install -Dm755 "$raiz/dist/umbriel-ciclar" "$bin/umbriel-ciclar"
     case ":$PATH:" in
     *":$bin:"*) ;;
     *) aviso "$bin no está en el PATH: los binds de Hyprland llaman a morganctl por nombre" ;;
@@ -169,7 +174,7 @@ desinstalar() {
 
     paso "Archivos"
     local f
-    for f in "$bin"/{morgan,morganctl,morgan-lock,morgan-greet,morgan-captura,morgan-cuota} \
+    for f in "$bin"/{morgan,morganctl,morgan-lock,morgan-greet,morgan-captura,morgan-cuota,umbriel-ciclar} \
         "$unidades"/{morgan.service,morgan-lock.service} "$dbus" "$config/hypr/morgan.lua"; do
         if [[ -e $f ]]; then rm -v "$f"; fi
     done

@@ -109,6 +109,10 @@ fn arranque() -> String {
     )
 }
 
+/// Los atajos de ventanas que ofrece `morgan setup`; sin el archivo no hacen nada. Van antes de
+/// los binds de morgan, que pisan lo que comparten.
+const ATAJOS: &str = "-- Atajos de ventanas (morgan setup).\npcall(require, \"morgan-atajos\")\n\n"; // no-tr
+
 /// Los colores del tema van primero: la sombra los usa.
 pub fn lua(
     c: &Config,
@@ -127,7 +131,7 @@ pub fn lua(
          -- Colores del tema activo (morganctl theme).\n\
          pcall(dofile, {:?})\n\n\
          {CAPAS}\n\
-         {}\n-- Sombra: {nombre}.\n{lua_sombra}\n{}{}{binds}{reglas}",
+         {}\n-- Sombra: {nombre}.\n{lua_sombra}\n{}{}{ATAJOS}{binds}{reglas}",
         arranque(),
         tema.to_string_lossy(),
         animaciones::lua(

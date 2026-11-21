@@ -118,6 +118,7 @@ holds, never past the edge of the screen, and scrolls inside when it has to.
 - glib 2.84 or newer.
 - A GPU with a working Vulkan driver (Mesa's `vulkan-radeon` or `vulkan-intel`, or NVIDIA's):
   morgan draws everything on the GPU.
+- The **JetBrainsMono Nerd Font** (`ttf-jetbrains-mono-nerd` on Arch): the interface's icons are glyphs from it, and without it they show as empty boxes. The packages depend on it; with `install.sh`, `morgan setup` offers it.
 
 ## What morgan is built around
 
@@ -133,7 +134,7 @@ list is also a good set of tools to start from.
 |---|---|
 | PipeWire with `pipewire-pulse` and WirePlumber | Volume, per-app audio, microphone, the privacy indicator |
 | NetworkManager | The network card (iwd or systemd-networkd on their own won't show up) |
-| BlueZ | The Bluetooth card |
+| BlueZ | The Bluetooth card (without `bluez` and its `bluetooth.service` running, the switch does nothing; `morgan setup` installs and enables them) |
 | power-profiles-daemon | The power card |
 | systemd-logind | Locking, suspend, power off |
 
@@ -223,9 +224,31 @@ Then, **once per user, from inside Hyprland**:
 morgan setup
 ```
 
-It adds one line to the end of `~/.config/hypr/hyprland.lua`, enables the user service, offers to stop whatever competes with morgan and to install what's recommended, and starts it. It shows the list and asks before touching anything, and `morgan setup --dry-run` shows what it would do without doing it.
+It adds one line to the end of `~/.config/hypr/hyprland.lua`, enables the user service, offers to stop whatever competes with morgan, to install what's recommended and to write [morgan's window shortcuts](#window-shortcuts), and starts it. It shows the list and asks before touching anything, and `morgan setup --dry-run` shows what it would do without doing it.
 
 What's recommended is whatever is missing from [What morgan is built around](#what-morgan-is-built-around), plus bluez and power-profiles-daemon when they apply. They're installed with pacman, except `papirus-folders`, which is in the AUR and goes through yay or paru. Switching what manages your network, audio or power is never done on its own. If it finds iwd, PulseAudio or TLP, for example, it writes out the steps to move to NetworkManager, PipeWire or power-profiles-daemon.
+
+### Window shortcuts
+
+`morgan setup` also offers the window shortcuts morgan was built with, for Hyprland (`~/.config/hypr/morgan-atajos.lua`) and for Umbriel (`~/.config/umbriel/morgan-atajos.toml`). Both come from one table, so the two compositors get the same keys. They're separate files you can edit, written once and never rewritten, and `morgan setup --dry-run` shows them before they exist. Keys you already use stay yours: Hyprland skips the ones your config already binds, and Umbriel loads your `user.toml` after them. In Hyprland they set the layout to scrolling, which they assume.
+
+| Keys | |
+|---|---|
+| `Super` + arrows or `H` `J` `K` `L` | Focus left, down, up, right |
+| `Super+Shift` + `Left` `Right` | Move the column |
+| `Super+Shift` + `Up` `Down` | Move the window to the workspace above or below |
+| `Super+Ctrl` + arrows, adding `Shift` | Focus another monitor, move the window to it |
+| `Super+1` to `9`, `Super+0` | Workspaces (`0` is the 10th, for games); with `Ctrl` or `Shift`, move the window there |
+| `Super+U` `Super+I`, `Super` + wheel | Next and previous workspace |
+| `Super+Q` | Close the window |
+| `Super+F` `Super+Shift+F` `Super+T` `Super+W` `Super+C` | Maximize the column, fullscreen, floating, tabs, center |
+| `Super+minus` `Super+plus` | Narrower and wider column |
+| `Super+Return` `B` `E` `Z` `S` `O` | Kitty, Brave, Yazi, Vesktop, Steam, Obsidian: focus the next window of the app, or open it if it has none |
+| `Super+Shift+Return` `Super+Shift+B` | A new Kitty or Brave window |
+| `Super+Shift+M` | Mute the microphone |
+| `Super+G` `R` `Alt+R` `Alt+Shift+G` | Record, save the replay, replay buffer, overlay (with `gpu-screen-recorder-ui`) |
+
+On Umbriel the cycling keys call `umbriel-ciclar`, which needs `jq`. Change the apps by editing the file.
 
 ## Using it
 
