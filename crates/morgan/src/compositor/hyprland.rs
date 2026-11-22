@@ -130,6 +130,13 @@ impl Hyprland {
         .await;
     }
 
+    pub async fn cerrar(&self, id: &str) {
+        self.eval(&format!(
+            "hl.dispatch(hl.dsp.window.close({{ window = \"address:{id}\" }}))"
+        ))
+        .await;
+    }
+
     pub async fn ir_a(&self, id: i64) {
         let lua = format!("eval hl.dispatch(hl.dsp.focus({{ workspace = {id} }}))");
         match pedir(&self.dir, &lua).await {
@@ -464,6 +471,8 @@ pub fn leer_clientes(clientes: &str, monitores: &str) -> Result<Vec<Cliente>, se
         historia: i32,
         #[serde(default, rename = "contentType")]
         contenido: String,
+        #[serde(default)]
+        pid: i64,
     }
     let monitores: Vec<Monitor> = serde_json::from_str(monitores)?;
     Ok(serde_json::from_str::<Vec<C>>(clientes)?
@@ -487,6 +496,7 @@ pub fn leer_clientes(clientes: &str, monitores: &str) -> Result<Vec<Cliente>, se
                 h: c.size[1],
             },
             historia: c.historia,
+            pid: u32::try_from(c.pid).ok().filter(|p| *p > 1),
         })
         .collect())
 }

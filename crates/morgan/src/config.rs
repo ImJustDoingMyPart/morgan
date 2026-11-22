@@ -692,6 +692,10 @@ pub struct Dock {
     /// Cuántas de las apps más usadas van siempre, abiertas o no.
     #[serde(rename = "most_used")]
     pub usadas: usize,
+    /// El ícono de lo que está en el dock por la bandeja: `Id` del ítem → nombre del tema de
+    /// íconos o ruta absoluta (el de la bandeja está pensado para 16 px).
+    #[serde(rename = "tray_icons")]
+    pub iconos_bandeja: BTreeMap<String, String>,
 }
 
 impl Default for Dock {
@@ -700,6 +704,7 @@ impl Default for Dock {
             mostrar: true,
             ocultar: false,
             usadas: 6,
+            iconos_bandeja: BTreeMap::new(),
         }
     }
 }

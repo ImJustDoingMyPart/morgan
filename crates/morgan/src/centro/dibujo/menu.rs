@@ -1,5 +1,6 @@
-//! El menú de una app de la bandeja, con las piezas del centro y sin anillo: un marco de línea
-//! neutra debajo del ícono (su borde derecho alineado con el del ícono), las filas en recuadros
+//! El menú de una app, con las piezas del centro y sin anillo: un marco de línea neutra debajo
+//! del ícono de la barra (su borde derecho alineado con el del ícono) o encima de la celda del
+//! dock (centrado en ella), con el nombre de la app arriba en negrita, las filas en recuadros
 //! de lista y cada submenú como un botón suelto, con el tinte de las tarjetas, cuya lista cae
 //! debajo en su propio recuadro. Un submenú parte su sección: lo de antes, el botón y lo de
 //! después. Abrir uno cierra los de su nivel. Lo marcado es lo que mandó la app al abrir; elegir
@@ -28,7 +29,7 @@ use smithay_client_toolkit::seat::keyboard::Keysym;
 use super::trazo::{self, Degrade, Trazo};
 use super::{Animos, DESPLIEGUE, Hoja, MARGEN, Objetivo, RADIO, Rotulos};
 use crate::bandeja::menu::Marca;
-use crate::centro::vista::{Menu, NodoMenu};
+use crate::centro::vista::{LugarMenu, Menu, NodoMenu};
 
 /// `max-width-chars` de la etiqueta, en celdas de la monoespaciada a 14 px.
 const ETIQUETA_MAX: f64 = 40.0 * 8.4;
@@ -75,6 +76,8 @@ pub struct MenuUi {
     hoja: Hoja,
     /// La caja del panel, de borde a borde.
     caja: Rect,
+    /// Lo que mide el prefijo más largo, más el espacio hasta la etiqueta.
+    columna: f64,
     pub tam: (u32, u32),
 }
 
@@ -99,8 +102,23 @@ impl MenuUi {
             puntero: None,
             hoja: Hoja::default(),
             caja: Rect::ZERO,
+            columna: 0.0,
             tam: (0, 0),
         }
+    }
+
+    /// Desde dónde aparece: la barra, arriba; el dock, abajo.
+    pub fn desde_abajo(&self) -> bool {
+        matches!(self.menu.lugar, LugarMenu::Dock { .. })
+    }
+
+    fn prefijo(
+        &mut self,
+        texto: &str,
+        resaltado: bool,
+    ) -> std::rc::Rc<morgan_motor::parley::Layout<u8>> {
+        let peso = if resaltado { 700.0 } else { 500.0 };
+        self.rotulos.linea(texto, PX, peso)
     }
 
     pub fn panel(&self) -> Rect {
@@ -123,6 +141,9 @@ impl MenuUi {
     fn natural(&mut self, n: &NodoMenu) -> f64 {
         let l = self.rotulos.linea(&sin_tecla(&n.etiqueta), PX, 400.0);
         let mut w = self.ancho(&l).min(ETIQUETA_MAX);
+        if n.prefijo.is_some() {
+            w += self.columna;
+        }
         if !n.hijos.is_empty() {
             let f = self.rotulos.linea(FLECHA, 16.0, 400.0);
             w += ENTRE + self.ancho(&f);
@@ -147,29 +168,73 @@ impl MenuUi {
     pub fn armar(&mut self, escala: f32, ahora: Instant) {
         self.rotulos.poner_escala(escala);
         let secciones = self.menu.secciones.clone();
-        let mut contenido: f64 = 0.0;
+        let prefijos: Vec<(String, bool)> = secciones
+            .iter()
+            .flatten()
+            .filter_map(|n| n.prefijo.clone())
+            .collect();
+        self.columna = 0.0;
+        for (t, r) in &prefijos {
+            let l = self.prefijo(t, *r);
+            self.columna = self.columna.max(self.ancho(&l));
+        }
+        if !prefijos.is_empty() {
+            self.columna = self.columna.ceil() + ENTRE;
+        }
+        let titulo = self
+            .menu
+            .titulo
+            .clone()
+            .map(|t| self.rotulos.linea(&t, PX, 700.0));
+        let mut contenido: f64 = titulo
+            .as_ref()
+            .map_or(0.0, |l| self.ancho(l))
+            .min(ETIQUETA_MAX);
         for n in secciones.iter().flatten() {
             contenido = contenido.max(self.natural(n));
         }
         let ancho = (contenido + 2.0 * (BORDE_Y_RELLENO + BOTON_X))
             .max(MIN)
             .ceil();
-        let w = f64::from(self.tam.0);
-        let x1 = (w - f64::from(self.menu.derecha))
-            .min(w - MARGEN)
-            .max(ancho + MARGEN);
         let mut h = Hoja::default();
         let interior = ancho - 2.0 * BORDE_Y_RELLENO;
         let mut y = 0.0;
+        if let Some(t) = self.menu.titulo.clone() {
+            let l = self
+                .rotulos
+                .recortada_con_peso(&t, PX, 700.0, interior - 2.0 * BOTON_X);
+            let alto = self.alto(&l).ceil();
+            h.trazos.push(Trazo::Texto {
+                l,
+                x: BOTON_X,
+                y: FILA_Y,
+                color: self.paleta.on_surface,
+            });
+            y = alto + 2.0 * FILA_Y;
+        }
         for (i, s) in secciones.iter().enumerate() {
-            if i > 0 {
+            if i > 0 || self.menu.titulo.is_some() {
                 y += ENTRE_BLOQUES;
             }
             y = self.armar_seccion(&mut h, s, interior, y, ahora);
         }
         h.alto = y;
-        let x0 = x1 - ancho;
-        self.caja = Rect::new(x0, MARGEN, x1, MARGEN + y + 2.0 * BORDE_Y_RELLENO);
+        let w = f64::from(self.tam.0);
+        let alto = y + 2.0 * BORDE_Y_RELLENO;
+        self.caja = match self.menu.lugar {
+            LugarMenu::Barra { derecha } => {
+                let x1 = (w - f64::from(derecha)).min(w - MARGEN).max(ancho + MARGEN);
+                Rect::new(x1 - ancho, MARGEN, x1, MARGEN + alto)
+            }
+            LugarMenu::Dock { centro, abajo } => {
+                let x0 = (f64::from(centro) - ancho / 2.0)
+                    .floor()
+                    .min(w - MARGEN - ancho)
+                    .max(MARGEN);
+                let y1 = f64::from(self.tam.1) - f64::from(abajo);
+                Rect::new(x0, y1 - alto, x0 + ancho, y1)
+            }
+        };
         let vivos: std::collections::HashSet<Objetivo> =
             h.objetivos.iter().map(|(o, _)| *o).collect();
         self.hoja = h;
@@ -263,7 +328,9 @@ impl MenuUi {
             .as_ref()
             .map(|l| self.ancho(l))
             .or(casilla.map(|_| CASILLA));
-        let tx = x + FILA_X;
+        let prefijo = n.prefijo.as_ref().map(|(t, r)| (self.prefijo(t, *r), *r));
+        let columna = if prefijo.is_some() { self.columna } else { 0.0 };
+        let tx = x + FILA_X + columna;
         let max = (x + ancho - FILA_X - w_der.map_or(0.0, |w| w + ENTRE) - tx).max(0.0);
         let etiqueta = self
             .rotulos
@@ -291,6 +358,20 @@ impl MenuUi {
             color: op(&p.primary, TINTE_FILA * luz),
         });
         let ty = y + FILA_Y + ((alto_contenido - self.alto(&etiqueta)) / 2.0).floor();
+        if let Some((l, resaltado)) = prefijo {
+            // Centrado en su columna, como los workspaces del globo del dock.
+            let px = x + FILA_X + ((columna - ENTRE - self.ancho(&l)) / 2.0).floor();
+            h.trazos.push(Trazo::Texto {
+                l,
+                x: px,
+                y: ty,
+                color: if resaltado {
+                    p.primary
+                } else {
+                    p.on_surface_variant
+                },
+            });
+        }
         h.trazos.push(Trazo::Texto {
             l: etiqueta,
             x: tx,
@@ -608,13 +689,19 @@ mod tests {
             habilitado: true,
             marca: None,
             hijos,
+            prefijo: None,
         }
     }
 
     fn armado(secciones: Vec<Vec<NodoMenu>>) -> MenuUi {
+        armado_en(LugarMenu::Barra { derecha: 100 }, None, secciones)
+    }
+
+    fn armado_en(lugar: LugarMenu, titulo: Option<&str>, secciones: Vec<Vec<NodoMenu>>) -> MenuUi {
         let menu = Menu {
             salida: String::new(),
-            derecha: 100,
+            lugar,
+            titulo: titulo.map(str::to_owned),
             secciones,
         };
         let mut ui = MenuUi::new(menu, Paleta::desde_css(""), 1.0);
@@ -640,6 +727,67 @@ mod tests {
     fn un_menu_corto_mide_el_minimo() {
         let ui = armado(vec![vec![nodo(1, "Salir", vec![])]]);
         assert_eq!(ui.panel().width(), MIN);
+    }
+
+    /// En el dock, el menú queda encima de la celda, centrado en ella, y su borde de abajo a la
+    /// distancia pedida del de la salida; el título va antes de todo.
+    #[test]
+    fn en_el_dock_va_encima_de_la_celda() {
+        let ui = armado_en(
+            LugarMenu::Dock {
+                centro: 900,
+                abajo: 110,
+            },
+            Some("Steam"),
+            vec![vec![nodo(1, "Biblioteca", vec![])]],
+        );
+        let c = ui.panel();
+        assert_eq!(c.y1, 1080.0 - 110.0);
+        assert!((c.center().x - 900.0).abs() <= 1.0, "{c:?}");
+        let fila = ui
+            .hoja
+            .objetivos
+            .iter()
+            .find(|(o, _)| *o == Objetivo::Fila(1))
+            .map(|(_, r)| *r)
+            .unwrap();
+        assert!(fila.y0 >= 2.0 * FILA_Y + ENTRE_BLOQUES, "debajo del título");
+        // Contra el borde, no se sale de la pantalla.
+        let ui = armado_en(
+            LugarMenu::Dock {
+                centro: 5,
+                abajo: 110,
+            },
+            None,
+            vec![vec![nodo(1, "Biblioteca", vec![])]],
+        );
+        assert_eq!(ui.panel().x0, MARGEN);
+    }
+
+    /// Los prefijos van en una columna: las etiquetas empiezan todas en el mismo lugar.
+    #[test]
+    fn los_prefijos_van_en_columna() {
+        let con = |id, p: &str| NodoMenu {
+            prefijo: Some((p.to_owned(), false)),
+            ..nodo(id, "ventana", vec![])
+        };
+        let ui = armado(vec![vec![con(1, "I"), con(2, "VIII")]]);
+        let textos: Vec<f64> = ui
+            .hoja
+            .trazos
+            .iter()
+            .filter_map(|t| match t {
+                Trazo::Texto { x, .. } => Some(*x),
+                _ => None,
+            })
+            .collect();
+        // Prefijo y etiqueta de cada fila.
+        assert_eq!(textos.len(), 4);
+        assert_eq!(textos[1], textos[3], "las etiquetas alineadas");
+        assert!(
+            textos[0] > textos[2],
+            "la I, centrada, empieza después que la VIII"
+        );
     }
 
     /// Un submenú parte su sección: su botón va de lado a lado, afuera de los recuadros.

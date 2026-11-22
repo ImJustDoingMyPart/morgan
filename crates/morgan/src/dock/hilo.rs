@@ -37,10 +37,11 @@ use wayland_client::protocol::{wl_output, wl_pointer, wl_seat, wl_surface};
 use wayland_client::{Connection, QueueHandle};
 
 use super::dibujo::{self, GLOBO_MARGEN, Rotulos};
-use super::modelo::{ALTO_CAPA, Disposicion, Pieza, ZONA, disponer, entran, tope};
+use super::modelo::{ALTO_CAPA, Disposicion, Pieza, Seccion, ZONA, disponer, entran, tope};
 use crate::lamina::Lamina;
 
 const BTN_IZQUIERDO: u32 = 0x110;
+const BTN_DERECHO: u32 = 0x111;
 const BTN_MEDIO: u32 = 0x112;
 
 /// Como los globos de la barra: si otro se cerró hace menos de `ENSEGUIDA`, sale enseguida.
@@ -73,8 +74,18 @@ pub enum Orden {
 /// Lo que se tocó, para el hilo de GTK.
 pub enum Evento {
     Click(String),
-    Nueva(String),
+    /// El click derecho en una app: su menú, encima de su celda.
+    Menu {
+        clave: String,
+        salida: String,
+        /// El centro de la celda, desde la izquierda de la salida.
+        centro: i32,
+        /// Del borde de abajo de lo que el menú puede ocupar al de abajo del menú.
+        abajo: i32,
+    },
     Enfocar(String),
+    /// El click medio: le pide a la ventana que se cierre.
+    Cerrar(String),
     /// Se abrió o se cerró el globo: mientras está, los títulos importan.
     Globo(bool),
 }
@@ -259,10 +270,7 @@ impl Hilo {
                 self.juego = j;
                 self.sincronizar();
             }
-            Orden::Config {
-                mostrar,
-                ocultar,
-            } => {
+            Orden::Config { mostrar, ocultar } => {
                 let cambia = ocultar != self.ocultar;
                 self.mostrar = mostrar;
                 self.ocultar = ocultar;
@@ -373,8 +381,12 @@ impl Hilo {
         let v = &mut self.ventanas[i];
         let ancho = f64::from(v.lamina.tam.0);
         v.visibles = entran(piezas, tope(ancho));
-        let usadas: Vec<bool> = v.visibles.iter().map(|&p| piezas[p].usada).collect();
-        v.disposicion = disponer(ancho, &usadas);
+        let bandeja: Vec<bool> = v
+            .visibles
+            .iter()
+            .map(|&p| piezas[p].seccion == Seccion::Bandeja)
+            .collect();
+        v.disposicion = disponer(ancho, &bandeja);
         v.tintes.resize(v.visibles.len(), Transicion::new(0.0));
         v.encima = v.encima.filter(|&e| e < v.visibles.len());
         v.lamina.sucio = true;
@@ -382,7 +394,9 @@ impl Hilo {
     }
 
     fn poner_region(compositor: &CompositorState, v: &Ventana) {
-        let Ok(r) = Region::new(compositor) else { return };
+        let Ok(r) = Region::new(compositor) else {
+            return;
+        };
         if let Some(c) = v
             .disposicion
             .region(f64::from(v.lamina.tam.1), v.subida.abierto())
@@ -421,18 +435,22 @@ impl Hilo {
     }
 
     fn abrir_globo(&mut self, i: usize, celda: usize) {
-        let Some(v) = self.ventanas.get(i) else { return };
+        let Some(v) = self.ventanas.get(i) else {
+            return;
+        };
         let (Some(&p), Some(c)) = (v.visibles.get(celda), v.disposicion.celdas.get(celda)) else {
             return;
         };
-        let Some(pieza) = self.datos.piezas.get(p) else { return };
+        let Some(pieza) = self.datos.piezas.get(p) else {
+            return;
+        };
         let escala = v.lamina.escala.max(1);
         let rotulos = Rotulos::armar(&mut self.textos, pieza, escala as f32);
         let tam = rotulos.tam;
         let tintes = vec![Transicion::new(0.0); rotulos.cuantas()];
         let ancho_salida = i32::try_from(v.lamina.tam.0).unwrap_or(i32::MAX);
-        let izquierda = (c.center().x as i32 - tam.0 as i32 / 2)
-            .clamp(0, (ancho_salida - tam.0 as i32).max(0));
+        let izquierda =
+            (c.center().x as i32 - tam.0 as i32 / 2).clamp(0, (ancho_salida - tam.0 as i32).max(0));
         let abajo = ZONA as i32 + ENCIMA_DE_LA_ISLA - GLOBO_MARGEN as i32;
         let salida = v.salida.clone();
         let clave = pieza.clave.clone();
@@ -488,11 +506,14 @@ impl Hilo {
         }
         self.temporizador_ocultar = self
             .bucle
-            .insert_source(Timer::from_duration(ESPERA_OCULTAR), |_, _, h: &mut Hilo| {
-                h.temporizador_ocultar = None;
-                h.ocultar_ahora();
-                TimeoutAction::Drop
-            })
+            .insert_source(
+                Timer::from_duration(ESPERA_OCULTAR),
+                |_, _, h: &mut Hilo| {
+                    h.temporizador_ocultar = None;
+                    h.ocultar_ahora();
+                    TimeoutAction::Drop
+                },
+            )
             .ok();
     }
 
@@ -626,16 +647,47 @@ impl Hilo {
             }
             PointerEventKind::Release { button, .. } => {
                 let v = &self.ventanas[i];
+                let Some(celda) = v.encima else { return };
                 let Some(p) = v
-                    .encima
-                    .and_then(|c| v.visibles.get(c))
+                    .visibles
+                    .get(celda)
                     .and_then(|&p| self.datos.piezas.get(p))
                 else {
                     return;
                 };
                 let evento = match button {
                     BTN_IZQUIERDO => Evento::Click(p.clave.clone()),
-                    BTN_MEDIO => Evento::Nueva(p.clave.clone()),
+                    BTN_DERECHO => {
+                        let salida = self
+                            .salidas
+                            .info(&v.salida)
+                            .and_then(|i| i.name)
+                            .unwrap_or_default();
+                        let centro = v
+                            .disposicion
+                            .celdas
+                            .get(celda)
+                            .map_or(0, |c| c.center().x.round() as i32);
+                        // El menú ocupa lo que dejan las zonas reservadas: si el dock reserva la
+                        // suya, el borde de abajo ya queda encima de la isla.
+                        let isla = if self.ocultar { ZONA as i32 } else { 0 };
+                        Evento::Menu {
+                            clave: p.clave.clone(),
+                            salida,
+                            centro,
+                            abajo: isla + ENCIMA_DE_LA_ISLA,
+                        }
+                    }
+                    // Una ventana: se cierra. Varias: el globo, ya, para elegir cuál.
+                    BTN_MEDIO => match p.filas.as_slice() {
+                        [una] => Evento::Cerrar(una.direccion.clone()),
+                        [] => return,
+                        _ => {
+                            self.sin_temporizador();
+                            self.abrir_globo(i, celda);
+                            return;
+                        }
+                    },
                     _ => return,
                 };
                 let _ = self.eventos.send_blocking(evento);
@@ -662,19 +714,24 @@ impl Hilo {
                 }
                 self.temporizar(CERRAR_GLOBO, Pendiente::Cerrar);
             }
-            PointerEventKind::Release {
-                button: BTN_IZQUIERDO,
-                ..
-            } => {
+            PointerEventKind::Release { button, .. } => {
                 let direccion = self.globo.as_ref().and_then(|g| {
                     let fila = g.encima?;
                     let p = self.datos.piezas.iter().find(|p| p.clave == g.clave)?;
                     Some(p.filas.get(fila)?.direccion.clone())
                 });
-                if let Some(d) = direccion {
-                    let _ = self.eventos.send_blocking(Evento::Enfocar(d));
-                    self.sin_temporizador();
-                    self.cerrar_globo();
+                let Some(d) = direccion else { return };
+                match button {
+                    BTN_IZQUIERDO => {
+                        let _ = self.eventos.send_blocking(Evento::Enfocar(d));
+                        self.sin_temporizador();
+                        self.cerrar_globo();
+                    }
+                    // El globo se queda: la fila se va cuando la ventana se cierra.
+                    BTN_MEDIO => {
+                        let _ = self.eventos.send_blocking(Evento::Cerrar(d));
+                    }
+                    _ => {}
                 }
             }
             _ => {}
@@ -685,7 +742,11 @@ impl Hilo {
 impl LayerShellHandler for Hilo {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, capa: &LayerSurface) {
         let wl = capa.wl_surface();
-        if self.globo.as_ref().is_some_and(|g| g.capa.wl_surface() == wl) {
+        if self
+            .globo
+            .as_ref()
+            .is_some_and(|g| g.capa.wl_surface() == wl)
+        {
             self.globo = None;
             return;
         }
@@ -747,7 +808,11 @@ impl CompositorHandler for Hilo {
             g.lamina.escala = factor;
             g.lamina.sucio = true;
         }
-        if let Some(v) = self.ventanas.iter_mut().find(|v| v.capa.wl_surface() == surface) {
+        if let Some(v) = self
+            .ventanas
+            .iter_mut()
+            .find(|v| v.capa.wl_surface() == surface)
+        {
             v.lamina.escala = factor;
             v.lamina.sucio = true;
         }
@@ -774,7 +839,11 @@ impl CompositorHandler for Hilo {
         {
             g.lamina.esperando = false;
         }
-        if let Some(v) = self.ventanas.iter_mut().find(|v| v.capa.wl_surface() == surface) {
+        if let Some(v) = self
+            .ventanas
+            .iter_mut()
+            .find(|v| v.capa.wl_surface() == surface)
+        {
             v.lamina.esperando = false;
         }
     }

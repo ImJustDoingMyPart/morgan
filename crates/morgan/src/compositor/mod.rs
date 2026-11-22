@@ -91,6 +91,8 @@ pub struct Cliente {
     /// 0 es la que tuvo el foco último.
     pub historia: i32,
     pub juego: bool,
+    /// El proceso de la ventana, si el compositor lo sabe.
+    pub pid: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -265,6 +267,15 @@ impl Compositor {
             Driver::Hyprland(h) => h.activa().await,
             Driver::Umbriel(u) => u.activa().await,
             Driver::Ninguno => None,
+        }
+    }
+
+    /// Le pide a la ventana que se cierre (la app puede preguntar antes, como con el atajo).
+    pub async fn cerrar(&self, id: &str) {
+        match &self.driver {
+            Driver::Hyprland(h) => h.cerrar(id).await,
+            Driver::Umbriel(u) => u.cerrar(id).await,
+            Driver::Ninguno => {}
         }
     }
 

@@ -9,7 +9,7 @@
 //! despierta al cambiar el minuto y al volver de una suspensión (el temporizador de glib no
 //! cuenta el tiempo dormido).
 
-mod bandeja;
+pub(crate) mod bandeja;
 mod dibujo;
 pub mod hilo;
 pub(crate) mod modelo;

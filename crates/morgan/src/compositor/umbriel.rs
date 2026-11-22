@@ -243,6 +243,7 @@ impl Estado {
                         .position(|h| *h == v.id)
                         .map_or(i32::MAX, |i| i as i32),
                     juego: super::es_juego(&v.app_id, &v.content_type, None, |_| false),
+                    pid: v.pid.and_then(|p| u32::try_from(p).ok()).filter(|p| *p > 1),
                 })
             })
             .collect()
@@ -366,6 +367,10 @@ impl Umbriel {
     /// `window-focus` no lleva el puntero: el dock y el lienzo quedan igual.
     pub async fn enfocar(&self, id: &str) {
         self.hacer("window-focus", json!({ "window": id })).await;
+    }
+
+    pub async fn cerrar(&self, id: &str) {
+        self.hacer("window-close", json!({ "window": id })).await;
     }
 
     pub async fn ir_a(&self, n: i64) {

@@ -1676,8 +1676,15 @@ impl Hilo {
         m.ui.armar(escala as f32, ahora);
         let inicio = *m.inicio.get_or_insert(ahora);
         let micros = ahora.saturating_duration_since(inicio).as_micros() as i64;
-        let bajada = crate::bajada::desplazamiento(micros, m.ui.panel().y1 as f32);
-        m.ui.pintar(&mut self.escena, f64::from(escala), f64::from(bajada));
+        // El de la barra baja desde arriba; el del dock sube desde abajo.
+        let panel = m.ui.panel();
+        let bajada = if m.ui.desde_abajo() {
+            let fondo = f64::from(m.ui.tam.1) - panel.y0;
+            -f64::from(crate::bajada::desplazamiento(micros, fondo as f32))
+        } else {
+            f64::from(crate::bajada::desplazamiento(micros, panel.y1 as f32))
+        };
+        m.ui.pintar(&mut self.escena, f64::from(escala), bajada);
         let wl = m.capa.wl_surface().clone();
         m.lamina
             .presentar(&mut self.gpu, &self.escena, &wl, &self.qh);

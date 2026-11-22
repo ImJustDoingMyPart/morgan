@@ -18,7 +18,7 @@ use super::hilo::Orden;
 use crate::bandeja::menu::{Nodo, secciones};
 use crate::bandeja::{Bandeja, Item};
 use crate::centro::Centro;
-use crate::centro::vista::{Menu as VistaMenu, NodoMenu};
+use crate::centro::vista::{LugarMenu, Menu as VistaMenu, NodoMenu};
 use crate::tema::Tema;
 
 const TAMANO: u32 = 14;
@@ -67,12 +67,15 @@ impl Contexto {
         ctx
     }
 
-    /// Son pocos y cambian poco: se rehacen todos.
+    /// Son pocos y cambian poco: se rehacen todos. Con el dock prendido, los muestra él.
     pub fn enviar(&self) {
         let escala = crate::pixeles::escala().max(1) as u32;
-        let iconos = self
-            .bandeja
-            .items()
+        let items = if self.bandeja.en_dock() {
+            Vec::new()
+        } else {
+            self.bandeja.items()
+        };
+        let iconos = items
             .into_iter()
             .map(|item| Icono {
                 imagen: self.imagen(&item, escala),
@@ -153,7 +156,8 @@ impl Menu {
         let c = clave.clone();
         let m = VistaMenu {
             salida,
-            derecha,
+            lugar: LugarMenu::Barra { derecha },
+            titulo: None,
             secciones: nodos(&raiz.hijos),
         };
         // Un doble click pudo abrir otro mientras se leía este: `abrir_menu` lo cierra antes.
@@ -165,7 +169,7 @@ impl Menu {
 }
 
 /// Las secciones de un menú (los separadores parten), con sus submenús.
-fn nodos(hijos: &[Nodo]) -> Vec<Vec<NodoMenu>> {
+pub fn nodos(hijos: &[Nodo]) -> Vec<Vec<NodoMenu>> {
     secciones(hijos)
         .into_iter()
         .map(|s| {
@@ -176,6 +180,7 @@ fn nodos(hijos: &[Nodo]) -> Vec<Vec<NodoMenu>> {
                     habilitado: n.habilitado,
                     marca: n.marca,
                     hijos: nodos(&n.hijos),
+                    prefijo: None,
                 })
                 .collect()
         })

@@ -4,6 +4,14 @@
 
 ## Sin publicar
 
+### La bandeja pasa al dock
+
+Los íconos de la bandeja ahora están en el dock. El de una app que ya tiene lugar ahí (Steam, Vesktop) se junta a ese ícono, y su menú sale con el click derecho. Lo que está en el dock solo por la bandeja (OpenRGB, Cachy-Update) va al final, después de una raya. Una app que corre de fondo sin ventanas lleva un punto hueco. La raya que separaba las apps más usadas de las otras abiertas ya no está.
+
+El click derecho en cualquier ícono del dock abre un menú con sus ventanas, «Ventana nueva», las acciones de la app (como «Ventana privada nueva» en Brave), «Cerrar todas» y las opciones de su bandeja. El click medio cierra la ventana si hay una sola. Si hay varias, abre la lista, y el click medio sobre una fila cierra esa. «Ventana nueva» pasó del click medio al menú.
+
+En la barra, sin la flecha de la bandeja, los avisos de grabación, micrófono y pantalla compartida quedan junto a la campana. Con el dock apagado (`[dock] show = false`), la bandeja vuelve a la barra como antes. `[dock] tray_icons` cambia el ícono de algo de la bandeja en el dock, por su `Id` (por ejemplo `"Cachy-Update" = "octopi"`).
+
 En Umbriel, si `UMBRIEL_SOCKET` apunta a un socket que ya no existe (lo deja así un Umbriel de prueba en el entorno de `systemctl --user`), morgan usa el de la sesión y lo corrige para los comandos `umbriel` que lanza. Antes la barra mostraba todos los workspaces apagados y el menú no podía hablar con Umbriel.
 
 ## 0.3.2 · 2026-11-22

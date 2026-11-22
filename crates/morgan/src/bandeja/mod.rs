@@ -6,7 +6,7 @@
 
 pub mod menu;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
@@ -225,6 +225,10 @@ struct Inner {
     items: RefCell<Vec<Item>>,
     tareas: RefCell<HashMap<String, glib::JoinHandle<()>>>,
     oyentes: Oyentes,
+    /// El proceso dueño de cada bus: no cambia mientras el bus vive.
+    pids: RefCell<HashMap<String, u32>>,
+    /// Los íconos los muestra el dock; la barra, solo si no hay dock.
+    en_dock: Cell<bool>,
 }
 
 impl Bandeja {
@@ -235,6 +239,8 @@ impl Bandeja {
                 items: RefCell::default(),
                 tareas: RefCell::default(),
                 oyentes: RefCell::default(),
+                pids: RefCell::default(),
+                en_dock: Cell::new(false),
             }),
         };
         let yo = b.clone();
@@ -254,6 +260,17 @@ impl Bandeja {
             .filter(|i| !i.pasivo)
             .cloned()
             .collect()
+    }
+
+    pub fn en_dock(&self) -> bool {
+        self.inner.en_dock.get()
+    }
+
+    /// Lo dice el dock al arrancar y cuando se prende o se apaga.
+    pub fn poner_en_dock(&self, si: bool) {
+        if self.inner.en_dock.replace(si) != si {
+            self.avisar();
+        }
     }
 
     pub fn al_cambiar(&self, f: impl Fn() + 'static) {
@@ -480,7 +497,32 @@ impl Bandeja {
         }
     }
 
-    fn item(&self, clave: &str) -> Option<Item> {
+    /// El proceso que publica el ítem: con él se sabe de qué app es.
+    pub async fn pid(&self, clave: &str) -> Option<u32> {
+        let bus = bus_de(clave).to_owned();
+        if let Some(p) = self.inner.pids.borrow().get(&bus) {
+            return Some(*p);
+        }
+        let conn = self.conn()?;
+        let r = conn
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "GetConnectionUnixProcessID",
+                &(bus.as_str(),),
+            )
+            .await
+            .ok()?;
+        let pid: u32 = r.body().deserialize().ok()?;
+        let mut pids = self.inner.pids.borrow_mut();
+        // Los buses que se fueron no vuelven: el nombre único no se reusa.
+        pids.retain(|b, _| self.inner.tareas.borrow().keys().any(|c| bus_de(c) == b));
+        pids.insert(bus, pid);
+        Some(pid)
+    }
+
+    pub fn item(&self, clave: &str) -> Option<Item> {
         self.inner
             .items
             .borrow()

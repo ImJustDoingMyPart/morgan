@@ -218,8 +218,13 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
     x -= cw + 2.0;
 
     // La bandeja entra desde la derecha (`SlideLeft`): su borde derecho queda fijo y el
-    // revelador la recorta a la izquierda.
-    let bw = 10.0 + iconos as f64 * ICONO + iconos.saturating_sub(1) as f64 * ENTRE_ICONOS;
+    // revelador la recorta a la izquierda. Sin íconos (los muestra el dock), no hay cajón: los
+    // avisos quedan junto a la campana.
+    let bw = if iconos == 0 {
+        0.0
+    } else {
+        10.0 + iconos as f64 * ICONO + iconos.saturating_sub(1) as f64 * ENTRE_ICONOS
+    };
     let rv = (bw * revelado.clamp(0.0, 1.0)).ceil();
     let revelador = Rect::new(x - rv, 0.0, x, h);
     let origen = x - bw + 2.0;
@@ -236,12 +241,18 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
         });
     }
     x -= rv;
-    let flw = 4.0 + rot.ancho(&rot.flecha) + 4.0;
-    piezas.push(Pieza {
-        que: Que::Flecha,
-        caja: Rect::new(x - flw, 0.0, x, h),
-        contenido: Rect::new(x - flw + 4.0, 0.0, x - 4.0, h),
-    });
+    let flw = if iconos == 0 {
+        0.0
+    } else {
+        4.0 + rot.ancho(&rot.flecha) + 4.0
+    };
+    if iconos > 0 {
+        piezas.push(Pieza {
+            que: Que::Flecha,
+            caja: Rect::new(x - flw, 0.0, x, h),
+            contenido: Rect::new(x - flw + 4.0, 0.0, x - 4.0, h),
+        });
+    }
     let cajon = Rect::new(x - flw, 0.0, revelador.x1, h);
     x -= flw;
 

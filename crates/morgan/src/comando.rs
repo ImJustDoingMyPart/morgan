@@ -1,4 +1,3 @@
-
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -128,10 +127,60 @@ pub fn lanzar_app(id: &str, archivos: &[&str]) {
             return;
         };
         desktop = ruta.to_string_lossy().into_owned();
-        vec!["systemd-run", "--user", "--scope", "--collect", "--quiet", "--", "gio", "launch", &desktop]
+        vec![
+            "systemd-run",
+            "--user",
+            "--scope",
+            "--collect",
+            "--quiet",
+            "--",
+            "gio",
+            "launch",
+            &desktop,
+        ]
     };
     args.extend_from_slice(archivos);
     lanzar(&args);
+}
+
+/// Una acción del `.desktop` («Ventana privada nueva»), fuera del cgroup de morgan como
+/// `lanzar_app`. Con uwsm, `uwsm app -- id:acción`; si no, su `Exec` en un scope propio (`gio
+/// launch` no lanza acciones).
+pub fn lanzar_accion(id: &str, accion: &str) {
+    if con_uwsm() {
+        let con_accion = format!("{id}:{accion}");
+        lanzar(&["uwsm", "app", "--", &con_accion]);
+        return;
+    }
+    let Some(exec) = exec_de_accion(id, accion) else {
+        eprintln!("morgan: {id}: no está la acción {accion}");
+        return;
+    };
+    let mut args = vec![
+        "systemd-run",
+        "--user",
+        "--scope",
+        "--collect",
+        "--quiet",
+        "--",
+    ];
+    args.extend(exec.iter().map(String::as_str));
+    lanzar(&args);
+}
+
+/// El `Exec` de una acción, sin los códigos de campo (`%u`, `%F`…): se lanza sin archivos.
+fn exec_de_accion(id: &str, accion: &str) -> Option<Vec<String>> {
+    let ruta = gio_unix::DesktopAppInfo::new(id)?.filename()?;
+    let k = glib::KeyFile::new();
+    k.load_from_file(ruta, glib::KeyFileFlags::NONE).ok()?;
+    let exec = k.string(&format!("Desktop Action {accion}"), "Exec").ok()?;
+    let v: Vec<String> = glib::shell_parse_argv(exec.as_str())
+        .ok()?
+        .into_iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .filter(|a| !(a.len() == 2 && a.starts_with('%')))
+        .collect();
+    (!v.is_empty()).then_some(v)
 }
 
 /// `launch_default_for_uri` la lanzaría como hija y moriría con un reinicio de morgan.

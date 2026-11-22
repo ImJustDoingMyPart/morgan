@@ -211,7 +211,14 @@ fn main() -> ExitCode {
         let audio = Audio::new(&config.sonido);
         let sonidos = sonidos::Sonidos::new(&config.sonido);
         let ventanas = ventanas::Ventanas::new(compositor.clone(), &centro, config.shell.esquina);
-        let dock = dock::Dock::new(compositor.clone(), &tema, &config.dock);
+        let bandeja = bandeja::Bandeja::new();
+        let dock = dock::Dock::new(
+            compositor.clone(),
+            &tema,
+            &config.dock,
+            bandeja.clone(),
+            &centro,
+        );
         let servicios = Rc::new(Servicios {
             osd,
             calendario: calendario.clone(),
@@ -299,7 +306,7 @@ fn main() -> ExitCode {
                 tema: tema.clone(),
                 calendario: servicios.calendario.clone(),
                 centro: servicios.centro.clone(),
-                bandeja: bandeja::Bandeja::new(),
+                bandeja,
                 privacidad,
                 iconos_bandeja,
                 tele,

@@ -10,7 +10,7 @@ use morgan_motor::forma::{self, Anillo, Borde, degrade_horizontal, marco, tarjet
 use morgan_motor::parley::Layout;
 use morgan_motor::texto::{self, Textos};
 use morgan_motor::vello::Scene;
-use morgan_motor::vello::kurbo::{Affine, Circle, Rect, RoundedRect};
+use morgan_motor::vello::kurbo::{Affine, BezPath, Circle, Rect, RoundedRect, Shape};
 use morgan_motor::vello::peniko::{Fill, ImageData};
 
 use super::modelo::{ALTO_MARCAS, Disposicion, ICONO, Marca, Pieza, marcas_en};
@@ -19,6 +19,8 @@ const RADIO_CELDA: f64 = 6.0;
 /// El de `forma::tarjeta`.
 const RADIO_TARJETA: f64 = 4.0;
 const ALTO_PUNTO: f64 = 5.0;
+/// La línea del punto hueco de lo que corre de fondo.
+const LINEA_HUECO: f64 = 1.0;
 const ROL: u8 = 0;
 
 pub const GLOBO_MARGEN: f64 = SOMBRA;
@@ -123,6 +125,13 @@ fn marcas(s: &mut Scene, tr: Affine, cx: f64, y: f64, m: &[Marca], p: &Paleta) {
                     &Circle::new((x + ancho / 2.0, yc), ALTO_PUNTO / 2.0),
                 );
             }
+            Marca::Fondo => {
+                let c = (x + ancho / 2.0, yc);
+                let mut aro = BezPath::new();
+                aro.extend(Circle::new(c, ALTO_PUNTO / 2.0).path_elements(0.05));
+                aro.extend(Circle::new(c, ALTO_PUNTO / 2.0 - LINEA_HUECO).path_elements(0.05));
+                s.fill(Fill::EvenOdd, tr, pincel(&p.on_surface_variant), None, &aro);
+            }
         }
     }
 }
@@ -226,7 +235,12 @@ pub fn pintar_globo(
     s.reset();
     let tr = Affine::scale(escala);
     let (w, h) = (f64::from(r.tam.0), f64::from(r.tam.1));
-    let caja = Rect::new(GLOBO_MARGEN, GLOBO_MARGEN, w - GLOBO_MARGEN, h - GLOBO_MARGEN);
+    let caja = Rect::new(
+        GLOBO_MARGEN,
+        GLOBO_MARGEN,
+        w - GLOBO_MARGEN,
+        h - GLOBO_MARGEN,
+    );
     marco(s, tr, escala, p, opacidad, caja);
 
     let en = |x: f64, y: f64, l: &Layout<u8>| {
@@ -271,8 +285,17 @@ pub fn pintar_globo(
             );
         }
         let x = caja.x0 + FILA_X;
-        let color_esp = if r.foco == Some(i) { p.primary } else { p.on_surface_variant };
-        escribir(s, esp, en(r.x_espacio(x, esp, escala), caja.y0, esp), color_esp);
+        let color_esp = if r.foco == Some(i) {
+            p.primary
+        } else {
+            p.on_surface_variant
+        };
+        escribir(
+            s,
+            esp,
+            en(r.x_espacio(x, esp, escala), caja.y0, esp),
+            color_esp,
+        );
         escribir(s, tit, en(x + r.columna, caja.y0, tit), p.on_surface);
     }
 }
@@ -298,7 +321,8 @@ mod tests {
                 .collect(),
             marcas: Vec::new(),
             foco: false,
-            usada: false,
+            seccion: super::super::modelo::Seccion::Usada,
+            bandeja: None,
         }
     }
 
@@ -315,7 +339,11 @@ mod tests {
         let mut p = pieza(&["XXVIII"]);
         p.filas[0].titulo = "Una nota de Obsidian con un nombre muy largo".repeat(4);
         let r = Rotulos::armar(&mut Textos::new(), &p, 1.0);
-        assert!(f64::from(r.tam.0) <= GLOBO_MAX + 2.0 * GLOBO_MARGEN, "{:?}", r.tam);
+        assert!(
+            f64::from(r.tam.0) <= GLOBO_MAX + 2.0 * GLOBO_MARGEN,
+            "{:?}",
+            r.tam
+        );
         let x = r.columna + texto::caja(&r.filas[0].1).0;
         assert!(x <= GLOBO_TEXTO_MAX, "{x}");
     }
@@ -328,7 +356,11 @@ mod tests {
         assert_eq!(r.fila_en(a.center().x, a.center().y), Some(0));
         assert_eq!(r.fila_en(b.center().x, b.center().y), Some(1));
         assert_eq!(r.fila_en(a.center().x, a.y0 - 1.0), None, "el título");
-        assert_eq!(r.fila_en(a.x0 - 1.0, a.center().y), None, "el borde del recuadro");
+        assert_eq!(
+            r.fila_en(a.x0 - 1.0, a.center().y),
+            None,
+            "el borde del recuadro"
+        );
     }
 
     #[test]

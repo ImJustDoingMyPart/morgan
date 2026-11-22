@@ -235,13 +235,24 @@ pub struct Grupo {
     pub avisos: Vec<Aviso>,
 }
 
-/// El menú de una app de la bandeja.
+/// El menú de una app: el de la bandeja en la barra, o el del click derecho en el dock.
 #[derive(Clone, Debug)]
 pub struct Menu {
-    /// La salida donde está el ícono y la distancia del borde derecho del ícono al de ella.
+    /// La salida donde está el ícono.
     pub salida: String,
-    pub derecha: i32,
+    pub lugar: LugarMenu,
+    /// En negrita, arriba de todo (en el dock, el nombre de la app).
+    pub titulo: Option<String>,
     pub secciones: Vec<Vec<NodoMenu>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LugarMenu {
+    /// Debajo de un ícono de la barra: la distancia del borde derecho del ícono al de la salida.
+    Barra { derecha: i32 },
+    /// Encima de una celda del dock: su centro, desde la izquierda de la salida, y la distancia
+    /// del borde de abajo de la salida al de abajo del menú.
+    Dock { centro: i32, abajo: i32 },
 }
 
 #[derive(Clone, Debug)]
@@ -251,6 +262,8 @@ pub struct NodoMenu {
     pub habilitado: bool,
     pub marca: Option<crate::bandeja::menu::Marca>,
     pub hijos: Vec<Vec<NodoMenu>>,
+    /// Una columna antes de la etiqueta (el workspace de una ventana) y si va resaltada.
+    pub prefijo: Option<(String, bool)>,
 }
 
 /// El ícono de una fila del launcher: una imagen tal cual, o un simbólico que se pinta del
