@@ -484,6 +484,9 @@ fn restaurar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
 }
 
 fn pantalla(demo: bool) -> ExitCode {
+    if !demo {
+        registro();
+    }
     let mut usuarios =
         greeter::usuarios(&std::fs::read_to_string("/etc/passwd").unwrap_or_default());
     let sesiones = greeter::sesiones(&[PathBuf::from("/usr/share/wayland-sessions")]);
@@ -557,6 +560,22 @@ fn pantalla(demo: bool) -> ExitCode {
         rutas: Some(rutas),
         eleccion,
     })
+}
+
+/// Lo que la pantalla escribe en stderr va a `/var/lib/morgan-greet/pantalla.log`, que se
+/// vacía en cada arranque: greetd no guarda la salida del greeter, y sin esto no queda rastro
+/// de qué pasó al prender la máquina (p. ej., si el teclado entró). Si no se puede abrir,
+/// sigue a stderr.
+fn registro() {
+    use std::os::fd::AsRawFd;
+    let ruta = Path::new(BASE).join("pantalla.log");
+    match std::fs::File::create(&ruta) {
+        // SAFETY: dup2 sobre descriptores abiertos; el archivo queda abierto como fd 2.
+        Ok(f) => unsafe {
+            libc::dup2(f.as_raw_fd(), 2);
+        },
+        Err(e) => eprintln!("morgan-greet: {}: {e}", ruta.display()),
+    }
 }
 
 /// greetd, y al acertar, la sesión elegida.

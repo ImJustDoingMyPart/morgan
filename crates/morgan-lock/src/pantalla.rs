@@ -794,6 +794,7 @@ impl SessionLockHandler for App {
             let _ = l.send_blocking(ALogind::Marcar(true, None));
         }
         if self.greeter {
+            eprintln!("morgan-greet: bloqueado");
             // El tiempo de que las superficies se mapeen y Hyprland reparta el foco.
             let _ = self.bucle.insert_source(
                 Timer::from_duration(Duration::from_millis(300)),
@@ -960,6 +961,9 @@ impl SeatHandler for App {
             }
         }
         if c == Capability::Keyboard && self.teclado.is_none() {
+            if self.greeter {
+                eprintln!("morgan-greet: hay teclado");
+            }
             match self.asientos.get_keyboard_with_repeat(
                 qh,
                 &seat,
@@ -1009,6 +1013,14 @@ impl KeyboardHandler for App {
         _: &[Keysym],
     ) {
         self.con_teclado = self.id_de(wl);
+        if self.greeter {
+            let salida = self
+                .con_teclado
+                .and_then(|id| self.superficies.iter().find(|s| s.id == id))
+                .and_then(|s| self.salidas.info(&s.salida))
+                .and_then(|i| i.name);
+            eprintln!("morgan-greet: el teclado entró en {salida:?}");
+        }
         if !self.puntero_visto
             && let Some(id) = self.con_teclado
         {
