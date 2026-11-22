@@ -2,6 +2,10 @@
 
 [English](CHANGELOG.md) · **Español**
 
+## Sin publicar
+
+En Umbriel, si `UMBRIEL_SOCKET` apunta a un socket que ya no existe (lo deja así un Umbriel de prueba en el entorno de `systemctl --user`), morgan usa el de la sesión y lo corrige para los comandos `umbriel` que lanza. Antes la barra mostraba todos los workspaces apagados y el menú no podía hablar con Umbriel.
+
 ## 0.3.2 · 2026-11-22
 
 ### morgan-greet en Umbriel, y pantallas que ya no se apagan solas

@@ -2,6 +2,10 @@
 
 **English** · [Español](CHANGELOG.es.md)
 
+## Unreleased
+
+On Umbriel, if `UMBRIEL_SOCKET` points to a socket that no longer exists (a test Umbriel can leave it that way in the `systemctl --user` environment), morgan uses the session's socket and fixes the variable for the `umbriel` commands it runs. Before, the bar showed every workspace as inactive and the menu could not talk to Umbriel.
+
 ## 0.3.2 · 2026-11-22
 
 ### morgan-greet on Umbriel, and screens that no longer turn off on their own
