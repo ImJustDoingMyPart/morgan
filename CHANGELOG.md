@@ -8,7 +8,7 @@
 
 Tray icons now live in the dock. The icon of an app that already has a spot there (Steam, Vesktop) joins that icon, and its menu opens with a right click. What is in the dock only because of the tray (OpenRGB, Cachy-Update) goes at the end, after a divider. An app running in the background with no windows gets a hollow dot. The divider between the most used apps and the other open ones is gone.
 
-Right-clicking any dock icon opens a menu with its windows, "New window", the app's actions (such as "New private window" in Brave), "Close all" and its tray options. A middle click closes the window if there is only one. If there are several, it opens the list, and a middle click on a row closes that one. "New window" moved from the middle click to the menu.
+Right-clicking any dock icon opens a menu with its windows, "New window", the app's actions (such as "New private window" in Brave), "Close all" and its tray options. It opens on press, and the dock stays visible while it is open. A middle click closes the window if there is only one. If there are several, it opens the list, and a middle click on a row closes that one. "New window" moved from the middle click to the menu.
 
 On the bar, without the tray arrow, the recording, microphone and screen sharing indicators sit next to the bell. With the dock turned off (`[dock] show = false`), the tray goes back to the bar as before. `[dock] tray_icons` changes the dock icon of a tray item by its `Id` (for example `"Cachy-Update" = "octopi"`).
 

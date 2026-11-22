@@ -387,7 +387,8 @@ impl Dock {
                 salida,
                 centro,
                 abajo,
-            } => self.menu(&clave, salida, LugarMenu::Dock { centro, abajo }),
+                n,
+            } => self.menu(&clave, salida, LugarMenu::Dock { centro, abajo }, n),
             Evento::Enfocar(d) => self.enfocar(d),
             Evento::Cerrar(d) => {
                 let c = self.inner.compositor.clone();
@@ -413,8 +414,14 @@ impl Dock {
 
     /// El menú del click derecho: las ventanas, lo que se puede hacer con la app y lo de su
     /// ícono de bandeja, en ese orden.
-    fn menu(&self, clave: &str, salida: String, lugar: LugarMenu) {
-        let Some(p) = self.pieza(clave) else { return };
+    fn menu(&self, clave: &str, salida: String, lugar: LugarMenu, n: u32) {
+        let hilo = self.inner.hilo.clone();
+        let cerrado = move || {
+            let _ = hilo.send(Orden::MenuCerrado(n));
+        };
+        let Some(p) = self.pieza(clave) else {
+            return cerrado();
+        };
         let yo = self.clone();
         glib::MainContext::default().spawn_local(async move {
             let i = &yo.inner;
@@ -458,7 +465,7 @@ impl Dock {
                 secciones.extend(crate::barra::bandeja::nodos(&raiz.hijos));
             }
             if secciones.is_empty() {
-                return;
+                return cerrado();
             }
             let m = VistaMenu {
                 salida,
@@ -493,7 +500,7 @@ impl Dock {
                 }
                 _ => {}
             };
-            i.centro.abrir_menu(m, elegir, || {});
+            i.centro.abrir_menu(m, elegir, cerrado);
         });
     }
 }

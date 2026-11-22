@@ -8,7 +8,7 @@
 
 Los íconos de la bandeja ahora están en el dock. El de una app que ya tiene lugar ahí (Steam, Vesktop) se junta a ese ícono, y su menú sale con el click derecho. Lo que está en el dock solo por la bandeja (OpenRGB, Cachy-Update) va al final, después de una raya. Una app que corre de fondo sin ventanas lleva un punto hueco. La raya que separaba las apps más usadas de las otras abiertas ya no está.
 
-El click derecho en cualquier ícono del dock abre un menú con sus ventanas, «Ventana nueva», las acciones de la app (como «Ventana privada nueva» en Brave), «Cerrar todas» y las opciones de su bandeja. El click medio cierra la ventana si hay una sola. Si hay varias, abre la lista, y el click medio sobre una fila cierra esa. «Ventana nueva» pasó del click medio al menú.
+El click derecho en cualquier ícono del dock abre un menú con sus ventanas, «Ventana nueva», las acciones de la app (como «Ventana privada nueva» en Brave), «Cerrar todas» y las opciones de su bandeja. Sale al apretar el botón, y mientras está abierto el dock no se esconde. El click medio cierra la ventana si hay una sola. Si hay varias, abre la lista, y el click medio sobre una fila cierra esa. «Ventana nueva» pasó del click medio al menú.
 
 En la barra, sin la flecha de la bandeja, los avisos de grabación, micrófono y pantalla compartida quedan junto a la campana. Con el dock apagado (`[dock] show = false`), la bandeja vuelve a la barra como antes. `[dock] tray_icons` cambia el ícono de algo de la bandeja en el dock, por su `Id` (por ejemplo `"Cachy-Update" = "octopi"`).
 

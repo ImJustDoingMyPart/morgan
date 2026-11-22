@@ -69,6 +69,8 @@ pub enum Orden {
         mostrar: bool,
         ocultar: bool,
     },
+    /// Se cerró el menú número tal (o no llegó a abrirse).
+    MenuCerrado(u32),
 }
 
 /// Lo que se tocó, para el hilo de GTK.
@@ -82,6 +84,8 @@ pub enum Evento {
         centro: i32,
         /// Del borde de abajo de lo que el menú puede ocupar al de abajo del menú.
         abajo: i32,
+        /// Para avisar con `Orden::MenuCerrado` cuál se cerró.
+        n: u32,
     },
     Enfocar(String),
     /// El click medio: le pide a la ventana que se cierre.
@@ -187,6 +191,9 @@ struct Hilo {
     ventanas: Vec<Ventana>,
     globo: Option<Globo>,
     globo_cerrado: Option<Instant>,
+    /// El menú del click derecho abierto: mientras está, el dock no se esconde.
+    menu: Option<u32>,
+    menus: u32,
     temporizador: Option<RegistrationToken>,
     temporizador_ocultar: Option<RegistrationToken>,
     eventos: async_channel::Sender<Evento>,
@@ -239,6 +246,8 @@ fn correr(
         ventanas: Vec::new(),
         globo: None,
         globo_cerrado: None,
+        menu: None,
+        menus: 0,
         temporizador: None,
         temporizador_ocultar: None,
         eventos,
@@ -279,6 +288,12 @@ impl Hilo {
                     self.quitar_capas();
                 }
                 self.sincronizar();
+            }
+            Orden::MenuCerrado(n) => {
+                if self.menu == Some(n) {
+                    self.menu = None;
+                    self.programar_ocultar();
+                }
             }
         }
     }
@@ -518,7 +533,7 @@ impl Hilo {
     }
 
     fn ocultar_ahora(&mut self) {
-        if self.globo.is_some() {
+        if self.globo.is_some() || self.menu.is_some() {
             return;
         }
         let ahora = Instant::now();
@@ -645,6 +660,8 @@ impl Hilo {
                 self.poner_encima(i, None);
                 self.programar_ocultar();
             }
+            // El menú sale al apretar, como el de cualquier app: esperar a soltar se nota.
+            PointerEventKind::Press { button, .. } if button == BTN_DERECHO => self.menu(i),
             PointerEventKind::Release { button, .. } => {
                 let v = &self.ventanas[i];
                 let Some(celda) = v.encima else { return };
@@ -657,27 +674,7 @@ impl Hilo {
                 };
                 let evento = match button {
                     BTN_IZQUIERDO => Evento::Click(p.clave.clone()),
-                    BTN_DERECHO => {
-                        let salida = self
-                            .salidas
-                            .info(&v.salida)
-                            .and_then(|i| i.name)
-                            .unwrap_or_default();
-                        let centro = v
-                            .disposicion
-                            .celdas
-                            .get(celda)
-                            .map_or(0, |c| c.center().x.round() as i32);
-                        // El menú ocupa lo que dejan las zonas reservadas: si el dock reserva la
-                        // suya, el borde de abajo ya queda encima de la isla.
-                        let isla = if self.ocultar { ZONA as i32 } else { 0 };
-                        Evento::Menu {
-                            clave: p.clave.clone(),
-                            salida,
-                            centro,
-                            abajo: isla + ENCIMA_DE_LA_ISLA,
-                        }
-                    }
+                    BTN_DERECHO => return,
                     // Una ventana: se cierra. Varias: el globo, ya, para elegir cuál.
                     BTN_MEDIO => match p.filas.as_slice() {
                         [una] => Evento::Cerrar(una.direccion.clone()),
@@ -696,6 +693,42 @@ impl Hilo {
             }
             _ => {}
         }
+    }
+
+    fn menu(&mut self, i: usize) {
+        let v = &self.ventanas[i];
+        let Some(celda) = v.encima else { return };
+        let Some(p) = v
+            .visibles
+            .get(celda)
+            .and_then(|&p| self.datos.piezas.get(p))
+        else {
+            return;
+        };
+        let salida = self
+            .salidas
+            .info(&v.salida)
+            .and_then(|i| i.name)
+            .unwrap_or_default();
+        let centro = v
+            .disposicion
+            .celdas
+            .get(celda)
+            .map_or(0, |c| c.center().x.round() as i32);
+        // El menú ocupa lo que dejan las zonas reservadas: si el dock reserva la suya, el borde
+        // de abajo ya queda encima de la isla.
+        let isla = if self.ocultar { ZONA as i32 } else { 0 };
+        self.menus = self.menus.wrapping_add(1);
+        self.menu = Some(self.menus);
+        let _ = self.eventos.send_blocking(Evento::Menu {
+            clave: p.clave.clone(),
+            salida,
+            centro,
+            abajo: isla + ENCIMA_DE_LA_ISLA,
+            n: self.menus,
+        });
+        self.sin_temporizador();
+        self.cerrar_globo();
     }
 
     fn puntero_globo(&mut self, e: &PointerEvent) {
