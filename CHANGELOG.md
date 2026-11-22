@@ -2,7 +2,15 @@
 
 **English** · [Español](CHANGELOG.es.md)
 
-## Unreleased
+## 0.3.2 · 2026-11-22
+
+### morgan-greet on Umbriel, and screens that no longer turn off on their own
+
+morgan-greet now also runs on Umbriel, without depending on Hyprland, and every monitor starts at its highest refresh rate. `morgan-greet install` uses whichever compositor is installed and asks which one if both are. To set it without being asked, `sudo morgan-greet install --compositor umbriel --apply`.
+
+The login screen logs what happens at startup to `/var/lib/morgan-greet/pantalla.log`, which is emptied on every boot. It records, for example, whether the keyboard got in.
+
+If `morgan-lock` exited without unlocking (after a crash, for example), the session stayed marked as locked and the screens turned off after 30 seconds without input. Now morgan sees that the lock is no longer running and clears the mark.
 
 ### Umbriel without Hyprland leftovers, and apps in the theme's mode
 

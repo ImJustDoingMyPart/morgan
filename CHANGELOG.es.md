@@ -2,7 +2,15 @@
 
 [English](CHANGELOG.md) · **Español**
 
-## Sin publicar
+## 0.3.2 · 2026-11-22
+
+### morgan-greet en Umbriel, y pantallas que ya no se apagan solas
+
+morgan-greet ahora también corre sobre Umbriel, sin depender de Hyprland, y cada monitor arranca en su frecuencia más alta. `morgan-greet install` usa el compositor que esté instalado y, si están los dos, pregunta cuál. Para fijarlo sin que pregunte, `sudo morgan-greet install --compositor umbriel --apply`.
+
+La pantalla de inicio anota lo que pasa al arrancar en `/var/lib/morgan-greet/pantalla.log`, que se vacía en cada arranque. Ahí queda, por ejemplo, si el teclado entró.
+
+Si `morgan-lock` terminaba sin desbloquear (por un cierre inesperado, por ejemplo), la sesión seguía marcada como bloqueada y las pantallas se apagaban a los 30 segundos sin uso. Ahora morgan ve que el bloqueo ya no corre y saca la marca.
 
 ### Umbriel sin restos de Hyprland, y las apps en el modo del tema
 
