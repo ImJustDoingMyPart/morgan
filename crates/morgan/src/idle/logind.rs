@@ -54,6 +54,13 @@ impl Logind {
         self.proxy_sesion().await?.get_property("LockedHint").await
     }
 
+    pub async fn desmarcar_bloqueada(&self) -> zbus::Result<()> {
+        self.proxy_sesion()
+            .await?
+            .call::<_, _, ()>("SetLockedHint", &(false,))
+            .await
+    }
+
     pub async fn inhibir_suspension(&self) -> zbus::Result<OwnedFd> {
         let fd: zbus::zvariant::OwnedFd = manager(&self.conn)
             .await?

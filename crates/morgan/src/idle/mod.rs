@@ -6,6 +6,7 @@
 
 mod logind;
 mod screensaver;
+mod unidad;
 mod wayland;
 
 use std::cell::{Cell, RefCell};
@@ -20,6 +21,7 @@ use crate::config;
 use crate::compositor::Compositor;
 use crate::osd::Aviso;
 use logind::Logind;
+use unidad::Unidad;
 use wayland::Notificador;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,6 +85,7 @@ struct Inner {
     bloqueada: Cell<bool>,
     notificador: RefCell<Option<Rc<Notificador>>>,
     logind: RefCell<Option<Rc<Logind>>>,
+    unidad: RefCell<Option<Rc<Unidad>>>,
     inhibidor: RefCell<Option<OwnedFd>>,
     esperando: RefCell<Option<async_channel::Sender<()>>>,
     oyentes: RefCell<Vec<Rc<dyn Fn()>>>,
@@ -103,6 +106,7 @@ impl Idle {
                 bloqueada: Cell::new(false),
                 notificador: RefCell::default(),
                 logind: RefCell::default(),
+                unidad: RefCell::default(),
                 inhibidor: RefCell::default(),
                 esperando: RefCell::default(),
                 oyentes: RefCell::default(),
@@ -288,6 +292,28 @@ impl Idle {
                 }
             };
             yo.inner.logind.replace(Some(l.clone()));
+            match Unidad::conectar().await {
+                Ok(u) => {
+                    let u = Rc::new(u);
+                    let y = yo.clone();
+                    let u2 = u.clone();
+                    glib::MainContext::default().spawn_local(async move {
+                        let r = u2
+                            .al_cambiar(move || {
+                                let y = y.clone();
+                                glib::MainContext::default()
+                                    .spawn_local(async move { y.revisar_marca().await });
+                            })
+                            .await;
+                        if let Err(e) = r {
+                            eprintln!("morgan: idle: morgan-lock.service: {e}");
+                        }
+                    });
+                    yo.inner.unidad.replace(Some(u));
+                }
+                Err(e) => eprintln!("morgan: idle: morgan-lock.service: {e}"),
+            }
+            yo.revisar_marca().await;
             yo.releer_bloqueo(&l).await;
             yo.tomar_inhibidor().await;
             yo.releer_inhibidores().await;
@@ -381,6 +407,7 @@ impl Idle {
         };
         let yo = self.clone();
         glib::MainContext::default().spawn_local(async move {
+            yo.revisar_marca().await;
             yo.releer_bloqueo(&l).await;
             if yo.inner.bloqueada.get()
                 && let Some(tx) = yo.inner.esperando.borrow().clone()
@@ -388,6 +415,32 @@ impl Idle {
                 let _ = tx.try_send(());
             }
         });
+    }
+
+    /// `LockedHint` sin `morgan-lock.service` corriendo es una marca huérfana (ver `unidad`):
+    /// se saca, y el cambio de la propiedad vuelve a pasar por `releer_bloqueo`.
+    async fn revisar_marca(&self) {
+        let Some(l) = self.inner.logind.borrow().clone() else {
+            return;
+        };
+        let Some(u) = self.inner.unidad.borrow().clone() else {
+            return;
+        };
+        if !l.bloqueada().await.unwrap_or(false) {
+            return;
+        }
+        match u.parada().await {
+            Ok(Some(true)) => {
+                eprintln!(
+                    "morgan: idle: la sesión figuraba bloqueada sin morgan-lock corriendo; se saca la marca"
+                );
+                if let Err(e) = l.desmarcar_bloqueada().await {
+                    eprintln!("morgan: idle: SetLockedHint: {e}");
+                }
+            }
+            Ok(_) => {}
+            Err(e) => eprintln!("morgan: idle: morgan-lock.service: {e}"),
+        }
     }
 
     async fn releer_bloqueo(&self, l: &Logind) {
