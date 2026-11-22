@@ -286,7 +286,7 @@ sudo morgan-greet restore --apply    # goes back to the previous config
 It takes effect on the next boot. If the greeter ever fails to start, Ctrl+Alt+F2 gives you a
 text login to run the `restore` from.
 
-The screen runs inside its own compositor, separate from the session you log into: Hyprland or Umbriel, whichever is installed (Hyprland if both are). To pick one, `sudo morgan-greet install --compositor umbriel --apply`.
+The screen runs inside its own compositor, separate from the session you log into: Hyprland or Umbriel. `install` uses whichever is installed and asks which one if both are.
 
 ## Uninstall
 

@@ -29,15 +29,81 @@ const PREFIJO_RESPALDO: &str = "config.toml.morgan-";
 const PREFIJO_RESPALDO_PAM: &str = "pam.d-greetd.morgan-";
 
 /// Los compositores que el greeter sabe lanzar, en orden de preferencia, con el programa que
-/// tiene que estar. Con varios, Hyprland (Roberto, 2026-11-06); otro, con `--compositor`.
+/// tiene que estar. Con varios, `install` pregunta y propone el primero (Roberto, 2026-11-22).
 pub const COMPOSITORES: &[(&str, &str)] = &[("hyprland", "start-hyprland"), ("umbriel", "umbriel")];
 
 /// El primero de `COMPOSITORES` cuyo programa está.
 pub fn instalado(esta: impl Fn(&str) -> bool) -> Option<&'static str> {
+    instalados(esta).into_iter().next()
+}
+
+/// Los de `COMPOSITORES` cuyo programa está, en orden de preferencia.
+pub fn instalados(esta: impl Fn(&str) -> bool) -> Vec<&'static str> {
     COMPOSITORES
         .iter()
-        .find(|(_, prog)| esta(prog))
+        .filter(|(_, prog)| esta(prog))
         .map(|(n, _)| *n)
+        .collect()
+}
+
+/// Cómo se le muestra a quien instala.
+pub fn nombre_visible(compositor: &str) -> &str {
+    match compositor {
+        "hyprland" => "Hyprland",
+        "umbriel" => "Umbriel",
+        otro => otro,
+    }
+}
+
+/// El compositor del greeter ya puesto en la config de greetd: el de `--compositor`, o
+/// Hyprland si el `command` es el greeter solo (antes de que hubiera para elegir).
+pub fn compositor_puesto(actual: &str, binario: &str) -> Option<String> {
+    let c = command_de(actual)?;
+    if c == binario {
+        return Some("hyprland".to_owned());
+    }
+    let resto = c.strip_prefix(&format!("{binario} "))?;
+    let mut p = resto.split_whitespace();
+    while let Some(a) = p.next() {
+        if a == "--compositor" {
+            return p.next().map(str::to_owned);
+        }
+    }
+    None
+}
+
+/// La opción que se propone al elegir: la ya puesta si está entre las instaladas; si no, la
+/// primera.
+pub fn propuesto<'a>(instalados: &[&'a str], puesto: Option<&str>) -> Option<&'a str> {
+    puesto
+        .and_then(|p| instalados.iter().find(|i| **i == p).copied())
+        .or_else(|| instalados.first().copied())
+}
+
+/// Lo que se contestó a la lista numerada: vacío es el propuesto; un número, esa opción; un
+/// nombre, ese. `None` si no es ninguna.
+pub fn respuesta<'a>(texto: &str, instalados: &[&'a str], propuesto: &'a str) -> Option<&'a str> {
+    let t = texto.trim();
+    if t.is_empty() {
+        return Some(propuesto);
+    }
+    if let Ok(n) = t.parse::<usize>() {
+        return instalados.get(n.checked_sub(1)?).copied();
+    }
+    instalados
+        .iter()
+        .find(|i| i.eq_ignore_ascii_case(t))
+        .copied()
+}
+
+fn command_de(actual: &str) -> Option<String> {
+    actual
+        .parse::<DocumentMut>()
+        .ok()?
+        .get("default_session")?
+        .get("command")?
+        .as_str()
+        .map(str::to_owned)
 }
 
 /// El `command` de greetd: el greeter con su compositor fijo, así no depende de qué haya
@@ -49,16 +115,7 @@ pub fn comando(binario: &str, compositor: &str) -> String {
 /// Si el `command` de `[default_session]` ya es el greeter (con cualquier compositor): cambiarlo
 /// no lleva respaldo, así `restore` sigue volviendo a la config de antes del greeter.
 pub fn tiene_greeter(actual: &str, binario: &str) -> bool {
-    actual
-        .parse::<DocumentMut>()
-        .ok()
-        .and_then(|d| {
-            d.get("default_session")?
-                .get("command")?
-                .as_str()
-                .map(str::to_owned)
-        })
-        .is_some_and(|c| c == binario || c.starts_with(&format!("{binario} ")))
+    command_de(actual).is_some_and(|c| c == binario || c.starts_with(&format!("{binario} ")))
 }
 
 /// Si greetd no está: el greeter corre sobre él. `None` si está (su config existe).
@@ -291,6 +348,34 @@ user = "greeter"
         assert!(tiene_greeter(&con(&comando(b, "hyprland")), b));
         assert!(!tiene_greeter(&con("agreety --cmd x"), b));
         assert!(!tiene_greeter(&con("/usr/lib/morgan/morgan-greeter"), b));
+    }
+
+    #[test]
+    fn con_varios_se_propone_el_puesto() {
+        let b = "/usr/lib/morgan/morgan-greet";
+        let con = |c: &str| format!("[default_session]\ncommand = \"{c}\"\n");
+        assert_eq!(instalados(|_| true), ["hyprland", "umbriel"]);
+        assert_eq!(instalados(|p| p == "umbriel"), ["umbriel"]);
+        assert_eq!(compositor_puesto(&con(b), b).as_deref(), Some("hyprland"));
+        assert_eq!(
+            compositor_puesto(&con(&comando(b, "umbriel")), b).as_deref(),
+            Some("umbriel")
+        );
+        assert_eq!(compositor_puesto(&con("agreety --cmd x"), b), None);
+        let dos = ["hyprland", "umbriel"];
+        assert_eq!(propuesto(&dos, Some("umbriel")), Some("umbriel"));
+        assert_eq!(
+            propuesto(&dos, Some("niri")),
+            Some("hyprland"),
+            "uno que ya no está"
+        );
+        assert_eq!(propuesto(&dos, None), Some("hyprland"));
+        assert_eq!(respuesta("", &dos, "umbriel"), Some("umbriel"));
+        assert_eq!(respuesta(" 1\n", &dos, "umbriel"), Some("hyprland"));
+        assert_eq!(respuesta("Umbriel", &dos, "hyprland"), Some("umbriel"));
+        assert_eq!(respuesta("0", &dos, "hyprland"), None);
+        assert_eq!(respuesta("3", &dos, "hyprland"), None);
+        assert_eq!(respuesta("sway", &dos, "hyprland"), None);
     }
 
     #[test]

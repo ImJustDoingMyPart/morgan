@@ -163,25 +163,13 @@ fn instalar(raiz: Option<PathBuf>, compositor: Option<String>, aplicar: bool) ->
         eprintln!("morgan-greet: install --apply necesita root (sudo)");
         return ExitCode::FAILURE;
     }
-    let compositor = match compositor {
-        Some(c) => {
-            let prog = COMPOSITORES.iter().find(|(n, _)| *n == c).map(|(_, p)| *p);
-            if !prog.is_some_and(greeter::en_el_path) {
-                eprintln!("morgan-greet: {c} no está instalado");
-                return ExitCode::FAILURE;
-            }
-            c
+    if let Some(c) = &compositor {
+        let prog = COMPOSITORES.iter().find(|(n, _)| n == c).map(|(_, p)| *p);
+        if !prog.is_some_and(greeter::en_el_path) {
+            eprintln!("morgan-greet: {} no está instalado", nombre_visible(c));
+            return ExitCode::FAILURE;
         }
-        None => match instalado(greeter::en_el_path) {
-            Some(c) => c.to_owned(),
-            None => {
-                eprintln!(
-                    "morgan-greet: no hay ningún compositor que el greeter sepa lanzar (Hyprland o Umbriel)"
-                );
-                return ExitCode::FAILURE;
-            }
-        },
-    };
+    }
     let exe = match std::env::current_exe() {
         Ok(e) => e,
         Err(e) => {
@@ -207,6 +195,16 @@ fn instalar(raiz: Option<PathBuf>, compositor: Option<String>, aplicar: bool) ->
             return ExitCode::FAILURE;
         }
     };
+    let compositor = match compositor {
+        Some(c) => c,
+        None => {
+            let puesto = compositor_puesto(&actual, &binario.to_string_lossy());
+            match elegir_compositor(puesto.as_deref()) {
+                Some(c) => c,
+                None => return ExitCode::FAILURE,
+            }
+        }
+    };
     let command = comando(&binario.to_string_lossy(), &compositor);
     let nueva = match config_nueva(&actual, &command) {
         Ok(n) => n,
@@ -228,7 +226,7 @@ fn instalar(raiz: Option<PathBuf>, compositor: Option<String>, aplicar: bool) ->
         .and_then(|t| pam_nuevo(&t));
     let respaldo_pam = greetd.with_file_name(nombre_respaldo_pam(&f));
 
-    println!("Plan (compositor: {compositor}):");
+    println!("Plan (compositor: {}):", nombre_visible(&compositor));
     if del_paquete {
         println!("  1. el greeter es el del paquete: {}", binario.display());
     } else {
@@ -337,6 +335,57 @@ fn instalar(raiz: Option<PathBuf>, compositor: Option<String>, aplicar: bool) ->
             eprintln!("morgan-greet: {e}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// Sin `--compositor`: con uno solo instalado, ese; con varios, se pregunta en la terminal,
+/// proponiendo el que ya tiene el greeter. Sin terminal, hay que elegirlo con `--compositor`.
+fn elegir_compositor(puesto: Option<&str>) -> Option<String> {
+    use morgan_lock::instalar::*;
+    use std::io::{BufRead, IsTerminal, Write};
+    let hay = instalados(greeter::en_el_path);
+    let Some(prop) = propuesto(&hay, puesto) else {
+        eprintln!(
+            "morgan-greet: no hay ningún compositor que el greeter sepa lanzar (Hyprland o Umbriel)"
+        );
+        return None;
+    };
+    if hay.len() == 1 {
+        return Some(prop.to_owned());
+    }
+    let nombres: Vec<&str> = hay.iter().map(|c| nombre_visible(c)).collect();
+    if !std::io::stdin().is_terminal() {
+        eprintln!(
+            "morgan-greet: hay varios compositores ({}); elegí uno con --compositor {}",
+            nombres.join(", "),
+            hay.join("|")
+        );
+        return None;
+    }
+    println!(
+        "La pantalla de inicio corre dentro de un compositor, aparte de la sesión a la que se entra."
+    );
+    println!("Hay varios instalados:");
+    for (i, (c, n)) in hay.iter().zip(&nombres).enumerate() {
+        let marca = if *c == prop { "  (Enter)" } else { "" };
+        println!("  {}. {n}{marca}", i + 1);
+    }
+    let mut entrada = std::io::stdin().lock();
+    loop {
+        print!("¿Cuál? ");
+        let _ = std::io::stdout().flush();
+        let mut linea = String::new();
+        match entrada.read_line(&mut linea) {
+            Ok(0) | Err(_) => return None,
+            Ok(_) => {}
+        }
+        if let Some(c) = respuesta(&linea, &hay, prop) {
+            return Some(c.to_owned());
+        }
+        println!(
+            "Un número de la lista, o Enter para {}.",
+            nombre_visible(prop)
+        );
     }
 }
 
