@@ -286,6 +286,8 @@ sudo morgan-greet restore --apply    # goes back to the previous config
 It takes effect on the next boot. If the greeter ever fails to start, Ctrl+Alt+F2 gives you a
 text login to run the `restore` from.
 
+The screen runs inside its own compositor, separate from the session you log into: Hyprland or Umbriel, whichever is installed (Hyprland if both are). To pick one, `sudo morgan-greet install --compositor umbriel --apply`.
+
 ## Uninstall
 
 Before removing the package, `morgan setup --undo` removes the line from `hyprland.lua`, disables the service and brings back what `morgan setup` stopped, which starts again the next time you log in. Then remove the package (`pacman -R morgan-bin` or `morgan-git`). If you installed from source, `./install.sh --desinstalar` does both. Your config in `~/.config/morgan` and the programs `setup` installed stay.

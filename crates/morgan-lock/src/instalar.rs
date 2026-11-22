@@ -29,8 +29,37 @@ const PREFIJO_RESPALDO: &str = "config.toml.morgan-";
 const PREFIJO_RESPALDO_PAM: &str = "pam.d-greetd.morgan-";
 
 /// Los compositores que el greeter sabe lanzar, en orden de preferencia, con el programa que
-/// tiene que estar.
-pub const COMPOSITORES: &[(&str, &str)] = &[("hyprland", "start-hyprland")];
+/// tiene que estar. Con varios, Hyprland (Roberto, 2026-11-06); otro, con `--compositor`.
+pub const COMPOSITORES: &[(&str, &str)] = &[("hyprland", "start-hyprland"), ("umbriel", "umbriel")];
+
+/// El primero de `COMPOSITORES` cuyo programa está.
+pub fn instalado(esta: impl Fn(&str) -> bool) -> Option<&'static str> {
+    COMPOSITORES
+        .iter()
+        .find(|(_, prog)| esta(prog))
+        .map(|(n, _)| *n)
+}
+
+/// El `command` de greetd: el greeter con su compositor fijo, así no depende de qué haya
+/// instalado al arrancar.
+pub fn comando(binario: &str, compositor: &str) -> String {
+    format!("{binario} --compositor {compositor}")
+}
+
+/// Si el `command` de `[default_session]` ya es el greeter (con cualquier compositor): cambiarlo
+/// no lleva respaldo, así `restore` sigue volviendo a la config de antes del greeter.
+pub fn tiene_greeter(actual: &str, binario: &str) -> bool {
+    actual
+        .parse::<DocumentMut>()
+        .ok()
+        .and_then(|d| {
+            d.get("default_session")?
+                .get("command")?
+                .as_str()
+                .map(str::to_owned)
+        })
+        .is_some_and(|c| c == binario || c.starts_with(&format!("{binario} ")))
+}
 
 /// Si greetd no está: el greeter corre sobre él. `None` si está (su config existe).
 pub fn falta_greetd(raiz: &Path) -> Option<String> {
@@ -55,7 +84,10 @@ pub fn aviso_gestor(raiz: &Path) -> Option<String> {
         Some(otro) => Some(format!(
             "Ojo: el inicio de sesión lo maneja {otro}, no greetd. Para ver el greeter: sudo systemctl disable {otro} && sudo systemctl enable greetd"
         )),
-        None => Some("Ojo: greetd no está habilitado. Para ver el greeter: sudo systemctl enable greetd".to_owned()),
+        None => Some(
+            "Ojo: greetd no está habilitado. Para ver el greeter: sudo systemctl enable greetd"
+                .to_owned(),
+        ),
     }
 }
 
@@ -192,7 +224,11 @@ mod tests {
         let sys = raiz.join("etc/systemd/system");
         std::fs::create_dir_all(&sys).unwrap();
         assert!(falta_greetd(&raiz).unwrap().contains("pacman -S greetd"));
-        assert!(aviso_gestor(&raiz).unwrap().contains("systemctl enable greetd"));
+        assert!(
+            aviso_gestor(&raiz)
+                .unwrap()
+                .contains("systemctl enable greetd")
+        );
         let alias = sys.join("display-manager.service");
         std::os::unix::fs::symlink("/usr/lib/systemd/system/sddm.service", &alias).unwrap();
         assert!(aviso_gestor(&raiz).unwrap().contains("disable sddm"));
@@ -237,6 +273,24 @@ user = "greeter"
         assert_eq!(doc["terminal"]["vt"].as_integer(), Some(1));
         assert!(n.contains("# The VT to run the greeter on."), "{n}");
         assert!(n.contains("# The user to run the command as."), "{n}");
+    }
+
+    #[test]
+    fn el_compositor_queda_en_el_command() {
+        let b = "/usr/lib/morgan/morgan-greet";
+        assert_eq!(comando(b, "umbriel"), format!("{b} --compositor umbriel"));
+        assert_eq!(instalado(|p| p == "umbriel"), Some("umbriel"));
+        assert_eq!(
+            instalado(|_| true),
+            Some("hyprland"),
+            "con los dos, Hyprland"
+        );
+        assert_eq!(instalado(|_| false), None);
+        let con = |c: &str| format!("[default_session]\ncommand = \"{c}\"\n");
+        assert!(tiene_greeter(&con(b), b), "el de antes, sin --compositor");
+        assert!(tiene_greeter(&con(&comando(b, "hyprland")), b));
+        assert!(!tiene_greeter(&con("agreety --cmd x"), b));
+        assert!(!tiene_greeter(&con("/usr/lib/morgan/morgan-greeter"), b));
     }
 
     #[test]

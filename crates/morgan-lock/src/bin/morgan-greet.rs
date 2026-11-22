@@ -1,7 +1,8 @@
 //! El greeter de morgan: la pantalla del bloqueo, para entrar.
 //!
-//!   morgan-greet                     lo que corre greetd: arma la config de Hyprland y lo
-//!                                    lanza; Hyprland lanza la pantalla y sale cuando termina
+//!   morgan-greet [--compositor C]    lo que corre greetd: arma la config del compositor
+//!                                    (hyprland o umbriel; sin nada, el primero instalado) y lo
+//!                                    lanza; el compositor lanza la pantalla y sale cuando termina
 //!   morgan-greet pantalla            la pantalla, contra greetd (`GREETD_SOCK`)
 //!   morgan-greet pantalla --demo     la pantalla sin greetd, para probarla en un Hyprland
 //!                                    anidado: cualquier clave entra y «mal» falla
@@ -23,8 +24,7 @@ use morgan_lock::pantalla::{self, Ajustes};
 use morgan_lock::perfil::Rutas;
 use morgan_lock::verificar::{Resultado, Verificador};
 
-const USO: &str =
-    "uso: morgan-greet [pantalla [--demo] | install [--apply] | restore [--apply]] [--raiz DIR]";
+const USO: &str = "uso: morgan-greet [--compositor hyprland|umbriel] [pantalla [--demo] | install [--apply] | restore [--apply]] [--raiz DIR]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -42,12 +42,32 @@ fn main() -> ExitCode {
         }
         None => None,
     };
+    // `--compositor`: en qué compositor corre el greeter; `install` lo deja en el command.
+    let compositor = match args.iter().position(|a| *a == "--compositor") {
+        Some(i) if i + 1 < args.len() => {
+            let c = args[i + 1].to_owned();
+            args.drain(i..=i + 1);
+            if !morgan_lock::instalar::COMPOSITORES
+                .iter()
+                .any(|(n, _)| *n == c)
+            {
+                eprintln!("morgan-greet: compositor desconocido: {c}");
+                return ExitCode::FAILURE;
+            }
+            Some(c)
+        }
+        Some(_) => {
+            eprintln!("morgan-greet: {USO}");
+            return ExitCode::FAILURE;
+        }
+        None => None,
+    };
     match args.as_slice() {
-        [] => lanzar(),
+        [] => lanzar(compositor),
         ["pantalla"] => pantalla(false),
         ["pantalla", "--demo"] => pantalla(true),
-        ["install"] => instalar(raiz, false),
-        ["install", "--apply"] => instalar(raiz, true),
+        ["install"] => instalar(raiz, compositor, false),
+        ["install", "--apply"] => instalar(raiz, compositor, true),
         ["restore"] => restaurar(raiz, false),
         ["restore", "--apply"] => restaurar(raiz, true),
         _ => {
@@ -57,10 +77,16 @@ fn main() -> ExitCode {
     }
 }
 
-/// Escribe la config y reemplaza este proceso por Hyprland (con su watchdog,
-/// `start-hyprland`). Lo que Hyprland lanza hereda `GREETD_SOCK`.
-fn lanzar() -> ExitCode {
+/// Escribe la config y reemplaza este proceso por el compositor. Lo que el compositor
+/// lanza hereda `GREETD_SOCK`.
+fn lanzar(compositor: Option<String>) -> ExitCode {
     idioma_del_sistema();
+    let Some(compositor) = compositor
+        .or_else(|| morgan_lock::instalar::instalado(greeter::en_el_path).map(str::to_owned))
+    else {
+        eprintln!("morgan-greet: no hay ningún compositor que el greeter sepa lanzar");
+        return ExitCode::FAILURE;
+    };
     let exe = match std::env::current_exe() {
         Ok(e) => e,
         Err(e) => {
@@ -71,26 +97,40 @@ fn lanzar() -> ExitCode {
     let teclado = greeter::teclado(
         &std::fs::read_to_string("/etc/X11/xorg.conf.d/00-keyboard.conf").unwrap_or_default(),
     );
-    let config = greeter::config_hyprland(
-        &[exe.to_string_lossy().into_owned(), "pantalla".to_owned()],
-        &teclado,
-    );
+    let pantalla = [exe.to_string_lossy().into_owned(), "pantalla".to_owned()];
+    let (archivo, config) = match compositor.as_str() {
+        "umbriel" => ("umbriel.toml", greeter::config_umbriel(&teclado)),
+        _ => (
+            "hyprland.lua",
+            greeter::config_hyprland(&pantalla, &teclado),
+        ),
+    };
     let dir = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .filter(|d| d.is_dir())
         .unwrap_or_else(std::env::temp_dir)
         .join("morgan-greet");
-    let ruta = dir.join("hyprland.lua");
+    let ruta = dir.join(archivo);
     if let Err(e) = std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&ruta, config)) {
         eprintln!("morgan-greet: {}: {e}", ruta.display());
         return ExitCode::FAILURE;
     }
-    let e = Command::new("start-hyprland")
-        .arg("--")
-        .arg("-c")
-        .arg(&ruta)
-        .exec();
-    eprintln!("morgan-greet: start-hyprland: {e}");
+    let e = match compositor.as_str() {
+        // `umbriel` y no `start-umbriel`: ese arma una sesión de systemd del usuario, y acá
+        // no hay usuario todavía.
+        "umbriel" => Command::new("umbriel")
+            .arg("-c")
+            .arg(&ruta)
+            .arg("-s")
+            .arg(greeter::arranque_umbriel(&pantalla))
+            .exec(),
+        _ => Command::new("start-hyprland")
+            .arg("--")
+            .arg("-c")
+            .arg(&ruta)
+            .exec(),
+    };
+    eprintln!("morgan-greet: {compositor}: {e}");
     ExitCode::FAILURE
 }
 
@@ -116,19 +156,31 @@ fn idioma_del_sistema() {
 }
 
 /// Lo que va a hacer `install`, paso por paso, y si `aplicar`, lo hace.
-fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
+fn instalar(raiz: Option<PathBuf>, compositor: Option<String>, aplicar: bool) -> ExitCode {
     use morgan_lock::instalar::*;
     let r = raiz.clone().unwrap_or_else(|| PathBuf::from("/"));
     if aplicar && raiz.is_none() && unsafe { libc::geteuid() } != 0 {
         eprintln!("morgan-greet: install --apply necesita root (sudo)");
         return ExitCode::FAILURE;
     }
-    let Some((compositor, _)) = COMPOSITORES
-        .iter()
-        .find(|(_, prog)| greeter::en_el_path(prog))
-    else {
-        eprintln!("morgan-greet: no hay ningún compositor que el greeter sepa lanzar (Hyprland)");
-        return ExitCode::FAILURE;
+    let compositor = match compositor {
+        Some(c) => {
+            let prog = COMPOSITORES.iter().find(|(n, _)| *n == c).map(|(_, p)| *p);
+            if !prog.is_some_and(greeter::en_el_path) {
+                eprintln!("morgan-greet: {c} no está instalado");
+                return ExitCode::FAILURE;
+            }
+            c
+        }
+        None => match instalado(greeter::en_el_path) {
+            Some(c) => c.to_owned(),
+            None => {
+                eprintln!(
+                    "morgan-greet: no hay ningún compositor que el greeter sepa lanzar (Hyprland o Umbriel)"
+                );
+                return ExitCode::FAILURE;
+            }
+        },
     };
     let exe = match std::env::current_exe() {
         Ok(e) => e,
@@ -155,7 +207,8 @@ fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let nueva = match config_nueva(&actual, &binario.to_string_lossy()) {
+    let command = comando(&binario.to_string_lossy(), &compositor);
+    let nueva = match config_nueva(&actual, &command) {
         Ok(n) => n,
         Err(e) => {
             eprintln!("morgan-greet: {e}");
@@ -192,9 +245,15 @@ fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
     );
     // Ya instalado: sin respaldo nuevo, así `restore` sigue volviendo a la de antes del greeter.
     let config_lista = nueva == actual;
+    let con_greeter = tiene_greeter(&actual, &binario.to_string_lossy());
     if config_lista {
         println!(
             "  3-4. {} ya tiene el greeter: no se toca",
+            greetd.display()
+        );
+    } else if con_greeter {
+        println!(
+            "  3-4. {} ya tiene el greeter: command = \"{command}\" (sin respaldo nuevo: `restore` vuelve a la de antes del greeter)",
             greetd.display()
         );
     } else {
@@ -204,9 +263,8 @@ fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
             respaldo.display()
         );
         println!(
-            "  4. en {}: [default_session] command = \"{}\", y sin [initial_session] (sin inicio automático)",
+            "  4. en {}: [default_session] command = \"{command}\", y sin [initial_session] (sin inicio automático)",
             greetd.display(),
-            binario.display()
         );
     }
     if pam_nueva.is_some() {
@@ -234,7 +292,7 @@ fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
     }
     if !aplicar {
         println!(
-            "Nada cambió. Para hacerlo: sudo {} install --apply",
+            "Nada cambió. Para hacerlo: sudo {} --compositor {compositor} install --apply",
             exe.display()
         );
         return ExitCode::SUCCESS;
@@ -258,7 +316,9 @@ fn instalar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
             de_greeter(&estado)?;
         }
         if !config_lista {
-            std::fs::copy(&greetd, &respaldo).map_err(|x| e(&respaldo, x))?;
+            if !con_greeter {
+                std::fs::copy(&greetd, &respaldo).map_err(|x| e(&respaldo, x))?;
+            }
             // Con los permisos del original (en Arch, solo root la lee).
             reemplazar(&greetd, &nueva)?;
         }
@@ -430,6 +490,9 @@ fn pantalla(demo: bool) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    if morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Umbriel {
+        greeter::poner_modos_umbriel();
+    }
     // Los colores y el fondo, los de la cuenta con la que se empieza.
     let rutas = greeter::rutas_de(&usuarios[u], Path::new(BASE));
     pantalla::correr(Ajustes {

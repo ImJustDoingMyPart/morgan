@@ -1,7 +1,7 @@
 //! Lo que el greeter sabe del sistema sin entrar a ningún home: las cuentas (`/etc/passwd`),
 //! las sesiones (`/usr/share/wayland-sessions`), el teclado (`00-keyboard.conf` de
 //! localed), las copias de cada cuenta en `/var/lib/morgan-greet/usuarios/` y la config del
-//! Hyprland donde corre.
+//! compositor donde corre (Hyprland o Umbriel).
 //!
 //! Como DMS Greeter: `morgan-greet` lanza el compositor con una config que arma en el
 //! momento, y el compositor lanza la pantalla; al terminar la pantalla, el compositor sale y
@@ -287,12 +287,7 @@ fn lua(s: &str) -> String {
 /// más alta de cada salida y, entre esas, la mayor resolución. Con `preferred` el monitor
 /// elige, y uno de 300 Hz suele pedir 60.
 pub fn config_hyprland(pantalla: &[String], t: &Teclado) -> String {
-    let cmd = pantalla
-        .iter()
-        .map(|a| format!("'{}'", a.replace('\'', r"'\''")))
-        .collect::<Vec<_>>()
-        .join(" ");
-    let cmd = format!("{cmd}; hyprctl dispatch 'hl.dsp.exit()'");
+    let cmd = format!("{}; hyprctl dispatch 'hl.dsp.exit()'", sh(pantalla));
     format!(
         r#"-- Generado por morgan-greet: se reescribe en cada arranque.
 hl.monitor({{ output = "", mode = "highrr", position = "auto", scale = 1 }})
@@ -317,6 +312,113 @@ end)
         lua(&t.options),
         lua(&cmd),
     )
+}
+
+/// Las palabras entre comillas simples de sh, separadas por espacios.
+fn sh(palabras: &[String]) -> String {
+    palabras
+        .iter()
+        .map(|a| format!("'{}'", a.replace('\'', r"'\''")))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// La config del Umbriel del greeter (`umbriel -c`, que lee solo ese archivo): sin XWayland,
+/// sin la ayuda de atajos del primer arranque, sin animaciones, fondo negro y el teclado del
+/// sistema. Sin `[keybinds]`: Umbriel no trae atajos propios (`config get keybinds` en un
+/// Umbriel con esta config: «unknown config key»). Claves de `umbriel config schema --json`
+/// (`umbriel-git 0.1.0.r1644`).
+pub fn config_umbriel(t: &Teclado) -> String {
+    let s = |v: &str| toml::Value::String(v.to_owned()).to_string();
+    format!(
+        r##"# Generado por morgan-greet: se reescribe en cada arranque.
+[general]
+xwayland = false
+show_cheatsheet = false
+
+[animation]
+enabled = false
+
+[colors]
+background = "#000000ff"
+
+[input.keyboard]
+layout = {}
+variant = {}
+options = {}
+"##,
+        s(&t.layout),
+        s(&t.variant),
+        s(&t.options),
+    )
+}
+
+/// Lo que Umbriel lanza al arrancar (`umbriel -s`, por `/bin/sh`): la pantalla, y cuando
+/// termina, Umbriel sale. Lo lanzado tiene `UMBRIEL_SOCKET` del Umbriel del greeter.
+pub fn arranque_umbriel(pantalla: &[String]) -> String {
+    format!(
+        "{}; umbriel msg session-quit skip-confirmation",
+        sh(pantalla)
+    )
+}
+
+/// El modo de cada salida a la frecuencia más alta y, entre esas, la mayor resolución (lo
+/// que `highrr` hace en Hyprland). Umbriel usa el modo `preferred` si la config no dice otro,
+/// y el monitor de 300 Hz prefiere 60. De la respuesta de `{"cmd":"outputs"}`; da los pares
+/// clave y valor de `config-set`, solo para las salidas que no están ya en ese modo.
+pub fn modos_umbriel(salidas: &serde_json::Value) -> Vec<(String, String)> {
+    let Some(salidas) = salidas.as_array() else {
+        return Vec::new();
+    };
+    let mut v = Vec::new();
+    for o in salidas {
+        let (Some(nombre), Some(modos)) = (o["name"].as_str(), o["modes"].as_array()) else {
+            continue;
+        };
+        let clave = |m: &serde_json::Value| {
+            let n = |k: &str| m[k].as_u64().unwrap_or(0);
+            (n("refresh_mhz"), n("width") * n("height"))
+        };
+        let Some(m) = modos.iter().max_by_key(|m| clave(m)) else {
+            continue;
+        };
+        let mhz = m["refresh_mhz"].as_u64().unwrap_or(0);
+        if mhz == 0 || m["current"].as_bool() == Some(true) {
+            continue;
+        }
+        let hz = if mhz % 1000 == 0 {
+            format!("{}", mhz / 1000)
+        } else {
+            format!("{}.{:03}", mhz / 1000, mhz % 1000)
+        };
+        let modo = format!("{}x{}@{hz}", m["width"], m["height"]);
+        v.push((
+            format!("output.{}.mode", toml::Value::String(nombre.to_owned())),
+            toml::Value::String(modo).to_string(),
+        ));
+    }
+    v
+}
+
+/// En el Umbriel del greeter, antes de bloquearlo: las salidas a su frecuencia más alta.
+pub fn poner_modos_umbriel() {
+    use morgan_ipc::umbriel::{pedir_ya, socket};
+    let Some(s) = socket() else {
+        return;
+    };
+    let salidas = match pedir_ya(&s, &serde_json::json!({ "cmd": "outputs" })) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("morgan-greet: salidas de Umbriel: {e}");
+            return;
+        }
+    };
+    for (clave, valor) in modos_umbriel(&salidas) {
+        let pedido = serde_json::json!({ "cmd": "config-set", "args": [clave, valor] });
+        if let Err(e) = pedir_ya(&s, &pedido) {
+            eprintln!("morgan-greet: {clave} = {valor}: {e}");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -423,6 +525,62 @@ mod tests {
         assert!(
             c.contains(r#"mode = "highrr""#),
             "a la frecuencia más alta, no a la que propone el monitor"
+        );
+    }
+
+    #[test]
+    fn la_config_de_umbriel() {
+        let t = Teclado {
+            layout: "latam".into(),
+            options: "caps:\"escape\"".into(),
+            ..Default::default()
+        };
+        let v: toml::Table = config_umbriel(&t).parse().unwrap();
+        assert_eq!(v["input"]["keyboard"]["layout"].as_str(), Some("latam"));
+        assert_eq!(
+            v["input"]["keyboard"]["options"].as_str(),
+            Some("caps:\"escape\"")
+        );
+        assert_eq!(v["general"]["show_cheatsheet"].as_bool(), Some(false));
+        assert!(v.get("keybinds").is_none(), "ningún atajo en el greeter");
+        assert_eq!(
+            arranque_umbriel(&["/usr/lib/morgan/morgan-greet".into(), "pantalla".into()]),
+            "'/usr/lib/morgan/morgan-greet' 'pantalla'; umbriel msg session-quit skip-confirmation"
+        );
+    }
+
+    #[test]
+    fn umbriel_a_la_frecuencia_mas_alta() {
+        // Recortado de `umbriel outputs --json` en esta máquina (2026-11-22).
+        let salidas = serde_json::json!([
+            {"name": "DP-3", "modes": [
+                {"current": true, "height": 1440, "preferred": true, "refresh_mhz": 59951, "width": 2560},
+                {"current": false, "height": 1440, "preferred": false, "refresh_mhz": 300000, "width": 2560},
+                {"current": false, "height": 1080, "preferred": false, "refresh_mhz": 300000, "width": 1920},
+                {"current": false, "height": 1080, "preferred": false, "refresh_mhz": 120000, "width": 1920}
+            ]},
+            {"name": "HDMI-A-1", "modes": [
+                {"current": false, "height": 1080, "preferred": true, "refresh_mhz": 59940, "width": 1920}
+            ]},
+            {"name": "YA", "modes": [
+                {"current": true, "height": 1080, "preferred": true, "refresh_mhz": 60000, "width": 1920}
+            ]},
+            {"name": "HEADLESS-1", "modes": [
+                {"current": false, "height": 720, "preferred": false, "refresh_mhz": 0, "width": 1280}
+            ]}
+        ]);
+        assert_eq!(
+            modos_umbriel(&salidas),
+            [
+                (
+                    r#"output."DP-3".mode"#.to_owned(),
+                    r#""2560x1440@300""#.to_owned()
+                ),
+                (
+                    r#"output."HDMI-A-1".mode"#.to_owned(),
+                    r#""1920x1080@59.940""#.to_owned()
+                ),
+            ]
         );
     }
 
