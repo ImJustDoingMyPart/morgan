@@ -102,6 +102,7 @@ fn main() -> ExitCode {
     unsafe {
         std::env::set_var("NO_AT_BRIDGE", "1");
     }
+    morgan_ipc::umbriel::corregir_entorno();
     // Una configuración inválida no arranca nada, ni siquiera toma el socket.
     let config_path = match config::path() {
         Ok(p) => p,

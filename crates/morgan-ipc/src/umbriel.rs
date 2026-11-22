@@ -7,19 +7,56 @@ use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// `UMBRIEL_SOCKET`, o el nombre que Umbriel le da por su display.
-pub fn socket_from(env: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
-    if let Some(s) = env("UMBRIEL_SOCKET").filter(|v| !v.is_empty()) {
-        return Some(PathBuf::from(s));
+/// `UMBRIEL_SOCKET`, o el nombre que Umbriel le da por su display. Si `UMBRIEL_SOCKET` apunta a
+/// un socket que no está y el del display sí, vale el del display: un Umbriel de prueba deja su
+/// ruta en el entorno de `systemctl --user` y la sesión real la hereda al reiniciar el servicio.
+pub fn socket_from(
+    env: impl Fn(&str) -> Option<OsString>,
+    existe: impl Fn(&Path) -> bool,
+) -> Option<PathBuf> {
+    let del_display = || {
+        let runtime = env("XDG_RUNTIME_DIR").filter(|v| !v.is_empty())?;
+        let display = env("WAYLAND_DISPLAY").filter(|v| !v.is_empty())?;
+        let display = display.to_string_lossy();
+        Some(PathBuf::from(runtime).join(format!("umbriel-{display}.sock")))
+    };
+    match env("UMBRIEL_SOCKET").filter(|v| !v.is_empty()) {
+        Some(s) if existe(Path::new(&s)) => Some(PathBuf::from(s)),
+        Some(s) => Some(
+            del_display()
+                .filter(|d| existe(d))
+                .unwrap_or_else(|| PathBuf::from(s)),
+        ),
+        None => del_display(),
     }
-    let runtime = env("XDG_RUNTIME_DIR").filter(|v| !v.is_empty())?;
-    let display = env("WAYLAND_DISPLAY").filter(|v| !v.is_empty())?;
-    let display = display.to_string_lossy();
-    Some(PathBuf::from(runtime).join(format!("umbriel-{display}.sock")))
 }
 
 pub fn socket() -> Option<PathBuf> {
-    socket_from(|k| std::env::var_os(k))
+    socket_from(|k| std::env::var_os(k), Path::exists)
+}
+
+/// La ruta que hay que poner en `UMBRIEL_SOCKET` porque la de ahora no existe y hay otra que sí.
+pub fn correccion(
+    env: impl Fn(&str) -> Option<OsString>,
+    existe: impl Fn(&Path) -> bool,
+) -> Option<PathBuf> {
+    let puesta = PathBuf::from(env("UMBRIEL_SOCKET").filter(|v| !v.is_empty())?);
+    let buena = socket_from(env, existe)?;
+    (buena != puesta).then_some(buena)
+}
+
+/// Corrige `UMBRIEL_SOCKET` en el entorno del proceso, así lo heredan los `umbriel msg` y
+/// `umbriel config` que se lancen. Se llama al arrancar, antes de abrir otros hilos.
+pub fn corregir_entorno() {
+    let Some(buena) = correccion(|k| std::env::var_os(k), Path::exists) else {
+        return;
+    };
+    eprintln!(
+        "morgan: UMBRIEL_SOCKET apuntaba a un socket que no existe; se usa {}",
+        buena.display()
+    );
+    // SAFETY: lo llama `main` antes de lanzar hilos.
+    unsafe { std::env::set_var("UMBRIEL_SOCKET", &buena) };
 }
 
 /// Manda un pedido y devuelve lo que vino en `ok`; `err` vuelve como error.
@@ -62,18 +99,50 @@ mod tests {
 
     #[test]
     fn ruta_del_socket() {
+        let todo = |_: &Path| true;
         let env = |k: &str| match k {
             "XDG_RUNTIME_DIR" => Some("/run/user/1000".into()),
             "WAYLAND_DISPLAY" => Some("wayland-0".into()),
             _ => None,
         };
         assert_eq!(
-            socket_from(env),
+            socket_from(env, todo),
             Some(PathBuf::from("/run/user/1000/umbriel-wayland-0.sock"))
         );
         let con = |k: &str| (k == "UMBRIEL_SOCKET").then(|| "/x.sock".into());
-        assert_eq!(socket_from(con), Some(PathBuf::from("/x.sock")));
-        assert_eq!(socket_from(|_| None), None);
+        assert_eq!(socket_from(con, todo), Some(PathBuf::from("/x.sock")));
+        assert_eq!(socket_from(|_| None, todo), None);
+    }
+
+    /// El caso del 2026-11-22: la ruta de un Umbriel de prueba que ya no está.
+    #[test]
+    fn socket_viejo_en_el_entorno() {
+        let env = |k: &str| match k {
+            "UMBRIEL_SOCKET" => Some("/run/user/1000/mg-prueba/umbriel-wayland-0.sock".into()),
+            "XDG_RUNTIME_DIR" => Some("/run/user/1000".into()),
+            "WAYLAND_DISPLAY" => Some("wayland-0".into()),
+            _ => None,
+        };
+        let real = PathBuf::from("/run/user/1000/umbriel-wayland-0.sock");
+        let solo_real = |p: &Path| p == real;
+        assert_eq!(socket_from(env, solo_real), Some(real.clone()));
+        assert_eq!(correccion(env, solo_real), Some(real));
+        // Si existe la puesta, manda esa aunque también esté la del display.
+        assert_eq!(
+            socket_from(env, |_| true),
+            Some(PathBuf::from(
+                "/run/user/1000/mg-prueba/umbriel-wayland-0.sock"
+            ))
+        );
+        assert_eq!(correccion(env, |_| true), None);
+        // Si no hay ninguna, queda la puesta: el error dice esa ruta.
+        assert_eq!(
+            socket_from(env, |_| false),
+            Some(PathBuf::from(
+                "/run/user/1000/mg-prueba/umbriel-wayland-0.sock"
+            ))
+        );
+        assert_eq!(correccion(env, |_| false), None);
     }
 
     #[test]
