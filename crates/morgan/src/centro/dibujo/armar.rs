@@ -719,26 +719,33 @@ impl Ui {
         let lh = self.alto(&nombre).max(self.alto(&lp));
         let alto_col = lh + 2.0 + ESCALA_ALTO;
         let cy = y + ((CUADRO - alto_col) / 2.0).floor();
-        let color_nombre = match tocable {
+        let r_nombre = Rect::new(cx, cy, cx + self.ancho(&nombre), cy + lh);
+        // Como el nombre de un nivel: con el puntero o la lista abierta sube la opacidad, y
+        // apretado se achica.
+        let (color_nombre, escala) = match tocable {
             Some(i) => {
                 let o = Objetivo::Cuota(i);
-                let r = Rect::new(cx, cy, cx + self.ancho(&nombre), cy + lh);
-                h.objetivo(o, r, true);
+                h.objetivo(o, r_nombre, true);
                 let l = if self.cuota == Some(i) {
                     1.0
                 } else {
                     self.luz(o, ahora)
                 };
-                op(&p.on_surface, 0.5 + 0.5 * l)
+                (
+                    op(&p.on_surface, 0.5 + 0.5 * l),
+                    self.animos.escala(o, ahora),
+                )
             }
-            None => op(&p.on_surface, 0.5),
+            None => (op(&p.on_surface, 0.5), 1.0),
         };
+        h.trazos.push(Trazo::escalar(r_nombre, escala));
         h.trazos.push(Trazo::Texto {
             l: nombre,
             x: cx,
             y: cy,
             color: color_nombre,
         });
+        h.trazos.push(Trazo::Fin);
         if let Some(r) = renueva {
             h.trazos.push(Trazo::Texto {
                 l: r,
