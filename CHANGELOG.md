@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+### Notifications clean themselves up
+
+A new notification replaces the previous one from the same app when it says the same thing with a different number, such as "63 updates available" and "6 updates available", or "Battery at 20 %". It replaces nothing when it carries a preview (a screenshot), when it is a message, an email or a received file, or when the app is listed in `[notifications] accumulate`.
+
+The history keeps at most 5 notifications per app (`per_app`). Whatever was seen when opening the center goes away after 24 hours (`seen_hours`), and what was never looked at still lasts `retention_days`. Critical notifications stay until closed, except the ones asking for a reboot ("Reboot recommended"), which go away after rebooting. Apps in `close_on_focus` (for example `["kitty"]`, where terminal agents notify) close their notification when you go back to the window that sent it.
+
 ### The tray moves to the dock
 
 Tray icons now live in the dock. The icon of an app that already has a spot there (Steam, Vesktop) joins that icon, and its menu opens with a right click. What is in the dock only because of the tray (OpenRGB, Cachy-Update) goes at the end, after a divider. An app running in the background with no windows gets a hollow dot. The divider between the most used apps and the other open ones is gone.

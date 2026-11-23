@@ -52,8 +52,11 @@ impl Servidor {
         actions: Vec<String>,
         hints: HashMap<String, OwnedValue>,
         expire_timeout: i32,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] conn: &zbus::Connection,
     ) -> zbus::fdo::Result<u32> {
-        let n = traducir(
+        let pid = pid_de(conn, &header).await;
+        let mut n = traducir(
             app_name,
             replaces_id,
             &app_icon,
@@ -63,6 +66,7 @@ impl Servidor {
             &hints,
             expire_timeout,
         );
+        n.pid = pid;
         let (tx, rx) = async_channel::bounded(1);
         self.pedidos
             .send(Pedido::Notificar {
@@ -197,6 +201,8 @@ pub fn traducir(
             .map(|v| v.clamp(0, 100) as i32),
         vence_ms,
         llegada: ahora(),
+        vista: None,
+        pid: None,
         sonido: if booleano("suppress-sound") {
             PedidoSonido::Callar
         } else if let Some(f) = texto("sound-file") {
@@ -207,6 +213,13 @@ pub fn traducir(
             PedidoSonido::Normal
         },
     }
+}
+
+/// El proceso detrás de la conexión que mandó el pedido, según el bus.
+async fn pid_de(conn: &zbus::Connection, header: &zbus::message::Header<'_>) -> Option<u32> {
+    let emisor = header.sender()?.to_owned();
+    let bus = zbus::fdo::DBusProxy::new(conn).await.ok()?;
+    bus.get_connection_unix_process_id(emisor.into()).await.ok()
 }
 
 pub fn ahora() -> i64 {

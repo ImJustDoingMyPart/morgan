@@ -594,6 +594,20 @@ pub struct Notificaciones {
     pub sin_sonido: Vec<String>,
     #[serde(rename = "replace")]
     pub una_sola: Vec<String>,
+    /// Las que nunca se reemplazan por decir lo mismo con otro número.
+    #[serde(rename = "accumulate")]
+    pub acumulan: Vec<String>,
+    /// Cuántas guarda el historial por app.
+    #[serde(deserialize_with = "por_app")]
+    #[serde(rename = "per_app")]
+    pub por_app: u32,
+    /// Cuánto dura lo que ya se vio en el centro.
+    #[serde(deserialize_with = "horas")]
+    #[serde(rename = "seen_hours")]
+    pub horas_vistas: u32,
+    /// Las que se cierran al volver a la ventana que las mandó.
+    #[serde(rename = "close_on_focus")]
+    pub cerrar_al_volver: Vec<String>,
 }
 
 impl Default for Notificaciones {
@@ -604,6 +618,10 @@ impl Default for Notificaciones {
             sonido: true,
             sin_sonido: Vec::new(),
             una_sola: Vec::new(),
+            acumulan: Vec::new(),
+            por_app: 5,
+            horas_vistas: 24,
+            cerrar_al_volver: Vec::new(),
         }
     }
 }
@@ -619,6 +637,14 @@ impl Notificaciones {
 
     pub fn una_sola(&self, app: &str) -> bool {
         self.una_sola.iter().any(|s| s.eq_ignore_ascii_case(app))
+    }
+
+    pub fn acumula(&self, app: &str) -> bool {
+        self.acumulan.iter().any(|s| s.eq_ignore_ascii_case(app))
+    }
+
+    pub fn cierra_al_volver(&self, app: &str) -> bool {
+        self.cerrar_al_volver.iter().any(|s| s.eq_ignore_ascii_case(app))
     }
 }
 
@@ -666,6 +692,25 @@ fn minutos<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
         _ => Err(de::Error::invalid_value(
             de::Unexpected::Signed(v),
             &"whole minutes from 0 (never) to 1440",
+        )),
+    }
+}
+
+fn por_app<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    let v = i64::deserialize(d)?;
+    match u32::try_from(v) {
+        Ok(v @ 1..=100) => Ok(v),
+        _ => Err(de::Error::invalid_value(de::Unexpected::Signed(v), &"from 1 to 100")),
+    }
+}
+
+fn horas<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    let v = i64::deserialize(d)?;
+    match u32::try_from(v) {
+        Ok(v @ 1..=720) => Ok(v),
+        _ => Err(de::Error::invalid_value(
+            de::Unexpected::Signed(v),
+            &"whole hours from 1 to 720",
         )),
     }
 }
@@ -1062,6 +1107,17 @@ mod tests {
         assert!(!c.notificaciones.silenciada("discord"));
         assert_eq!(c.notificaciones.retencion_dias, 30);
         assert_eq!(Config::default().notificaciones.retencion_dias, 7);
+        let n = parse(
+            "[notifications]\nper_app = 3\nseen_hours = 48\naccumulate = [\"Signal\"]\nclose_on_focus = [\"kitty\"]\n",
+        )
+        .unwrap()
+        .notificaciones;
+        assert_eq!((n.por_app, n.horas_vistas), (3, 48));
+        assert!(n.acumula("signal") && n.cierra_al_volver("Kitty") && !n.acumula("kitty"));
+        let d = Config::default().notificaciones;
+        assert_eq!((d.por_app, d.horas_vistas), (5, 24));
+        assert!(parse("[notifications]\nper_app = 0\n").is_err());
+        assert!(parse("[notifications]\nseen_hours = 0\n").is_err());
         let d = |v: &str| parse(&format!("[notifications]\nretention_days = {v}\n"));
         assert!(d("0").is_err());
         assert!(d("366").is_err());

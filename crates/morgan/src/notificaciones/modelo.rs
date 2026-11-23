@@ -98,6 +98,12 @@ pub struct Notificacion {
     pub progreso: Option<i32>,
     pub vence_ms: i32,
     pub llegada: i64,
+    /// Cuándo quedó a la vista en el centro (segundos, como `llegada`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vista: Option<i64>,
+    /// El proceso que la mandó. No se guarda: después de un reinicio el número es de otro.
+    #[serde(skip)]
+    pub pid: Option<u32>,
     /// Solo cuenta al llegar: no se guarda.
     #[serde(skip)]
     pub sonido: PedidoSonido,
@@ -140,12 +146,82 @@ pub fn reemplaza(lista: &[Notificacion], n: &Notificacion) -> bool {
 }
 
 /// Llega con id propio y no como reemplazo, porque el emisor guarda ese id para sus acciones.
-pub fn desplazadas(lista: &[Notificacion], n: &Notificacion) -> Vec<u32> {
+/// Con `por_titulo` (la app está en `replace`) alcanza con el mismo título; si no, tiene que
+/// decir lo mismo salvo los números ([`misma_plantilla`]) y ninguna de las dos puede traer
+/// contenido propio ([`con_contenido`] lo decide afuera y llega en `contenido`).
+pub fn desplazadas(
+    lista: &[Notificacion],
+    n: &Notificacion,
+    por_titulo: bool,
+    contenido: impl Fn(&Notificacion) -> bool,
+) -> Vec<u32> {
+    let nueva_con_contenido = !por_titulo && contenido(n);
     lista
         .iter()
-        .filter(|x| x.id != n.id && x.app.eq_ignore_ascii_case(&n.app) && x.resumen == n.resumen)
+        .filter(|x| x.id != n.id && x.app.eq_ignore_ascii_case(&n.app))
+        .filter(|x| {
+            if por_titulo {
+                x.resumen == n.resumen
+            } else {
+                !nueva_con_contenido && misma_plantilla(x, n) && !contenido(x)
+            }
+        })
         .map(|x| x.id)
         .collect()
+}
+
+/// El texto con cada tanda de cifras cambiada por `#`: "63 actualizaciones" y "6
+/// actualizaciones" quedan iguales.
+pub fn plantilla(texto: &str) -> String {
+    let mut s = String::with_capacity(texto.len());
+    for c in texto.chars() {
+        if c.is_ascii_digit() {
+            if !s.ends_with('#') {
+                s.push('#');
+            }
+        } else {
+            s.push(c);
+        }
+    }
+    s
+}
+
+pub fn misma_plantilla(a: &Notificacion, b: &Notificacion) -> bool {
+    plantilla(&a.resumen) == plantilla(&b.resumen) && plantilla(&a.cuerpo) == plantilla(&b.cuerpo)
+}
+
+/// Lo que se guarda por lo que trae y no por lo que avisa: una vista previa (una captura, una
+/// foto), un mensaje, un correo, un archivo que llegó. `previa` dice si su imagen lo es (hay
+/// que abrirla para saberlo).
+pub fn con_contenido(n: &Notificacion, previa: bool) -> bool {
+    let categoria = n.categoria.as_deref().unwrap_or("");
+    previa
+        || categoria == super::captura::CATEGORIA
+        || ["im", "email", "transfer"]
+            .iter()
+            .any(|c| categoria == *c || categoria.starts_with(&format!("{c}.")))
+}
+
+/// Las más viejas de cada app pasado el tope. Las críticas no cuentan ni se van: esas las
+/// cierra el usuario.
+pub fn sobrantes(lista: &[Notificacion], tope: u32) -> Vec<u32> {
+    let mut v = Vec::new();
+    for ids in grupos(lista) {
+        // `grupos` pone la más nueva primero.
+        let comunes = ids.into_iter().filter(|id| {
+            lista
+                .iter()
+                .any(|n| n.id == *id && n.urgencia != Urgencia::Critica)
+        });
+        v.extend(comunes.skip(tope as usize));
+    }
+    v
+}
+
+/// "Reiniciá", "reboot", "restart": después de reiniciar ya no tiene sentido.
+pub fn pide_reiniciar(n: &Notificacion) -> bool {
+    let texto = format!("{} {}", n.resumen, n.cuerpo).to_lowercase();
+    ["reboot", "restart", "reinici"].iter().any(|p| texto.contains(p))
 }
 
 impl Notificacion {
@@ -297,11 +373,25 @@ pub fn grupos(lista: &[Notificacion]) -> Vec<Vec<u32>> {
     grupos.into_iter().map(|g| g.ids).collect()
 }
 
-pub fn vencidas(lista: &[Notificacion], ahora: i64, dias: u32) -> Vec<u32> {
+/// Una crítica se queda hasta que la cierre el usuario. Lo visto en el centro dura `horas`
+/// desde que se vio; lo demás, `dias` desde que llegó. Las que piden reiniciar se van si
+/// llegaron antes de `arranque` (el último encendido, si se sabe).
+pub fn vencidas(
+    lista: &[Notificacion],
+    ahora: i64,
+    dias: u32,
+    horas: u32,
+    arranque: Option<i64>,
+) -> Vec<u32> {
     let limite = ahora - i64::from(dias) * 86_400;
+    let visto = ahora - i64::from(horas) * 3_600;
     lista
         .iter()
-        .filter(|n| n.llegada < limite)
+        .filter(|n| {
+            (n.urgencia != Urgencia::Critica
+                && (n.llegada < limite || n.vista.is_some_and(|v| v < visto)))
+                || (pide_reiniciar(n) && arranque.is_some_and(|a| n.llegada < a))
+        })
         .map(|n| n.id)
         .collect()
 }
@@ -350,6 +440,8 @@ pub fn prueba(id: u32, app: &str) -> Notificacion {
         progreso: None,
         vence_ms: -1,
         llegada: 0,
+        vista: None,
+        pid: None,
         sonido: Default::default(),
     }
 }
@@ -529,7 +621,34 @@ mod tests {
         vieja.llegada = 1_000_000 - 8 * 86_400;
         let mut nueva = prueba(2, "a");
         nueva.llegada = 1_000_000 - 6 * 86_400;
-        assert_eq!(vencidas(&[vieja, nueva], 1_000_000, 7), vec![1]);
+        let mut critica = prueba(3, "a");
+        critica.urgencia = Urgencia::Critica;
+        let mut vista = prueba(4, "a");
+        vista.llegada = 1_000_000 - 2 * 86_400;
+        vista.vista = Some(1_000_000 - 25 * 3_600);
+        let mut recien_vista = prueba(5, "a");
+        recien_vista.llegada = 1_000_000 - 2 * 86_400;
+        recien_vista.vista = Some(1_000_000 - 23 * 3_600);
+        assert_eq!(
+            vencidas(&[vieja, nueva, critica, vista, recien_vista], 1_000_000, 7, 24, None),
+            vec![1, 4]
+        );
+    }
+
+    #[test]
+    fn reiniciar_se_va_al_reiniciar() {
+        let mut n = prueba(1, "CachyOS Update");
+        n.resumen = "Reboot recommended!".into();
+        n.urgencia = Urgencia::Critica;
+        n.llegada = 500;
+        let otra = Notificacion { llegada: 500, ..prueba(2, "a") };
+        assert_eq!(vencidas(&[n.clone(), otra.clone()], 1_000, 7, 24, Some(600)), vec![1]);
+        // Llegó después del arranque: sigue pendiente.
+        assert!(vencidas(&[n.clone()], 1_000, 7, 24, Some(400)).is_empty());
+        assert!(vencidas(&[n], 1_000, 7, 24, None).is_empty());
+        let mut es = prueba(3, "a");
+        es.cuerpo = "Reiniciá para terminar".into();
+        assert!(pide_reiniciar(&es));
     }
 
     #[test]
@@ -629,10 +748,59 @@ mod tests {
             con(3, "Kitty", "Claude Code"),
             con(4, "vesktop", "Claude Code"),
         ];
-        assert_eq!(desplazadas(&lista, &con(9, "kitty", "Claude Code")), [1, 3]);
+        let d = |n| desplazadas(&lista, &n, true, |_| false);
+        assert_eq!(d(con(9, "kitty", "Claude Code")), [1, 3]);
         // Un reemplazo por id no se desplaza a sí mismo.
-        assert_eq!(desplazadas(&lista, &con(3, "kitty", "Claude Code")), [1]);
-        assert!(desplazadas(&lista, &con(9, "kitty", "Codex")).is_empty());
+        assert_eq!(d(con(3, "kitty", "Claude Code")), [1]);
+        assert!(d(con(9, "kitty", "Codex")).is_empty());
+    }
+
+    #[test]
+    fn lo_mismo_con_otro_numero_reemplaza() {
+        use super::*;
+        let con = |id, app: &str, cuerpo: &str| Notificacion {
+            resumen: "Cachy-Update".into(),
+            cuerpo: cuerpo.into(),
+            ..prueba(id, app)
+        };
+        let lista = vec![
+            con(1, "Cachy-Update", "63 actualizaciones disponibles"),
+            con(2, "Cachy-Update", "Reinicio pendiente"),
+            con(3, "otra", "6 actualizaciones disponibles"),
+        ];
+        let nueva = con(9, "Cachy-Update", "6 actualizaciones disponibles");
+        assert_eq!(desplazadas(&lista, &nueva, false, |_| false), [1]);
+        // Con contenido (una captura, un mensaje) no reemplaza ni es reemplazada.
+        assert!(desplazadas(&lista, &nueva, false, |_| true).is_empty());
+        assert!(desplazadas(&lista, &nueva, false, |n| n.id == 1).is_empty());
+        assert_eq!(plantilla("Batería al 20 %"), plantilla("Batería al 5 %"));
+        assert_ne!(plantilla("hola"), plantilla("chau"));
+    }
+
+    #[test]
+    fn que_trae_contenido() {
+        use super::*;
+        let mut n = prueba(1, "a");
+        assert!(!con_contenido(&n, false));
+        assert!(con_contenido(&n, true));
+        for c in ["im.received", "email", "transfer.complete", super::super::captura::CATEGORIA] {
+            n.categoria = Some(c.into());
+            assert!(con_contenido(&n, false), "{c}");
+        }
+        n.categoria = Some("imagen".into());
+        assert!(!con_contenido(&n, false));
+    }
+
+    #[test]
+    fn tope_por_app() {
+        use super::*;
+        let mut lista: Vec<Notificacion> = (1..=8)
+            .map(|i| Notificacion { llegada: i64::from(i), ..prueba(i, "Captura") })
+            .collect();
+        lista[0].urgencia = Urgencia::Critica;
+        lista.push(Notificacion { llegada: 9, ..prueba(9, "otra") });
+        // De las 7 comunes de Captura quedan las 5 más nuevas (8 a 4); la crítica se queda.
+        assert_eq!(sobrantes(&lista, 5), [3, 2]);
     }
 
     #[test]

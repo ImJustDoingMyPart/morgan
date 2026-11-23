@@ -336,6 +336,7 @@ impl Centro {
             return;
         }
         i.toasts.callar(true);
+        i.notificaciones.marcar_vistas();
         i.mezclador.abrir();
         i.red.abrir();
         i.bluetooth.abrir();

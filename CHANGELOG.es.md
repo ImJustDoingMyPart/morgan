@@ -4,6 +4,12 @@
 
 ## Sin publicar
 
+### Las notificaciones se limpian solas
+
+Una notificación nueva reemplaza a la anterior de la misma app cuando dice lo mismo con otro número, como «63 actualizaciones disponibles» y «6 actualizaciones disponibles», o «Batería al 20 %». No reemplaza nada si trae una vista previa (una captura), si es un mensaje, un correo o un archivo recibido, o si la app está en `[notifications] accumulate`.
+
+El historial guarda como mucho 5 notificaciones por app (`per_app`). Lo que ya se vio al abrir el centro se va a las 24 horas (`seen_hours`), y lo que nunca se miró sigue durando `retention_days`. Las críticas se quedan hasta que se cierran, salvo las que piden reiniciar («Reboot recommended»), que se van solas después de reiniciar. Las apps de `close_on_focus` (por ejemplo `["kitty"]`, donde avisan los agentes de terminal) cierran su notificación al volver a la ventana que la mandó.
+
 ### La bandeja pasa al dock
 
 Los íconos de la bandeja ahora están en el dock. El de una app que ya tiene lugar ahí (Steam, Vesktop) se junta a ese ícono, y su menú sale con el click derecho. Lo que está en el dock solo por la bandeja (OpenRGB, Cachy-Update) va al final, después de una raya. Una app que corre de fondo sin ventanas lleva un punto hueco. La raya que separaba las apps más usadas de las otras abiertas ya no está.

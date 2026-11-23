@@ -67,6 +67,23 @@ impl Notificaciones {
         });
         let n = Notificaciones { inner };
         n.podar();
+        let weak = Rc::downgrade(&n.inner);
+        glib::timeout_add_seconds_local(PODA, move || match weak.upgrade() {
+            Some(inner) => {
+                Notificaciones { inner }.podar();
+                glib::ControlFlow::Continue
+            }
+            None => glib::ControlFlow::Break,
+        });
+        let weak = Rc::downgrade(&n.inner);
+        compositor.al_enfocar(move |ventana| {
+            if let Some(inner) = weak.upgrade() {
+                let ventana = ventana.to_owned();
+                glib::MainContext::default().spawn_local(async move {
+                    Notificaciones { inner }.al_volver(ventana).await;
+                });
+            }
+        });
 
         let weak = Rc::downgrade(&n.inner);
         compositor.al_cambiar(move |juego| {
@@ -152,8 +169,14 @@ impl Notificaciones {
             n.imagen = self.guardar_png(n.id, p).map(Imagen::Archivo);
         }
         escritorio(&mut n);
-        if self.inner.config.borrow().una_sola(&n.app) {
-            let viejas = modelo::desplazadas(&self.inner.lista.borrow(), &n);
+        let (por_titulo, acumula) = {
+            let c = self.inner.config.borrow();
+            (c.una_sola(&n.app), c.acumula(&n.app))
+        };
+        if por_titulo || !acumula {
+            let viejas = modelo::desplazadas(&self.inner.lista.borrow(), &n, por_titulo, |x| {
+                modelo::con_contenido(x, previa(x))
+            });
             for v in viejas {
                 self.cerrar(v, Razon::Vencio);
             }
@@ -192,8 +215,58 @@ impl Notificaciones {
             id,
             flota: destino == Destino::Flota,
         });
+        let tope = self.inner.config.borrow().por_app;
+        let sobrantes = modelo::sobrantes(&self.inner.lista.borrow(), tope);
+        for v in sobrantes {
+            self.cerrar(v, Razon::Vencio);
+        }
         self.guardar();
         id
+    }
+
+    /// Lo que hay en el historial quedó a la vista: el centro se abrió.
+    pub fn marcar_vistas(&self) {
+        let ahora = servidor::ahora();
+        let mut cambio = false;
+        for n in self.inner.lista.borrow_mut().iter_mut() {
+            if n.vista.is_none() {
+                n.vista = Some(ahora);
+                cambio = true;
+            }
+        }
+        if cambio {
+            self.guardar();
+        }
+    }
+
+    /// Volver a la ventana que mandó el aviso lo responde (los agentes que esperan).
+    async fn al_volver(&self, ventana: String) {
+        let esperan = self
+            .inner
+            .lista
+            .borrow()
+            .iter()
+            .any(|n| n.pid.is_some() && self.inner.config.borrow().cierra_al_volver(&n.app));
+        if ventana.is_empty() || !esperan {
+            return;
+        }
+        let Some(clientes) = self.inner.compositor.clientes().await else {
+            return;
+        };
+        let Some(pid) = clientes.iter().find(|c| c.id == ventana).and_then(|c| c.pid) else {
+            return;
+        };
+        let ids: Vec<u32> = self
+            .inner
+            .lista
+            .borrow()
+            .iter()
+            .filter(|n| n.pid == Some(pid) && self.inner.config.borrow().cierra_al_volver(&n.app))
+            .map(|n| n.id)
+            .collect();
+        for id in ids {
+            self.cerrar(id, Razon::Usuario);
+        }
     }
 
     fn proximo_id(&self) -> u32 {
@@ -270,6 +343,8 @@ impl Notificaciones {
                 progreso: None,
                 vence_ms: -1,
                 llegada: servidor::ahora(),
+                vista: None,
+                pid: None,
                 sonido: Default::default(),
             });
         }
@@ -312,17 +387,20 @@ impl Notificaciones {
     }
 
     fn podar(&self) {
-        let vencidas = modelo::vencidas(
-            &self.inner.lista.borrow(),
-            servidor::ahora(),
-            self.inner.config.borrow().retencion_dias,
-        );
-        if !vencidas.is_empty() {
-            self.inner
-                .lista
-                .borrow_mut()
-                .retain(|n| !vencidas.contains(&n.id));
-            self.guardar();
+        let (dias, horas, tope) = {
+            let c = self.inner.config.borrow();
+            (c.retencion_dias, c.horas_vistas, c.por_app)
+        };
+        let mut ids = {
+            let lista = self.inner.lista.borrow();
+            let mut v = modelo::vencidas(&lista, servidor::ahora(), dias, horas, arranque());
+            v.extend(modelo::sobrantes(&lista, tope));
+            v
+        };
+        ids.sort_unstable();
+        ids.dedup();
+        for id in ids {
+            self.cerrar(id, Razon::Vencio);
         }
     }
 
@@ -406,6 +484,26 @@ impl Notificaciones {
             }
         }
     }
+}
+
+/// Cada cuánto se revisa qué venció (segundos).
+const PODA: u32 = 600;
+
+/// Si su imagen es una vista previa: leer el encabezado del archivo alcanza.
+fn previa(n: &Notificacion) -> bool {
+    match &n.imagen {
+        Some(Imagen::Archivo(p)) => image::image_dimensions(p)
+            .is_ok_and(|(w, h)| modelo::es_vista_previa(w as i32, h as i32)),
+        _ => false,
+    }
+}
+
+/// Cuándo arrancó la máquina (segundos), de `btime` en `/proc/stat`.
+fn arranque() -> Option<i64> {
+    let stat = std::fs::read_to_string("/proc/stat").ok()?;
+    stat.lines()
+        .find_map(|l| l.strip_prefix("btime "))
+        .and_then(|v| v.trim().parse().ok())
 }
 
 fn escritorio(n: &mut Notificacion) {

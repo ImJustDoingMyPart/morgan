@@ -49,6 +49,8 @@ pub fn notificacion(ruta: &Path, llegada: i64) -> Notificacion {
         progreso: None,
         vence_ms: -1,
         llegada,
+        vista: None,
+        pid: None,
         // El obturador del tema de sonidos, no el de un mensaje.
         sonido: PedidoSonido::Nombre("screen-capture".into()),
     }
