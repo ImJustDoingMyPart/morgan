@@ -2,7 +2,15 @@
 
 [English](CHANGELOG.md) · **Español**
 
-## Sin publicar
+## 0.3.3 · 2026-11-23
+
+### El inglés llega a todo, y el borde de Umbriel con la sombra de los paneles
+
+Con el idioma en inglés, todo lo que morgan muestra sale en inglés, incluidos textos que antes quedaban en español.
+
+En Umbriel, la sombra alrededor de la ventana con foco es la misma de los paneles de morgan: la negra es una línea fina con un difuminado suave, y el glow lleva los dos colores del tema corridos un píxel. Antes copiaba la de Hyprland y la negra pesaba el doble junto al borde.
+
+En el centro, la barra de las cuotas usa el canal del slider, y el nombre de una cuota se achica al apretarlo, como el de un nivel.
 
 ### Las notificaciones se limpian solas
 

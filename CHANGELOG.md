@@ -2,7 +2,15 @@
 
 **English** · [Español](CHANGELOG.es.md)
 
-## Unreleased
+## 0.3.3 · 2026-11-23
+
+### English reaches everything, and the Umbriel border gets the panels' shadow
+
+With the language set to English, everything morgan shows comes out in English, including text that used to stay in Spanish.
+
+On Umbriel, the shadow around the focused window is the same one morgan's panels use: the black one is a thin line with a soft blur, and the glow carries the theme's two colors shifted by one pixel. It used to copy Hyprland's, and the black one was twice as heavy next to the border.
+
+In the center, the quota bar uses the slider's track, and a quota's name shrinks when pressed, like a level's.
 
 ### Notifications clean themselves up
 
