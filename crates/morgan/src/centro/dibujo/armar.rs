@@ -29,8 +29,6 @@ const ESCALA_ALTO: f64 = 16.0;
 const CANAL_Y: f64 = 6.0;
 const CANAL_ALTO: f64 = 5.0;
 const ESCALA_DERECHA: f64 = 14.0;
-/// La barra de las cuotas: 6 de alto con 6 arriba, 14 a la derecha y 4 abajo.
-const BARRA_ALTO: f64 = 6.0;
 /// El reproductor.
 const CARATULA: f64 = 72.0;
 const BOTON_REPRO: f64 = 32.0;
@@ -688,7 +686,7 @@ impl Ui {
         y
     }
 
-    /// Una fila de cuotas: un nivel con la barra en lugar del slider.
+    /// Una fila de cuotas: un nivel con el canal del slider, sin perilla.
     #[allow(clippy::too_many_arguments)]
     fn armar_cuota(
         &mut self,
@@ -719,7 +717,7 @@ impl Ui {
             .rotulos
             .recortada(&c.nombre, 12.0, (cw - wp - 6.0 - wr).max(0.0));
         let lh = self.alto(&nombre).max(self.alto(&lp));
-        let alto_col = lh + 2.0 + 6.0 + BARRA_ALTO + 4.0;
+        let alto_col = lh + 2.0 + ESCALA_ALTO;
         let cy = y + ((CUADRO - alto_col) / 2.0).floor();
         let color_nombre = match tocable {
             Some(i) => {
@@ -755,8 +753,9 @@ impl Ui {
             y: cy,
             color: if c.alerta { p.error } else { p.tertiary },
         });
-        let by = cy + lh + 2.0 + 6.0;
-        let canal = Rect::new(cx, by, cx + cw - ESCALA_DERECHA, by + BARRA_ALTO);
+        // El canal del slider, sin la perilla.
+        let by = cy + lh + 2.0 + CANAL_Y;
+        let canal = Rect::new(cx, by, cx + cw - ESCALA_DERECHA, by + CANAL_ALTO);
         let alfa = if c.apagada { 0.5 } else { 1.0 };
         h.trazos.push(Trazo::Grupo {
             r: canal,
@@ -767,7 +766,7 @@ impl Ui {
         });
         h.trazos.push(Trazo::Caja {
             r: canal,
-            radio: BARRA_ALTO / 2.0,
+            radio: RADIO,
             color: op(&p.outline_variant, 0.6),
         });
         let lleno = Rect::new(
@@ -779,14 +778,14 @@ impl Ui {
         if lleno.width() > 0.0 {
             h.trazos.push(Trazo::Sombra {
                 r: lleno,
-                radio: BARRA_ALTO / 2.0,
+                radio: RADIO,
                 color: con_alfa(&p.tertiary, 0.35),
                 spread: 0.0,
                 blur: 4.0,
             });
             h.trazos.push(Trazo::Degrade {
                 r: lleno,
-                radio: BARRA_ALTO / 2.0,
+                radio: RADIO,
                 a: p.primary,
                 b: p.tertiary,
                 forma: Degrade::Horizontal { de: lleno },
