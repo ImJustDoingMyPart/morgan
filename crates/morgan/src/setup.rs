@@ -130,7 +130,7 @@ fn presentar_a_morgan(interactivo: bool) {
     }
     let _ = std::fs::write(&marca, "");
     println!();
-    crate::acerca::correr();
+    let _ = crate::acerca::correr();
 }
 
 /// Los atajos de ventanas de morgan, uno por compositor, para elegir. Solo se ofrecen los
