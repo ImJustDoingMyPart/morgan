@@ -7,8 +7,8 @@ use crate::osd::Aviso;
 const MS: u32 = 2000;
 
 pub fn aviso(prendido: bool) -> Aviso {
-    let texto = if prendido { "Activado" } else { "Desactivado" };
-    Aviso::estado("󰘲", "Bloq Mayús", texto, prendido, MS)
+    let texto = if prendido { tr!("Activado") } else { tr!("Desactivado") };
+    Aviso::estado("󰘲", tr!("Bloq Mayús"), texto, prendido, MS)
 }
 
 /// El teclado que Hyprland marca `main`; si ninguno lo está, el primero.

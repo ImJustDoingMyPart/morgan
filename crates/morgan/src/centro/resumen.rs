@@ -20,11 +20,11 @@ pub fn red(e: &red::Estado) -> Resumen {
     match base {
         Some(c) => {
             let mut estado = match c.tipo {
-                Tipo::Cable => "Cable".to_owned(),
+                Tipo::Cable => tr!("Cable").to_owned(),
                 _ => c.nombre.clone(),
             };
             if vpn {
-                estado.push_str(" · VPN");
+                estado.push_str(" · VPN"); // no-tr
             }
             Resumen {
                 glifo: c.tipo.glifo(),
@@ -39,7 +39,7 @@ pub fn red(e: &red::Estado) -> Resumen {
         },
         None => Resumen {
             glifo: "󰈂",
-            estado: "Sin conexión".to_owned(),
+            estado: tr!("Sin conexión").to_owned(),
             encendida: false,
         },
     }
@@ -49,16 +49,16 @@ pub fn bluetooth(e: &bluetooth::Estado) -> Resumen {
     if !e.encendido {
         return Resumen {
             glifo: "󰂲",
-            estado: e.motivo.clone().unwrap_or_else(|| "Apagado".to_owned()),
+            estado: e.motivo.clone().unwrap_or_else(|| tr!("Apagado").to_owned()),
             encendida: false,
         };
     }
     let conectados: Vec<&bluetooth::Dispositivo> =
         e.dispositivos.iter().filter(|d| d.conectado).collect();
     let estado = match conectados.as_slice() {
-        [] => "Encendido".to_owned(),
+        [] => tr!("Encendido").to_owned(),
         [d] => d.nombre.clone(),
-        v => format!("{} conectados", v.len()),
+        v => trf!("{} conectados", v.len()),
     };
     Resumen {
         glifo: if conectados.is_empty() {
@@ -91,24 +91,24 @@ fn interruptor(glifo: &'static str, encendida: bool, si: &str, no: &str) -> Resu
 }
 
 pub fn no_molestar(activo: bool) -> Resumen {
-    interruptor("󰂛", activo, "Solo críticas", "Apagado")
+    interruptor("󰂛", activo, tr!("Solo críticas"), tr!("Apagado"))
 }
 
 pub fn caffeine(activo: bool) -> Resumen {
-    interruptor("󰅶", activo, "Sin apagar pantalla", "Apagado")
+    interruptor("󰅶", activo, tr!("Sin apagar pantalla"), tr!("Apagado"))
 }
 
 pub fn luz(activo: bool) -> Resumen {
-    interruptor("󰖔", activo, "Encendida", "Apagada")
+    interruptor("󰖔", activo, tr!("Encendida"), tr!("Apagada"))
 }
 
 pub fn sesion(segundos: u64) -> Resumen {
     let minutos = segundos / 60;
     let estado = match minutos {
-        0 => "Recién encendida".to_owned(),
-        m if m < 60 => format!("{m} min encendida"),
-        m if m < 24 * 60 => format!("{} h encendida", m / 60),
-        m => format!("{} d encendida", m / (24 * 60)),
+        0 => tr!("Recién encendida").to_owned(),
+        m if m < 60 => trf!("{} min encendida", m),
+        m if m < 24 * 60 => trf!("{} h encendida", m / 60),
+        m => trf!("{} d encendida", m / (24 * 60)),
     };
     Resumen {
         glifo: "󰐥",

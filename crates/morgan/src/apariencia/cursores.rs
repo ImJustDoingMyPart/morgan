@@ -62,10 +62,10 @@ pub fn actual() -> (String, u32) {
 
 pub async fn aplicar(tema: &str, tamano: u32) -> Result<(), String> {
     if !listar().iter().any(|t| t == tema) {
-        return Err(format!("no existe el tema de cursor «{tema}»"));
+        return Err(trf!("no existe el tema de cursor «{}»", tema));
     }
     if !(8..=256).contains(&tamano) {
-        return Err(format!("tamaño de cursor fuera de rango: {tamano}"));
+        return Err(trf!("tamaño de cursor fuera de rango: {}", tamano));
     }
     let n = tamano.to_string();
     reescribir(&uwsm_env(), |t| {

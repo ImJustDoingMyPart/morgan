@@ -27,7 +27,7 @@ impl Logind {
             SESION,
         )
         .await?;
-        let id: String = auto.get_property("Id").await?;
+        let id: String = auto.get_property("Id").await?; // no-tr
         let sesion: OwnedObjectPath = manager(&conn).await?.call("GetSession", &(id,)).await?;
         Ok(Logind { conn, sesion })
     }
@@ -39,14 +39,14 @@ impl Logind {
     pub async fn bloquear(&self) -> zbus::Result<()> {
         self.proxy_sesion()
             .await?
-            .call::<_, _, ()>("Lock", &())
+            .call::<_, _, ()>("Lock", &()) // no-tr
             .await
     }
 
     pub async fn suspender(&self) -> zbus::Result<()> {
         manager(&self.conn)
             .await?
-            .call::<_, _, ()>("Suspend", &(false,))
+            .call::<_, _, ()>("Suspend", &(false,)) // no-tr
             .await
     }
 
@@ -65,11 +65,11 @@ impl Logind {
         let fd: zbus::zvariant::OwnedFd = manager(&self.conn)
             .await?
             .call(
-                "Inhibit",
+                "Inhibit", // no-tr
                 &(
                     "sleep",
                     "morgan",
-                    "Bloquear la sesión antes de suspender",
+                    tr!("Bloquear la sesión antes de suspender"),
                     "delay",
                 ),
             )
@@ -87,7 +87,7 @@ impl Logind {
 
     pub async fn al_lock(&self, f: impl Fn()) -> zbus::Result<()> {
         let p = self.proxy_sesion().await?;
-        let mut s = p.receive_signal("Lock").await?;
+        let mut s = p.receive_signal("Lock").await?; // no-tr
         while s.next().await.is_some() {
             f();
         }

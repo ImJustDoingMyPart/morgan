@@ -76,7 +76,7 @@ impl Hyprland {
     }
 
     pub async fn eval(&self, lua: &str) {
-        if let Some(r) = self.consultar(&format!("eval {lua}")).await
+        if let Some(r) = self.consultar(&format!("eval {lua}")).await // no-tr
             && !(r.trim() == "ok" || r.trim().is_empty())
         {
             eprintln!("morgan: eval {lua}: {}", r.trim());
@@ -115,30 +115,27 @@ impl Hyprland {
     /// Enfocar una ventana lleva el puntero a su centro. `quieto`: `no_warps` vale solo
     /// durante el pedido y vuelve a lo que el usuario tenga puesto.
     pub async fn enfocar(&self, id: &str, quieto: bool) {
-        let foco = format!("hl.dispatch(hl.dsp.focus({{ window = \"address:{id}\" }}))");
+        let foco = format!("hl.dispatch(hl.dsp.focus({{ window = \"address:{id}\" }}))"); // no-tr
         if !quieto {
             return self.eval(&foco).await;
         }
         let antes = self
-            .consultar("j/getoption cursor:no_warps")
+            .consultar("j/getoption cursor:no_warps") // no-tr
             .await
             .is_some_and(|o| opcion_activa(&o));
-        self.eval(&format!(
-            "hl.config({{ cursor = {{ no_warps = true }} }}) {foco} \
-             hl.config({{ cursor = {{ no_warps = {antes} }} }})"
-        ))
-        .await;
+        let lua = format!("hl.config({{ cursor = {{ no_warps = true }} }}) {foco} hl.config({{ cursor = {{ no_warps = {antes} }} }})"); // no-tr
+        self.eval(&lua).await;
     }
 
     pub async fn cerrar(&self, id: &str) {
         self.eval(&format!(
-            "hl.dispatch(hl.dsp.window.close({{ window = \"address:{id}\" }}))"
+            "hl.dispatch(hl.dsp.window.close({{ window = \"address:{id}\" }}))" // no-tr
         ))
         .await;
     }
 
     pub async fn ir_a(&self, id: i64) {
-        let lua = format!("eval hl.dispatch(hl.dsp.focus({{ workspace = {id} }}))");
+        let lua = format!("eval hl.dispatch(hl.dsp.focus({{ workspace = {id} }}))"); // no-tr
         match pedir(&self.dir, &lua).await {
             Ok(r) if r.trim() == "ok" || r.trim().is_empty() => {}
             Ok(r) => eprintln!("morgan: ir al workspace {id}: {}", r.trim()),
@@ -150,7 +147,7 @@ impl Hyprland {
     /// existe.
     pub async fn dpms(&self, prender: bool) {
         let accion = if prender { "enable" } else { "disable" };
-        let lua = format!("eval hl.dispatch(hl.dsp.dpms({{ action = \"{accion}\" }}))");
+        let lua = format!("eval hl.dispatch(hl.dsp.dpms({{ action = \"{accion}\" }}))"); // no-tr
         match pedir(&self.dir, &lua).await {
             Ok(r) if r.trim() == "ok" || r.trim().is_empty() => {}
             Ok(r) => eprintln!("morgan: dpms {accion}: {}", r.trim()),
@@ -247,7 +244,7 @@ impl Hyprland {
                     .await;
             let w = w_res.map_err(|e| e.to_string())?;
             let m = m_res.map_err(|e| e.to_string())?;
-            leer_espacios(&w, &m).map_err(|e| format!("ilegible: {e}"))
+            leer_espacios(&w, &m).map_err(|e| format!("ilegible: {e}")) // no-tr
         };
         match leido.await {
             Ok(leido) => c.releer_espacios(leido, false),
@@ -284,7 +281,7 @@ pub async fn pedir(dir: &Path, comando: &str) -> Result<String, glib::Error> {
     let comando = comando.to_owned();
     gio::spawn_blocking(move || pedir_ya(&ruta, &comando))
         .await
-        .unwrap_or_else(|_| Err(std::io::Error::other("el hilo del pedido entró en pánico")))
+        .unwrap_or_else(|_| Err(std::io::Error::other("el hilo del pedido entró en pánico"))) // no-tr
         .map_err(|e| glib::Error::new(gio::IOErrorEnum::Failed, &e.to_string()))
 }
 

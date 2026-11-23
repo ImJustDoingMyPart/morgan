@@ -195,7 +195,7 @@ fn tema_bandeja() -> Option<crate::icono::TemaPropio> {
     propia
         .join("Bandeja/index.theme")
         .is_file()
-        .then(|| crate::icono::TemaPropio::nuevo("Bandeja", &[propia]))
+        .then(|| crate::icono::TemaPropio::nuevo("Bandeja", &[propia])) // no-tr
 }
 
 fn imagen(item: &Item, ctx: &Contexto, escala: u32) -> Option<ImageData> {

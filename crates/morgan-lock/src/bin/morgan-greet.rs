@@ -23,8 +23,9 @@ use morgan_lock::greeter::{self, BASE, Recuerdo, Sesion, Usuario};
 use morgan_lock::pantalla::{self, Ajustes};
 use morgan_lock::perfil::Rutas;
 use morgan_lock::verificar::{Resultado, Verificador};
+use morgan_idioma::{tr, trf};
 
-const USO: &str = "uso: morgan-greet [--compositor hyprland|umbriel] [pantalla [--demo] | install [--apply] | restore [--apply]] [--raiz DIR]";
+const USO: &str = "uso: morgan-greet [--compositor hyprland|umbriel] [pantalla [--demo] | install [--apply] | restore [--apply]] [--raiz DIR]"; // no-tr
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -226,78 +227,95 @@ fn instalar(raiz: Option<PathBuf>, compositor: Option<String>, aplicar: bool) ->
         .and_then(|t| pam_nuevo(&t));
     let respaldo_pam = greetd.with_file_name(nombre_respaldo_pam(&f));
 
-    println!("Plan (compositor: {}):", nombre_visible(&compositor));
+    println!("{}", trf!("Plan (compositor: {}):", nombre_visible(&compositor)));
     if del_paquete {
-        println!("  1. el greeter es el del paquete: {}", binario.display());
+        println!("{}", trf!("  1. el greeter es el del paquete: {}", binario.display()));
     } else {
         println!(
-            "  1. copiar {} a {}",
-            exe.display(),
-            r.join(BINARIO).display()
+            "{}",
+            trf!("  1. copiar {} a {}", exe.display(), r.join(BINARIO).display())
         );
     }
     println!(
-        "  2. crear {} (de greeter) y {}/usuarios (con sticky bit)",
-        estado.display(),
-        estado.display()
+        "{}",
+        trf!(
+            "  2. crear {} (de greeter) y {}/usuarios (con sticky bit)",
+            estado.display(),
+            estado.display()
+        )
     );
     // Ya instalado: sin respaldo nuevo, así `restore` sigue volviendo a la de antes del greeter.
     let config_lista = nueva == actual;
     let con_greeter = tiene_greeter(&actual, &binario.to_string_lossy());
     if config_lista {
-        println!(
-            "  3-4. {} ya tiene el greeter: no se toca",
-            greetd.display()
-        );
+        println!("{}", trf!("  3-4. {} ya tiene el greeter: no se toca", greetd.display()));
     } else if con_greeter {
         println!(
-            "  3-4. {} ya tiene el greeter: command = \"{command}\" (sin respaldo nuevo: `restore` vuelve a la de antes del greeter)",
-            greetd.display()
+            "{}",
+            trf!(
+                "  3-4. {} ya tiene el greeter: command = \"{}\" (sin respaldo nuevo: `restore` vuelve a la de antes del greeter)",
+                greetd.display(),
+                command
+            )
         );
     } else {
         println!(
-            "  3. respaldar {} en {}",
-            greetd.display(),
-            respaldo.display()
+            "{}",
+            trf!("  3. respaldar {} en {}", greetd.display(), respaldo.display())
         );
         println!(
-            "  4. en {}: [default_session] command = \"{command}\", y sin [initial_session] (sin inicio automático)",
-            greetd.display(),
+            "{}",
+            trf!(
+                "  4. en {}: [default_session] command = \"{}\", y sin [initial_session] (sin inicio automático)",
+                greetd.display(),
+                command
+            )
         );
     }
     if pam_nueva.is_some() {
         println!(
-            "  5. respaldar {} en {} y sumarle pam_gnome_keyring: la clave del greeter abre el llavero",
-            pam.display(),
-            respaldo_pam.display()
+            "{}",
+            trf!(
+                "  5. respaldar {} en {} y sumarle pam_gnome_keyring: la clave del greeter abre el llavero",
+                pam.display(),
+                respaldo_pam.display()
+            )
         );
     }
     let logind = std::fs::read_to_string(r.join("etc/systemd/logind.conf")).unwrap_or_default();
     if hay_tty_de_emergencia(&logind) {
         println!(
-            "Salida de emergencia: si el greeter no arranca, Ctrl+Alt+F2 da un login de texto;"
+            "{}",
+            tr!("Salida de emergencia: si el greeter no arranca, Ctrl+Alt+F2 da un login de texto;")
         );
         println!(
-            "  ahí, `sudo morgan-greet restore --apply` (o el binario de {}).",
-            binario.display()
+            "{}",
+            trf!("  ahí, `sudo morgan-greet restore --apply` (o el binario de {}).", binario.display())
         );
     } else {
-        println!("Ojo: logind tiene NAutoVTs=0: sin login de texto de emergencia. Se sigue igual.");
+        println!(
+            "{}",
+            tr!("Ojo: logind tiene NAutoVTs=0: sin login de texto de emergencia. Se sigue igual.")
+        );
     }
-    println!("Vale desde el próximo arranque: greetd no se reinicia.");
+    println!("{}", tr!("Vale desde el próximo arranque: greetd no se reinicia."));
     if let Some(m) = aviso_gestor(&r) {
         println!("{m}");
     }
     if !aplicar {
         println!(
-            "Nada cambió. Para hacerlo: sudo {} --compositor {compositor} install --apply",
-            exe.display()
+            "{}",
+            trf!(
+                "Nada cambió. Para hacerlo: sudo {} --compositor {} install --apply",
+                exe.display(),
+                compositor
+            )
         );
         return ExitCode::SUCCESS;
     }
 
     let hecho = (|| -> Result<(), String> {
-        let e = |p: &Path, err: std::io::Error| format!("{}: {err}", p.display());
+        let e = |p: &Path, err: std::io::Error| format!("{}: {err}", p.display()); // no-tr
         if !del_paquete {
             let destino = r.join(BINARIO);
             let dir = destino.parent().unwrap_or(&r);
@@ -363,16 +381,17 @@ fn elegir_compositor(puesto: Option<&str>) -> Option<String> {
         return None;
     }
     println!(
-        "La pantalla de inicio corre dentro de un compositor, aparte de la sesión a la que se entra."
+        "{}",
+        tr!("La pantalla de inicio corre dentro de un compositor, aparte de la sesión a la que se entra.")
     );
-    println!("Hay varios instalados:");
+    println!("{}", tr!("Hay varios instalados:"));
     for (i, (c, n)) in hay.iter().zip(&nombres).enumerate() {
-        let marca = if *c == prop { "  (Enter)" } else { "" };
-        println!("  {}. {n}{marca}", i + 1);
+        let marca = if *c == prop { "  (Enter)" } else { "" }; // no-tr
+        println!("  {}. {n}{marca}", i + 1); // no-tr
     }
     let mut entrada = std::io::stdin().lock();
     loop {
-        print!("¿Cuál? ");
+        print!("{}", tr!("¿Cuál? "));
         let _ = std::io::stdout().flush();
         let mut linea = String::new();
         match entrada.read_line(&mut linea) {
@@ -383,15 +402,15 @@ fn elegir_compositor(puesto: Option<&str>) -> Option<String> {
             return Some(c.to_owned());
         }
         println!(
-            "Un número de la lista, o Enter para {}.",
-            nombre_visible(prop)
+            "{}",
+            trf!("Un número de la lista, o Enter para {}.", nombre_visible(prop))
         );
     }
 }
 
 /// Escribe `p` por un temporal que se renombra, con los permisos que tenía.
 fn reemplazar(p: &Path, texto: &str) -> Result<(), String> {
-    let e = |q: &Path, err: std::io::Error| format!("{}: {err}", q.display());
+    let e = |q: &Path, err: std::io::Error| format!("{}: {err}", q.display()); // no-tr
     let tmp = p.with_extension("morgan-nuevo");
     std::fs::write(&tmp, texto).map_err(|x| e(&tmp, x))?;
     let modo = std::fs::metadata(p).map_err(|x| e(p, x))?.permissions();
@@ -411,7 +430,7 @@ fn de_greeter(p: &Path) -> Result<(), String> {
     // SAFETY: getpwnam con una cadena terminada en nul; se copian uid y gid enseguida.
     let pw = unsafe { libc::getpwnam(c"greeter".as_ptr()) };
     if pw.is_null() {
-        return Err("no existe el usuario greeter (lo crea el paquete de greetd)".into());
+        return Err(tr!("no existe el usuario greeter (lo crea el paquete de greetd)").into());
     }
     let (uid, gid) = unsafe { ((*pw).pw_uid, (*pw).pw_gid) };
     let c = std::ffi::CString::new(p.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
@@ -446,20 +465,18 @@ fn restaurar(raiz: Option<PathBuf>, aplicar: bool) -> ExitCode {
     let pam = r.join(PAM);
     let respaldo_pam = greetd.parent().and_then(ultimo_respaldo_pam);
     println!(
-        "Plan: copiar {} sobre {}",
-        respaldo.display(),
-        greetd.display()
+        "{}",
+        trf!("Plan: copiar {} sobre {}", respaldo.display(), greetd.display())
     );
     if let Some(rp) = &respaldo_pam {
         println!(
-            "  y {} sobre {} (sin el llavero)",
-            rp.display(),
-            pam.display()
+            "{}",
+            trf!("  y {} sobre {} (sin el llavero)", rp.display(), pam.display())
         );
     }
-    println!("Vale desde el próximo arranque: greetd no se reinicia.");
+    println!("{}", tr!("Vale desde el próximo arranque: greetd no se reinicia."));
     if !aplicar {
-        println!("Nada cambió. Para hacerlo: sudo morgan-greet restore --apply");
+        println!("{}", tr!("Nada cambió. Para hacerlo: sudo morgan-greet restore --apply"));
         return ExitCode::SUCCESS;
     }
     let volver = |de: &Path, a: &Path| {

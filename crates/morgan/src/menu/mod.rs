@@ -232,8 +232,8 @@ impl Menu {
         let ya_abierto = i.abierto.replace(true);
         let (cat, seccion) = match nivel {
             NivelMenu::Raiz => (Categoria::Apariencia, None),
-            NivelMenu::Fondos => (Categoria::Apariencia, Some("Fondos")),
-            NivelMenu::Clima => (Categoria::Shell, Some("Preferencias")),
+            NivelMenu::Fondos => (Categoria::Apariencia, Some("Fondos")), // no-tr
+            NivelMenu::Clima => (Categoria::Shell, Some("Preferencias")), // no-tr
         };
         let seccion = seccion.and_then(|n| cat.secciones().iter().position(|s| *s == n));
         if !ya_abierto {
@@ -971,10 +971,10 @@ impl Menu {
                 Ok(())
             }
             Que::Predeterminada(id, mimes) => {
-                let app = gio_unix::DesktopAppInfo::new(&id).ok_or(format!("no existe {id}"))?;
+                let app = gio_unix::DesktopAppInfo::new(&id).ok_or(trf!("no existe {}", id))?;
                 mimes.iter().try_for_each(|m| {
                     app.set_as_default_for_type(m)
-                        .map_err(|e| format!("{id} para {m}: {e}"))
+                        .map_err(|e| trf!("{} para {}: {}", id, m, e))
                 })
             }
             Que::ElegirTemaSonido(carpeta, demo) => {
@@ -984,7 +984,7 @@ impl Menu {
             }
             Que::BorrarRecientes => lectura::borrar_recientes(),
             Que::Autoarranque(archivo, activar) => lectura::poner_autoarranque(&archivo, activar)
-                .map_err(|e| format!("autoarranque de {archivo}: {e}")),
+                .map_err(|e| trf!("autoarranque de {}: {}", archivo, e)),
             Que::Fondos
             | Que::Ubicacion
             | Que::Calendario
@@ -1001,7 +1001,7 @@ impl Menu {
         let yo = self.clone();
         let actual = actual.to_owned();
         glib::MainContext::default().spawn_local(async move {
-            let elegida = carpeta::elegir("Carpeta de fondos", "Elegir", &actual).await;
+            let elegida = carpeta::elegir(tr!("Carpeta de fondos"), tr!("Elegir"), &actual).await;
             if let Some(ruta) = elegida {
                 let c = arbol::Cambio::CarpetaFondos(ruta.to_string_lossy().into_owned());
                 if let Err(e) = yo.cambiar_config(&c) {

@@ -32,9 +32,9 @@ pub struct Reproduccion {
 
 pub fn siguiente_repeticion(actual: &str) -> &'static str {
     match actual {
-        "None" => "Playlist",
-        "Playlist" => "Track",
-        _ => "None",
+        "None" => "Playlist", // no-tr
+        "Playlist" => "Track", // no-tr
+        _ => "None", // no-tr
     }
 }
 
@@ -61,7 +61,7 @@ pub fn textos(metadata: &HashMap<String, OwnedValue>) -> Option<(String, String)
     let titulo = texto("xesam:title");
     let artista = primero("xesam:artist").or_else(|| primero("xesam:albumArtist"));
     let subtitulo = match (&artista, texto("xesam:album")) {
-        (Some(a), Some(al)) => format!("{a} - {al}"),
+        (Some(a), Some(al)) => format!("{a} - {al}"), // no-tr
         (None, Some(al)) => al,
         (Some(a), None) => a.clone(),
         (None, None) => String::new(),
@@ -155,7 +155,7 @@ impl Mpris {
 
     pub fn alternar_mezcla(&self) {
         if let Some(m) = self.actual().and_then(|r| r.mezcla) {
-            self.poner("Shuffle", Value::from(!m));
+            self.poner("Shuffle", Value::from(!m)); // no-tr
         }
     }
 
@@ -251,7 +251,7 @@ async fn leer(conn: &Connection) -> zbus::Result<Option<Reproduccion>> {
             continue;
         };
         let metadata: HashMap<String, OwnedValue> =
-            p.get_property("Metadata").await.unwrap_or_default();
+            p.get_property("Metadata").await.unwrap_or_default(); // no-tr
         // Sin metadatos no se muestra (ni cuenta para elegir).
         let Some((titulo, subtitulo)) = textos(&metadata) else {
             continue;
@@ -273,7 +273,7 @@ async fn leer(conn: &Connection) -> zbus::Result<Option<Reproduccion>> {
             estado,
             puede_anterior: puede("CanGoPrevious").await,
             puede_siguiente: puede("CanGoNext").await,
-            mezcla: p.get_property::<bool>("Shuffle").await.ok(),
+            mezcla: p.get_property::<bool>("Shuffle").await.ok(), // no-tr
             repetir: p.get_property::<String>("LoopStatus").await.ok(),
         };
         candidatos.push((n.clone(), estado));

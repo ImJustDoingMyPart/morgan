@@ -38,7 +38,7 @@ blur_ignore_alpha = 0.5
 [[layer_rule]]
 match.namespace = "^morgan-(center|calendar|tray|calculator|notifications|osd|launcher|polkit|menu|wallpapers|windows|dock|dock-globo)$"
 blur_optimized = false
-"#;
+"#; // no-tr
 
 /// Lo cambiado desde Escritorio con Umbriel. Las claves no son las de Hyprland
 /// (`hyprland.toml`): cada compositor guarda lo suyo.
@@ -308,13 +308,13 @@ pub fn toml_con(c: &Config, con_grim: bool, tema: &Path, menu: &Menu) -> String 
             } else {
                 &["repeat = false"] // no-tr
             };
-            if let Some(b) = bind(t, &format!("spawn {cmd}"), extra) {
+            if let Some(b) = bind(t, &format!("spawn {cmd}"), extra) { // no-tr
                 out.push_str(&b);
             }
         }
     }
     // La tecla de ventanas abre el overview de Umbriel, no el lienzo de morgan.
-    if let Some(b) = bind(&a.ventanas, "overview-toggle", &["repeat = false"]) {
+    if let Some(b) = bind(&a.ventanas, "overview-toggle", &["repeat = false"]) { // no-tr
         // no-tr
         out.push_str("# Ventanas: el overview de Umbriel\n");
         out.push_str(&b);
@@ -327,7 +327,7 @@ pub fn toml_con(c: &Config, con_grim: bool, tema: &Path, menu: &Menu) -> String 
             } else {
                 &["allow_when_locked = true", "repeat = false"] // no-tr
             };
-            if let Some(b) = bind(t, &format!("spawn {cmd}"), extra) {
+            if let Some(b) = bind(t, &format!("spawn {cmd}"), extra) { // no-tr
                 out.push_str(&b);
             }
         }
@@ -335,15 +335,15 @@ pub fn toml_con(c: &Config, con_grim: bool, tema: &Path, menu: &Menu) -> String 
     if con_grim {
         out.push_str("# Capturas de pantalla (grim y slurp)\n");
         for (t, que) in [
-            ("Print", "region"),
-            ("CTRL + Print", "output"),
-            ("ALT + Print", "window"),
+            ("Print", "region"), // no-tr
+            ("CTRL + Print", "output"), // no-tr
+            ("ALT + Print", "window"), // no-tr
         ] {
             // no-tr
             if let Some(b) = bind(
                 t,
-                &format!("spawn {}", comando_captura(&c.capturas, que)),
-                &["repeat = false"],
+                &format!("spawn {}", comando_captura(&c.capturas, que)), // no-tr
+                &["repeat = false"], // no-tr
             ) {
                 // no-tr
                 out.push_str(&b);
@@ -368,13 +368,13 @@ pub fn toml_con(c: &Config, con_grim: bool, tema: &Path, menu: &Menu) -> String 
     {
         let nombre = binds::submap_modo(m);
         out.push_str(&format!("# Modo: {}\n", modo.name));
-        if let Some(b) = bind(&modo.key, &format!("submap {nombre}"), &["repeat = false"]) {
+        if let Some(b) = bind(&modo.key, &format!("submap {nombre}"), &["repeat = false"]) { // no-tr
             // no-tr
             out.push_str(&b);
         }
         // Escape siempre sale: un modo sin él dejaría el teclado atrapado.
         out.push_str(&format!(
-            "{} = \"submap reset\"\n",
+            "{} = \"submap reset\"\n", // no-tr
             cadena(&format!("submap[{nombre}],Escape"))
         )); // no-tr
         for p in &modo.binds {
@@ -450,7 +450,7 @@ pub async fn aplicar_con(
     .await; // no-tr
     let _ = std::fs::remove_file(&prueba);
     valida.map_err(|e| {
-        format!("la config de morgan para Umbriel quedó inválida ({e}); se dejó la de antes")
+        trf!("la config de morgan para Umbriel quedó inválida ({}); se dejó la de antes", e)
     })?;
     escribir(&destino, &nuevo)
 }

@@ -345,7 +345,7 @@ impl Red {
             let r = async {
                 sistema::proxy(NM, ruta, "org.freedesktop.NetworkManager.Settings.Connection")
                     .await?
-                    .call::<_, _, ()>("Delete", &())
+                    .call::<_, _, ()>("Delete", &()) // no-tr
                     .await
             };
             if let Err(e) = r.await {
@@ -443,10 +443,10 @@ async fn antenas(d: &OwnedObjectPath) -> zbus::Result<Vec<Antena>> {
         // Una antena puede desaparecer entre la lista y la lectura.
         let leida = async {
             Ok::<_, zbus::Error>(Antena {
-                ssid: a.get_property("Ssid").await?,
-                fuerza: a.get_property("Strength").await?,
+                ssid: a.get_property("Ssid").await?, // no-tr
+                fuerza: a.get_property("Strength").await?, // no-tr
                 seguridad: Seguridad::de(
-                    a.get_property::<u32>("Flags").await? & PRIVADA != 0,
+                    a.get_property::<u32>("Flags").await? & PRIVADA != 0, // no-tr
                     a.get_property("WpaFlags").await?,
                     a.get_property("RsnFlags").await?,
                 ),
@@ -497,7 +497,7 @@ async fn nueva(v: &Visible, clave: Option<&str>) -> Result<(), Falla> {
         )
         .await
     {
-        let _ = p.call::<_, _, ()>("Delete", &()).await;
+        let _ = p.call::<_, _, ()>("Delete", &()).await; // no-tr
     }
     r
 }
@@ -539,7 +539,7 @@ async fn esperar(activa: &OwnedObjectPath, dispositivo: &OwnedObjectPath) -> Res
                 .deserialize::<(u32, u32, u32)>()
                 .map(|(nuevo, _, motivo)| Cambio::Dispositivo(nuevo, motivo))
         });
-    match a.get_property::<u32>("State").await {
+    match a.get_property::<u32>("State").await { // no-tr
         Ok(ACTIVADA) => return Ok(()),
         Ok(DESACTIVADA) | Err(_) => return Err(Falla::Otra),
         Ok(_) => {}
@@ -598,7 +598,7 @@ async fn leer() -> zbus::Result<Estado> {
         )
         .await?;
         // Una activa puede desaparecer entre la lista y la lectura.
-        if let Ok(c) = p.get_property::<OwnedObjectPath>("Connection").await {
+        if let Ok(c) = p.get_property::<OwnedObjectPath>("Connection").await { // no-tr
             activas.insert(c, a);
         }
     }
@@ -694,7 +694,7 @@ async fn wifi_lista() -> zbus::Result<bool> {
         return Ok(false);
     };
     let p = sistema::proxy(NM, d, "org.freedesktop.NetworkManager.Device").await?;
-    Ok(p.get_property::<u32>("State").await? > NO_DISPONIBLE)
+    Ok(p.get_property::<u32>("State").await? > NO_DISPONIBLE) // no-tr
 }
 
 #[cfg(test)]

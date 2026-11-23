@@ -139,10 +139,10 @@ impl Cambios {
         fn escribir(n: &Nodo, sangria: usize, out: &mut String) {
             let s = "    ".repeat(sangria);
             for (k, v) in &n.hojas {
-                out.push_str(&format!("{s}{k} = {v},\n"));
+                out.push_str(&format!("{s}{k} = {v},\n")); // no-tr
             }
             for (k, h) in &n.hijos {
-                out.push_str(&format!("{s}{k} = {{\n"));
+                out.push_str(&format!("{s}{k} = {{\n")); // no-tr
                 escribir(h, sangria + 1, out);
                 out.push_str(&format!("{s}}},\n"));
             }
@@ -162,7 +162,7 @@ impl Cambios {
         let mut out = String::new();
         if !self.0.is_empty() {
             out.push_str(
-                "\n-- Compositor (menú › Escritorio; lo guardado está en morgan/hyprland.toml).\n",
+                "\n-- Compositor (menú › Escritorio; lo guardado está en morgan/hyprland.toml).\n", // no-tr
             );
             out.push_str("hl.config({\n");
             escribir(&raiz, 1, &mut out);
@@ -207,94 +207,94 @@ const fn opt(clave: &'static str, titulo: &'static str, sub: &'static str, tipo:
 }
 
 macro_rules! enteros {
-    ($($v:literal => $t:literal),* $(,)?) => { &[$((Valor::Int($v), $t)),*] };
+    ($($v:literal => $t:expr),* $(,)?) => { &[$((Valor::Int($v), $t)),*] };
 }
 macro_rules! reales {
-    ($($v:literal => $t:literal),* $(,)?) => { &[$((Valor::Float($v), $t)),*] };
+    ($($v:literal => $t:expr),* $(,)?) => { &[$((Valor::Float($v), $t)),*] };
 }
 
 /// Cada clave existe en la 0.56.2 (`hyprctl descriptions`) y los valores están dentro de su
 /// rango.
 pub const SECCIONES: &[(&str, &[Opt])] = &[
     (
-        "Ventanas",
+        tr_const!("Ventanas"),
         &[
             opt(
                 "general:gaps_in",
-                "Separación entre ventanas",
+                tr_const!("Separación entre ventanas"),
                 "",
                 Tipo::Valores(
-                    enteros![0 => "0 px", 2 => "2 px", 4 => "4 px", 6 => "6 px", 8 => "8 px", 10 => "10 px", 12 => "12 px", 16 => "16 px", 20 => "20 px"],
+                    enteros![0 => tr_const!("0 px"), 2 => tr_const!("2 px"), 4 => tr_const!("4 px"), 6 => tr_const!("6 px"), 8 => tr_const!("8 px"), 10 => tr_const!("10 px"), 12 => tr_const!("12 px"), 16 => tr_const!("16 px"), 20 => tr_const!("20 px")],
                 ),
             ),
             opt(
                 "general:gaps_out",
-                "Separación con el borde de la pantalla",
+                tr_const!("Separación con el borde de la pantalla"),
                 "",
                 Tipo::Valores(
-                    enteros![0 => "0 px", 4 => "4 px", 8 => "8 px", 12 => "12 px", 16 => "16 px", 20 => "20 px", 24 => "24 px", 32 => "32 px"],
+                    enteros![0 => tr_const!("0 px"), 4 => tr_const!("4 px"), 8 => tr_const!("8 px"), 12 => tr_const!("12 px"), 16 => tr_const!("16 px"), 20 => tr_const!("20 px"), 24 => tr_const!("24 px"), 32 => tr_const!("32 px")],
                 ),
             ),
             opt(
                 "general:border_size",
-                "Grosor del borde",
+                tr_const!("Grosor del borde"),
                 "",
                 Tipo::Valores(
-                    enteros![0 => "sin borde", 1 => "1 px", 2 => "2 px", 3 => "3 px", 4 => "4 px"],
+                    enteros![0 => tr_const!("sin borde"), 1 => tr_const!("1 px"), 2 => tr_const!("2 px"), 3 => tr_const!("3 px"), 4 => tr_const!("4 px")],
                 ),
             ),
             opt(
                 "decoration:rounding",
-                "Redondeo de las esquinas",
+                tr_const!("Redondeo de las esquinas"),
                 "",
                 Tipo::Valores(
-                    enteros![0 => "rectas", 2 => "2 px", 4 => "4 px", 6 => "6 px", 8 => "8 px", 10 => "10 px", 12 => "12 px", 16 => "16 px", 20 => "20 px"],
+                    enteros![0 => tr_const!("rectas"), 2 => tr_const!("2 px"), 4 => tr_const!("4 px"), 6 => tr_const!("6 px"), 8 => tr_const!("8 px"), 10 => tr_const!("10 px"), 12 => tr_const!("12 px"), 16 => tr_const!("16 px"), 20 => tr_const!("20 px")],
                 ),
             ),
             opt(
                 "decoration:active_opacity",
-                "Opacidad de la ventana activa",
+                tr_const!("Opacidad de la ventana activa"),
                 "",
                 Tipo::Valores(
-                    reales![0.8 => "80 %", 0.85 => "85 %", 0.9 => "90 %", 0.95 => "95 %", 1.0 => "opaca"],
+                    reales![0.8 => tr_const!("80 %"), 0.85 => tr_const!("85 %"), 0.9 => tr_const!("90 %"), 0.95 => tr_const!("95 %"), 1.0 => tr_const!("opaca")],
                 ),
             ),
             opt(
                 "decoration:inactive_opacity",
-                "Opacidad de las inactivas",
+                tr_const!("Opacidad de las inactivas"),
                 "",
                 Tipo::Valores(
-                    reales![0.7 => "70 %", 0.75 => "75 %", 0.8 => "80 %", 0.85 => "85 %", 0.9 => "90 %", 0.95 => "95 %", 1.0 => "opaca"],
+                    reales![0.7 => tr_const!("70 %"), 0.75 => tr_const!("75 %"), 0.8 => tr_const!("80 %"), 0.85 => tr_const!("85 %"), 0.9 => tr_const!("90 %"), 0.95 => tr_const!("95 %"), 1.0 => tr_const!("opaca")],
                 ),
             ),
             opt(
                 "decoration:dim_inactive",
-                "Atenuar las inactivas",
-                "oscurece las ventanas sin foco",
+                tr_const!("Atenuar las inactivas"),
+                tr_const!("oscurece las ventanas sin foco"),
                 Tipo::Casilla,
             ),
             opt(
                 "decoration:dim_strength",
-                "Cuánto se atenúan",
+                tr_const!("Cuánto se atenúan"),
                 "",
                 Tipo::Valores(
-                    reales![0.1 => "10 %", 0.2 => "20 %", 0.3 => "30 %", 0.4 => "40 %", 0.5 => "50 %"],
+                    reales![0.1 => tr_const!("10 %"), 0.2 => tr_const!("20 %"), 0.3 => tr_const!("30 %"), 0.4 => tr_const!("40 %"), 0.5 => tr_const!("50 %")],
                 ),
             ),
         ],
     ),
     (
-        "Desenfoque",
+        tr_const!("Desenfoque"),
         &[
             opt(
                 "decoration:blur:enabled",
-                "Desenfoque detrás de las ventanas",
-                "lo que se ve a través de una ventana transparente",
+                tr_const!("Desenfoque detrás de las ventanas"),
+                tr_const!("lo que se ve a través de una ventana transparente"),
                 Tipo::Casilla,
             ),
             opt(
                 "decoration:blur:size",
-                "Tamaño",
+                tr_const!("Tamaño"),
                 "",
                 Tipo::Valores(
                     enteros![2 => "2", 4 => "4", 6 => "6", 8 => "8", 10 => "10", 12 => "12"],
@@ -302,187 +302,187 @@ pub const SECCIONES: &[(&str, &[Opt])] = &[
             ),
             opt(
                 "decoration:blur:passes",
-                "Pasadas",
-                "más pasadas, más suave y más costoso",
+                tr_const!("Pasadas"),
+                tr_const!("más pasadas, más suave y más costoso"),
                 Tipo::Valores(enteros![1 => "1", 2 => "2", 3 => "3", 4 => "4"]),
             ),
             opt(
                 "decoration:blur:popups",
-                "También en los menús de las apps",
-                "menús contextuales y tooltips",
+                tr_const!("También en los menús de las apps"),
+                tr_const!("menús contextuales y tooltips"),
                 Tipo::Casilla,
             ),
         ],
     ),
     (
-        "Distribución",
+        tr_const!("Distribución"),
         &[
             opt(
                 "scrolling:focus_fit_method",
-                "Al enfocar una columna",
+                tr_const!("Al enfocar una columna"),
                 "",
-                Tipo::Valores(enteros![1 => "ajustarla a la vista", 0 => "centrarla"]),
+                Tipo::Valores(enteros![1 => tr_const!("ajustarla a la vista"), 0 => tr_const!("centrarla")]),
             ),
             opt(
                 "scrolling:fullscreen_on_one_column",
-                "Una sola columna ocupa toda la pantalla",
+                tr_const!("Una sola columna ocupa toda la pantalla"),
                 "",
                 Tipo::Casilla,
             ),
         ],
     ),
     (
-        "Grupos",
+        tr_const!("Grupos"),
         &[
             opt(
                 "group:auto_group",
-                "Las ventanas nuevas entran al grupo enfocado",
+                tr_const!("Las ventanas nuevas entran al grupo enfocado"),
                 "",
                 Tipo::Casilla,
             ),
             opt(
                 "group:insert_after_current",
-                "Una pestaña nueva va al lado de la actual",
-                "si no, al final",
+                tr_const!("Una pestaña nueva va al lado de la actual"),
+                tr_const!("si no, al final"),
                 Tipo::Casilla,
             ),
             opt(
                 "group:groupbar:enabled",
-                "Barra de pestañas",
+                tr_const!("Barra de pestañas"),
                 "",
                 Tipo::Casilla,
             ),
             opt(
                 "group:groupbar:height",
-                "Alto de la barra",
+                tr_const!("Alto de la barra"),
                 "",
                 Tipo::Valores(
-                    enteros![14 => "14 px", 16 => "16 px", 18 => "18 px", 20 => "20 px", 22 => "22 px", 24 => "24 px"],
+                    enteros![14 => tr_const!("14 px"), 16 => tr_const!("16 px"), 18 => tr_const!("18 px"), 20 => tr_const!("20 px"), 22 => tr_const!("22 px"), 24 => tr_const!("24 px")],
                 ),
             ),
             opt(
                 "group:groupbar:font_size",
-                "Letra de las pestañas",
+                tr_const!("Letra de las pestañas"),
                 "",
                 Tipo::Valores(enteros![8 => "8", 9 => "9", 10 => "10", 11 => "11", 12 => "12"]),
             ),
             opt(
                 "group:groupbar:gradients",
-                "Pestañas con fondo",
-                "si no, solo la rayita de la activa",
+                tr_const!("Pestañas con fondo"),
+                tr_const!("si no, solo la rayita de la activa"),
                 Tipo::Casilla,
             ),
             opt(
                 "group:groupbar:middle_click_close",
-                "Click del medio cierra la pestaña",
+                tr_const!("Click del medio cierra la pestaña"),
                 "",
                 Tipo::Casilla,
             ),
             opt(
                 "group:groupbar:scrolling",
-                "La rueda cambia de pestaña",
+                tr_const!("La rueda cambia de pestaña"),
                 "",
                 Tipo::Casilla,
             ),
         ],
     ),
     (
-        "Foco y cursor",
+        tr_const!("Foco y cursor"),
         &[
             opt(
                 "binds:workspace_back_and_forth",
-                "Volver al workspace anterior",
-                "ir al workspace en que ya se está vuelve al de antes",
+                tr_const!("Volver al workspace anterior"),
+                tr_const!("ir al workspace en que ya se está vuelve al de antes"),
                 Tipo::Casilla,
             ),
             opt(
                 "misc:focus_on_activate",
-                "Enfocar la app que lo pide",
+                tr_const!("Enfocar la app que lo pide"),
                 "",
                 Tipo::Casilla,
             ),
             opt(
                 "input:follow_mouse",
-                "El foco sigue al mouse",
-                "con el layout scrolling, el foco salta solo (ver input.lua)",
+                tr_const!("El foco sigue al mouse"),
+                tr_const!("con el layout scrolling, el foco salta solo (ver input.lua)"),
                 Tipo::Valores(
-                    enteros![0 => "no", 1 => "sí", 2 => "separado del teclado", 3 => "separado del todo"],
+                    enteros![0 => tr_const!("no"), 1 => tr_const!("sí"), 2 => tr_const!("separado del teclado"), 3 => tr_const!("separado del todo")],
                 ),
             ),
             opt(
                 "cursor:inactive_timeout",
-                "Esconder el cursor quieto",
+                tr_const!("Esconder el cursor quieto"),
                 "",
                 Tipo::Valores(
-                    reales![0.0 => "nunca", 3.0 => "a los 3 s", 5.0 => "a los 5 s", 10.0 => "a los 10 s", 20.0 => "a los 20 s"],
+                    reales![0.0 => tr_const!("nunca"), 3.0 => tr_const!("a los 3 s"), 5.0 => tr_const!("a los 5 s"), 10.0 => tr_const!("a los 10 s"), 20.0 => tr_const!("a los 20 s")],
                 ),
             ),
             opt(
                 "cursor:hide_on_key_press",
-                "Esconder el cursor al tipear",
-                "vuelve al mover el mouse",
+                tr_const!("Esconder el cursor al tipear"),
+                tr_const!("vuelve al mover el mouse"),
                 Tipo::Casilla,
             ),
         ],
     ),
     (
-        "Teclado",
+        tr_const!("Teclado"),
         &[
-            opt("input:kb_layout", "Distribución", "", Tipo::Leidos),
+            opt("input:kb_layout", tr_const!("Distribución"), "", Tipo::Leidos),
             opt(
                 "input:repeat_delay",
-                "Espera antes de repetir",
+                tr_const!("Espera antes de repetir"),
                 "",
                 Tipo::Valores(
-                    enteros![200 => "200 ms", 250 => "250 ms", 300 => "300 ms", 400 => "400 ms", 500 => "500 ms", 600 => "600 ms"],
+                    enteros![200 => tr_const!("200 ms"), 250 => tr_const!("250 ms"), 300 => tr_const!("300 ms"), 400 => tr_const!("400 ms"), 500 => tr_const!("500 ms"), 600 => tr_const!("600 ms")],
                 ),
             ),
             opt(
                 "input:repeat_rate",
-                "Velocidad de repetición",
+                tr_const!("Velocidad de repetición"),
                 "",
                 Tipo::Valores(
-                    enteros![15 => "15 por segundo", 20 => "20 por segundo", 25 => "25 por segundo", 30 => "30 por segundo", 40 => "40 por segundo", 50 => "50 por segundo"],
+                    enteros![15 => tr_const!("15 por segundo"), 20 => tr_const!("20 por segundo"), 25 => tr_const!("25 por segundo"), 30 => tr_const!("30 por segundo"), 40 => tr_const!("40 por segundo"), 50 => tr_const!("50 por segundo")],
                 ),
             ),
             opt(
                 "input:numlock_by_default",
-                "Bloq Num al arrancar",
+                tr_const!("Bloq Num al arrancar"),
                 "",
                 Tipo::Casilla,
             ),
         ],
     ),
     (
-        "Mouse y touchpad",
+        tr_const!("Mouse y touchpad"),
         &[
             opt(
                 "input:sensitivity",
-                "Sensibilidad del mouse",
+                tr_const!("Sensibilidad del mouse"),
                 "",
                 Tipo::Valores(
-                    reales![-0.5 => "-0,5", -0.25 => "-0,25", 0.0 => "0", 0.25 => "0,25", 0.5 => "0,5"],
+                    reales![-0.5 => tr_const!("-0,5"), -0.25 => tr_const!("-0,25"), 0.0 => "0", 0.25 => tr_const!("0,25"), 0.5 => tr_const!("0,5")],
                 ),
             ),
             opt(
                 "input:accel_profile",
-                "Aceleración",
+                tr_const!("Aceleración"),
                 "",
                 Tipo::Textos(&[
-                    ("", "la del dispositivo"),
-                    ("adaptive", "adaptativa"),
-                    ("flat", "plana, sin aceleración"),
+                    ("", tr_const!("la del dispositivo")),
+                    ("adaptive", tr_const!("adaptativa")),
+                    ("flat", tr_const!("plana, sin aceleración")),
                 ]),
             ),
             opt(
                 "input:touchpad:natural_scroll",
-                "Scroll natural en el touchpad",
+                tr_const!("Scroll natural en el touchpad"),
                 "",
                 Tipo::Casilla,
             ),
             opt(
                 "input:touchpad:tap-to-click",
-                "Tocar para hacer click",
+                tr_const!("Tocar para hacer click"),
                 "",
                 Tipo::Casilla,
             ),
@@ -497,60 +497,60 @@ pub const SECCIONES: &[(&str, &[Opt])] = &[
 /// nuevas en el grupo enfocado y el click del medio o la rueda sobre la barra de pestañas.
 pub const SECCIONES_UMBRIEL: &[(&str, &[Opt])] = &[
     (
-        "Ventanas",
+        tr_const!("Ventanas"),
         &[
             opt(
                 "layout.gap",
-                "Separación entre ventanas",
+                tr_const!("Separación entre ventanas"),
                 "",
                 Tipo::Valores(
-                    enteros![0 => "0 px", 2 => "2 px", 4 => "4 px", 6 => "6 px", 8 => "8 px", 10 => "10 px", 12 => "12 px", 16 => "16 px", 20 => "20 px"],
+                    enteros![0 => tr_const!("0 px"), 2 => tr_const!("2 px"), 4 => tr_const!("4 px"), 6 => tr_const!("6 px"), 8 => tr_const!("8 px"), 10 => tr_const!("10 px"), 12 => tr_const!("12 px"), 16 => tr_const!("16 px"), 20 => tr_const!("20 px")],
                 ),
             ),
             opt(
                 "appearance.border_width",
-                "Grosor del borde",
+                tr_const!("Grosor del borde"),
                 "",
                 Tipo::Valores(
-                    enteros![0 => "sin borde", 1 => "1 px", 2 => "2 px", 3 => "3 px", 4 => "4 px"],
+                    enteros![0 => tr_const!("sin borde"), 1 => tr_const!("1 px"), 2 => tr_const!("2 px"), 3 => tr_const!("3 px"), 4 => tr_const!("4 px")],
                 ),
             ),
             opt(
                 "appearance.corner_radius",
-                "Redondeo de las esquinas",
+                tr_const!("Redondeo de las esquinas"),
                 "",
                 Tipo::Valores(
-                    enteros![0 => "rectas", 2 => "2 px", 4 => "4 px", 6 => "6 px", 8 => "8 px", 10 => "10 px", 12 => "12 px", 16 => "16 px", 20 => "20 px"],
+                    enteros![0 => tr_const!("rectas"), 2 => tr_const!("2 px"), 4 => tr_const!("4 px"), 6 => tr_const!("6 px"), 8 => tr_const!("8 px"), 10 => tr_const!("10 px"), 12 => tr_const!("12 px"), 16 => tr_const!("16 px"), 20 => tr_const!("20 px")],
                 ),
             ),
             opt(
                 "animation.dim_unfocused.enabled",
-                "Atenuar las inactivas",
-                "oscurece las ventanas sin foco",
+                tr_const!("Atenuar las inactivas"),
+                tr_const!("oscurece las ventanas sin foco"),
                 Tipo::Casilla,
             ),
             opt(
                 "animation.dim_unfocused.dim",
-                "Cuánto se atenúan",
+                tr_const!("Cuánto se atenúan"),
                 "",
                 Tipo::Valores(
-                    reales![0.1 => "10 %", 0.2 => "20 %", 0.3 => "30 %", 0.4 => "40 %", 0.5 => "50 %"],
+                    reales![0.1 => tr_const!("10 %"), 0.2 => tr_const!("20 %"), 0.3 => tr_const!("30 %"), 0.4 => tr_const!("40 %"), 0.5 => tr_const!("50 %")],
                 ),
             ),
         ],
     ),
     (
-        "Desenfoque",
+        tr_const!("Desenfoque"),
         &[
             opt(
                 "appearance.blur.enabled",
-                "Desenfoque detrás de las ventanas",
-                "lo que se ve a través de una ventana transparente",
+                tr_const!("Desenfoque detrás de las ventanas"),
+                tr_const!("lo que se ve a través de una ventana transparente"),
                 Tipo::Casilla,
             ),
             opt(
                 "appearance.blur.radius",
-                "Tamaño",
+                tr_const!("Tamaño"),
                 "",
                 Tipo::Valores(
                     enteros![2 => "2", 4 => "4", 6 => "6", 8 => "8", 10 => "10", 12 => "12"],
@@ -558,153 +558,153 @@ pub const SECCIONES_UMBRIEL: &[(&str, &[Opt])] = &[
             ),
             opt(
                 "appearance.blur.passes",
-                "Pasadas",
-                "más pasadas, más suave y más costoso",
+                tr_const!("Pasadas"),
+                tr_const!("más pasadas, más suave y más costoso"),
                 Tipo::Valores(enteros![1 => "1", 2 => "2", 3 => "3", 4 => "4"]),
             ),
         ],
     ),
     (
-        "Distribución",
+        tr_const!("Distribución"),
         &[opt(
             "layout.scrolling.center_focused",
-            "Al enfocar una columna",
+            tr_const!("Al enfocar una columna"),
             "",
             Tipo::Textos(&[
-                ("never", "ajustarla a la vista"),
-                ("always", "centrarla"),
-                ("on_overflow", "centrarla si no entra con la de al lado"),
+                ("never", tr_const!("ajustarla a la vista")),
+                ("always", tr_const!("centrarla")),
+                ("on_overflow", tr_const!("centrarla si no entra con la de al lado")),
             ]),
         )],
     ),
     (
-        "Grupos",
+        tr_const!("Grupos"),
         &[
             opt(
                 "appearance.tab_bar.visible",
-                "Barra de pestañas",
+                tr_const!("Barra de pestañas"),
                 "",
                 Tipo::Casilla,
             ),
             opt(
                 "appearance.tab_bar.hide_when_single",
-                "Sin barra con una sola pestaña",
-                "sigue siendo un grupo",
+                tr_const!("Sin barra con una sola pestaña"),
+                tr_const!("sigue siendo un grupo"),
                 Tipo::Casilla,
             ),
             opt(
                 "appearance.tab_bar.height",
-                "Alto de la barra",
+                tr_const!("Alto de la barra"),
                 "",
                 Tipo::Valores(
-                    enteros![14 => "14 px", 16 => "16 px", 18 => "18 px", 20 => "20 px", 22 => "22 px", 24 => "24 px"],
+                    enteros![14 => tr_const!("14 px"), 16 => tr_const!("16 px"), 18 => tr_const!("18 px"), 20 => tr_const!("20 px"), 22 => tr_const!("22 px"), 24 => tr_const!("24 px")],
                 ),
             ),
             opt(
                 "appearance.tab_bar.style",
-                "Pestañas",
+                tr_const!("Pestañas"),
                 "",
                 Tipo::Textos(&[
-                    ("titles", "con el título"),
-                    ("indicator", "solo la marca, sin texto"),
+                    ("titles", tr_const!("con el título")),
+                    ("indicator", tr_const!("solo la marca, sin texto")),
                 ]),
             ),
         ],
     ),
     (
-        "Foco y cursor",
+        tr_const!("Foco y cursor"),
         &[
             opt(
                 "workspaces.back_and_forth",
-                "Volver al workspace anterior",
-                "ir al workspace en que ya se está vuelve al de antes",
+                tr_const!("Volver al workspace anterior"),
+                tr_const!("ir al workspace en que ya se está vuelve al de antes"),
                 Tipo::Casilla,
             ),
             opt(
                 "general.focus_on_activate",
-                "Enfocar la app que lo pide",
+                tr_const!("Enfocar la app que lo pide"),
                 "",
                 Tipo::Casilla,
             ),
             opt(
                 "input.focus.follows_mouse",
-                "El foco sigue al mouse",
+                tr_const!("El foco sigue al mouse"),
                 "",
                 Tipo::Casilla,
             ),
             opt(
                 "input.cursor.hide_timeout_ms",
-                "Esconder el cursor quieto",
+                tr_const!("Esconder el cursor quieto"),
                 "",
                 Tipo::Valores(
-                    enteros![0 => "nunca", 3000 => "a los 3 s", 5000 => "a los 5 s", 10000 => "a los 10 s", 20000 => "a los 20 s"],
+                    enteros![0 => tr_const!("nunca"), 3000 => tr_const!("a los 3 s"), 5000 => tr_const!("a los 5 s"), 10000 => tr_const!("a los 10 s"), 20000 => tr_const!("a los 20 s")],
                 ),
             ),
             opt(
                 "input.cursor.hide_when_typing",
-                "Esconder el cursor al tipear",
-                "vuelve al mover el mouse",
+                tr_const!("Esconder el cursor al tipear"),
+                tr_const!("vuelve al mover el mouse"),
                 Tipo::Casilla,
             ),
         ],
     ),
     (
-        "Teclado",
+        tr_const!("Teclado"),
         &[
-            opt("input.keyboard.layout", "Distribución", "", Tipo::Leidos),
+            opt("input.keyboard.layout", tr_const!("Distribución"), "", Tipo::Leidos),
             opt(
                 "input.keyboard.repeat_delay",
-                "Espera antes de repetir",
+                tr_const!("Espera antes de repetir"),
                 "",
                 Tipo::Valores(
-                    enteros![200 => "200 ms", 250 => "250 ms", 300 => "300 ms", 400 => "400 ms", 500 => "500 ms", 600 => "600 ms"],
+                    enteros![200 => tr_const!("200 ms"), 250 => tr_const!("250 ms"), 300 => tr_const!("300 ms"), 400 => tr_const!("400 ms"), 500 => tr_const!("500 ms"), 600 => tr_const!("600 ms")],
                 ),
             ),
             opt(
                 "input.keyboard.repeat_rate",
-                "Velocidad de repetición",
+                tr_const!("Velocidad de repetición"),
                 "",
                 Tipo::Valores(
-                    enteros![15 => "15 por segundo", 20 => "20 por segundo", 25 => "25 por segundo", 30 => "30 por segundo", 40 => "40 por segundo", 50 => "50 por segundo"],
+                    enteros![15 => tr_const!("15 por segundo"), 20 => tr_const!("20 por segundo"), 25 => tr_const!("25 por segundo"), 30 => tr_const!("30 por segundo"), 40 => tr_const!("40 por segundo"), 50 => tr_const!("50 por segundo")],
                 ),
             ),
             opt(
                 "input.keyboard.numlock_toggle",
-                "Bloq Num al arrancar",
+                tr_const!("Bloq Num al arrancar"),
                 "",
                 Tipo::Casilla,
             ),
         ],
     ),
     (
-        "Mouse y touchpad",
+        tr_const!("Mouse y touchpad"),
         &[
             opt(
                 "input.mouse.sensitivity",
-                "Sensibilidad del mouse",
+                tr_const!("Sensibilidad del mouse"),
                 "",
                 Tipo::Valores(
-                    reales![-0.5 => "-0,5", -0.25 => "-0,25", 0.0 => "0", 0.25 => "0,25", 0.5 => "0,5"],
+                    reales![-0.5 => tr_const!("-0,5"), -0.25 => tr_const!("-0,25"), 0.0 => "0", 0.25 => tr_const!("0,25"), 0.5 => tr_const!("0,5")],
                 ),
             ),
             opt(
                 "input.mouse.accel_profile",
-                "Aceleración",
+                tr_const!("Aceleración"),
                 "",
                 Tipo::Textos(&[
-                    ("adaptive", "adaptativa"),
-                    ("flat", "plana, sin aceleración"),
+                    ("adaptive", tr_const!("adaptativa")),
+                    ("flat", tr_const!("plana, sin aceleración")),
                 ]),
             ),
             opt(
                 "input.touchpad.natural_scroll",
-                "Scroll natural en el touchpad",
+                tr_const!("Scroll natural en el touchpad"),
                 "",
                 Tipo::Casilla,
             ),
             opt(
                 "input.touchpad.tap",
-                "Tocar para hacer click",
+                tr_const!("Tocar para hacer click"),
                 "",
                 Tipo::Casilla,
             ),
@@ -727,7 +727,7 @@ pub fn claves() -> impl Iterator<Item = &'static str> {
 /// 34 claves de a una tardan 100 ms; juntas, 4.
 pub fn pedido_batch() -> String {
     claves()
-        .map(|c| format!("j/getoption {c}"))
+        .map(|c| format!("j/getoption {c}")) // no-tr
         .collect::<Vec<_>>()
         .join(";")
 }
@@ -755,7 +755,7 @@ pub fn pagina(
         actuales,
         cambios,
         distribuciones,
-        "Volver a lo de los archivos de Hyprland",
+        tr!("Volver a lo de los archivos de Hyprland"),
     )
 }
 
@@ -769,7 +769,7 @@ pub fn pagina_umbriel(
         actuales,
         cambios,
         distribuciones,
-        "Volver a lo de los archivos de Umbriel",
+        tr!("Volver a lo de los archivos de Umbriel"),
     )
 }
 
@@ -783,7 +783,7 @@ fn pagina_de(
     secciones
         .iter()
         .map(|(titulo, opts)| Seccion {
-            titulo,
+            titulo: morgan_idioma::t(titulo),
             filas: opts
                 .iter()
                 .map(|o| fila(o, actuales.get(o.clave), cambios, distribuciones, volver))
@@ -806,7 +806,7 @@ fn fila(
     let cambiada = cambios.0.contains_key(o.clave);
     let marca = |s: String| {
         if cambiada {
-            format!("{s} · cambiado desde el menú")
+            trf!("{} · cambiado desde el menú", s)
         } else {
             s
         }
@@ -815,8 +815,8 @@ fn fila(
         Tipo::Casilla => {
             let si = matches!(actual, Some(Valor::Bool(true)) | Some(Valor::Int(1)));
             ajuste(
-                o.titulo,
-                &marca(o.sub.to_owned()),
+                morgan_idioma::t(o.titulo),
+                &marca(morgan_idioma::t(o.sub).to_owned()),
                 Control::Casilla {
                     activa: si,
                     que: poner(o.clave, Valor::Bool(!si)),
@@ -835,7 +835,7 @@ fn fila(
             let mut opciones: Vec<Opcion> = valores
                 .iter()
                 .map(|(v, t)| {
-                    opcion(t, "", poner(o.clave, v.clone()))
+                    opcion(morgan_idioma::t(t), "", poner(o.clave, v.clone()))
                         .activa(actual.is_some_and(|a| a.igual(v)))
                 })
                 .collect();
@@ -855,9 +855,9 @@ fn fila(
             let sub = if o.sub.is_empty() {
                 puesto
             } else {
-                format!("{puesto} · {}", o.sub)
+                format!("{puesto} · {}", morgan_idioma::t(o.sub)) // no-tr
             };
-            ajuste(o.titulo, &marca(sub), Control::Lista(opciones))
+            ajuste(morgan_idioma::t(o.titulo), &marca(sub), Control::Lista(opciones))
         }
         Tipo::Leidos => {
             let codigo = match actual {
@@ -868,7 +868,7 @@ fn fila(
                 .iter()
                 .map(|(c, n)| {
                     opcion(
-                        &format!("{n} ({c})"),
+                        &format!("{n} ({c})"), // no-tr
                         "",
                         poner(o.clave, Valor::Str(c.clone())),
                     )
@@ -886,14 +886,14 @@ fn fila(
                     Que::Compositor(o.clave.to_owned(), None),
                 ));
             }
-            ajuste(o.titulo, &marca(nombre), Control::Lista(opciones))
+            ajuste(morgan_idioma::t(o.titulo), &marca(nombre), Control::Lista(opciones))
         }
     }
 }
 
 fn texto(v: &Valor) -> String {
     match v {
-        Valor::Bool(b) => if *b { "sí" } else { "no" }.into(),
+        Valor::Bool(b) => if *b { tr!("sí") } else { tr!("no") }.into(),
         Valor::Int(i) => i.to_string(),
         Valor::Float(f) => f.to_string(),
         Valor::Str(s) => s.clone(),

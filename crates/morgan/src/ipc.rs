@@ -25,7 +25,7 @@ impl Call {
 /// no entra.
 pub fn de_evento(linea: &str) -> Option<Result<Request, String>> {
     let args: Vec<&str> = linea
-        .strip_prefix("custom>>morgan ")?
+        .strip_prefix("custom>>morgan ")? // no-tr
         .split_whitespace()
         .collect();
     Some(Request::from_args(&args))
@@ -48,11 +48,11 @@ pub fn start(listener: UnixListener) -> Receiver<Call> {
                     let (reply, answer) = async_channel::bounded(1);
                     if tx.send_blocking(Call { request, reply }).is_err() {
                         return Response::Error {
-                            message: "morgan se está cerrando".into(),
+                            message: tr!("morgan se está cerrando").into(),
                         };
                     }
                     answer.recv_blocking().unwrap_or(Response::Error {
-                        message: "la petición quedó sin respuesta".into(),
+                        message: tr!("la petición quedó sin respuesta").into(),
                     })
                 });
                 if let Err(e) = result {

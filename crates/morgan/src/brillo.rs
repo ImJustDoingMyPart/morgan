@@ -34,9 +34,9 @@ pub fn buses(detect: &str) -> Vec<u32> {
     let mut valido = false;
     for l in detect.lines() {
         if !l.starts_with(' ') {
-            valido = l.starts_with("Display ");
+            valido = l.starts_with("Display "); // no-tr
         } else if valido
-            && let Some(n) = l.trim().strip_prefix("I2C bus:").and_then(|r| r.trim().strip_prefix("/dev/i2c-"))
+            && let Some(n) = l.trim().strip_prefix("I2C bus:").and_then(|r| r.trim().strip_prefix("/dev/i2c-")) // no-tr
             && let Ok(n) = n.parse()
         {
             v.push(n);
@@ -46,7 +46,7 @@ pub fn buses(detect: &str) -> Vec<u32> {
 }
 
 pub fn vcp(salida: &str) -> Option<(u32, u32)> {
-    let l = salida.lines().find(|l| l.starts_with("VCP "))?;
+    let l = salida.lines().find(|l| l.starts_with("VCP "))?; // no-tr
     let c: Vec<&str> = l.split_whitespace().collect();
     match c.as_slice() {
         [_, _, "C", actual, max] => Some((actual.parse().ok()?, max.parse().ok()?)).filter(|(_, m)| *m > 0),
@@ -197,8 +197,8 @@ impl Brillo {
     pub fn poner(&self, pct: f64) -> Result<f64, String> {
         let pct = pct.clamp(0.0, 100.0).round();
         match &*self.inner.via.borrow() {
-            Via::Buscando => return Err("todavía buscando los monitores".into()),
-            Via::Ninguna => return Err("no hay backlight ni monitor con DDC/CI (ddcutil)".into()),
+            Via::Buscando => return Err(tr!("todavía buscando los monitores").into()),
+            Via::Ninguna => return Err(tr!("no hay backlight ni monitor con DDC/CI (ddcutil)").into()),
             Via::Backlight { nombre, max } => {
                 let (nombre, valor) = (nombre.clone(), (pct * f64::from(*max) / 100.0).round() as u32);
                 glib::MainContext::default().spawn_local(async move {

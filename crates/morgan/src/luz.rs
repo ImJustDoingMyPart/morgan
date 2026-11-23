@@ -46,11 +46,11 @@ pub fn plan(ahora: u32, prender: u32, apagar: u32) -> (bool, u32) {
 
 pub fn aviso(prendida: bool, temperatura: u32) -> Aviso {
     let texto = if prendida {
-        format!("Activada · {temperatura} K")
+        trf!("Activada · {} K", temperatura)
     } else {
-        "Desactivada".to_owned()
+        tr!("Desactivada").to_owned()
     };
-    Aviso::estado("󰖔", "Luz nocturna", &texto, prendida, 2000)
+    Aviso::estado("󰖔", tr!("Luz nocturna"), &texto, prendida, 2000)
 }
 
 #[derive(Clone)]

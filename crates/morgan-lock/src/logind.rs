@@ -25,7 +25,7 @@ impl Logind {
             SESION,
         )
         .await?;
-        let id: String = auto.get_property("Id").await?;
+        let id: String = auto.get_property("Id").await?; // no-tr
         let manager = Proxy::new(&conn, LOGIND, RUTA, "org.freedesktop.login1.Manager").await?;
         let sesion: OwnedObjectPath = manager.call("GetSession", &(id,)).await?;
         Ok(Logind { conn, sesion })
@@ -48,7 +48,7 @@ impl Logind {
 
     pub async fn esperar_unlock(&self) -> zbus::Result<()> {
         let p = self.proxy_sesion().await?;
-        let mut s = p.receive_signal("Unlock").await?;
+        let mut s = p.receive_signal("Unlock").await?; // no-tr
         s.next().await;
         Ok(())
     }

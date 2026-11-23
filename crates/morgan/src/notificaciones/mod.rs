@@ -154,7 +154,7 @@ impl Notificaciones {
 
     pub fn captura(&self, ruta: &Path) -> Result<(), String> {
         if !ruta.is_absolute() || !ruta.is_file() {
-            return Err(format!("no hay una captura en {}", ruta.display()));
+            return Err(trf!("no hay una captura en {}", ruta.display()));
         }
         self.interna(captura::notificacion(ruta, servidor::ahora()));
         Ok(())
@@ -502,7 +502,7 @@ fn previa(n: &Notificacion) -> bool {
 fn arranque() -> Option<i64> {
     let stat = std::fs::read_to_string("/proc/stat").ok()?;
     stat.lines()
-        .find_map(|l| l.strip_prefix("btime "))
+        .find_map(|l| l.strip_prefix("btime ")) // no-tr
         .and_then(|v| v.trim().parse().ok())
 }
 

@@ -324,21 +324,21 @@ pub fn resumen_juego(apps: &[String]) -> Option<(String, String)> {
         }
     }
     let titulo = match apps.len() {
-        1 => "1 notificación".to_owned(),
-        n => format!("{n} notificaciones"),
+        1 => tr!("1 notificación").to_owned(),
+        n => trf!("{} notificaciones", n),
     };
     let quienes = cuentas
         .iter()
         .map(|(a, c)| {
             if *c > 1 {
-                format!("{a} ({c})")
+                format!("{a} ({c})") // no-tr
             } else {
                 (*a).to_owned()
             }
         })
         .collect::<Vec<_>>()
         .join(", ");
-    Some((titulo, format!("mientras jugabas: {quienes}")))
+    Some((titulo, trf!("mientras jugabas: {}", quienes)))
 }
 
 /// Los que tienen una crítica primero, después la más reciente; en un empate, el que apareció
@@ -401,11 +401,11 @@ pub fn relativo(segundos: i64) -> String {
     let horas = min / 60;
     let dias = horas / 24;
     match () {
-        _ if min < 1 => "ahora".into(),
-        _ if horas < 1 => format!("hace {min} min"),
-        _ if dias < 1 => format!("hace {horas} h"),
-        _ if dias == 1 => "hace 1 día".into(),
-        _ => format!("hace {dias} días"),
+        _ if min < 1 => tr!("ahora").into(),
+        _ if horas < 1 => trf!("hace {} min", min),
+        _ if dias < 1 => trf!("hace {} h", horas),
+        _ if dias == 1 => tr!("hace 1 día").into(),
+        _ => trf!("hace {} días", dias),
     }
 }
 

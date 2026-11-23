@@ -162,10 +162,10 @@ impl Motor {
         let (raiz, excluir) = (c.raiz(), c.excluir.clone());
         let todos = gio::spawn_blocking(move || modelo::listar(&raiz, &excluir))
             .await
-            .map_err(|_| "fondos: el hilo se cayó".to_owned())?;
+            .map_err(|_| "fondos: el hilo se cayó".to_owned())?; // no-tr
         let azar = glib::random_int_range(0, i32::MAX) as u32;
         let elegido = modelo::otro(&todos, actual().as_deref(), azar)
-            .ok_or_else(|| format!("no hay otro fondo en {}", c.raiz().display()))?;
+            .ok_or_else(|| trf!("no hay otro fondo en {}", c.raiz().display()))?;
         self.aplicar(elegido.clone());
         Ok(())
     }

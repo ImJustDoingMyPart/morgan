@@ -88,7 +88,7 @@ impl Rotulos {
         ];
         let fecha = t.armar(&[(&e.fecha, ROL_VARIANTE)], texto::pt(20.0), escala);
         let aviso = if e.mayus {
-            Some("󰘲  Bloq Mayús activado".to_owned())
+            Some(format!("󰘲  {}", tr!("Bloq Mayús activado")))
         } else {
             e.aviso.clone()
         }
@@ -615,9 +615,9 @@ fn renglon(
             continue;
         }
         let nombre = match paso {
-            Paso::Elegir(Que::Usuario) => "usuario",
-            Paso::Elegir(Que::Sesion) => "sesión",
-            Paso::Clave => "contraseña",
+            Paso::Elegir(Que::Usuario) => tr!("usuario"),
+            Paso::Elegir(Que::Sesion) => tr!("sesión"),
+            Paso::Clave => tr!("contraseña"),
         };
         let l = suelto(rot, textos, nombre, ROL_PRIMARY, texto::pt(9.0), esc);
         // El rótulo de la clave es la voz del fallo: se tiñe de `error` y sacude con el campo.

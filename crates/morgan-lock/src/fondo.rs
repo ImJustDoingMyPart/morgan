@@ -32,7 +32,7 @@ pub fn cargar(ruta: &Path) -> Result<Imagen, String> {
     let mut lector = d.read_info().map_err(|e| e.to_string())?;
     let tam = lector
         .output_buffer_size()
-        .ok_or("imagen demasiado grande")?;
+        .ok_or("imagen demasiado grande")?; // no-tr
     let mut buf = vec![0u8; tam];
     let info = lector.next_frame(&mut buf).map_err(|e| e.to_string())?;
     let canales = match info.color_type {
@@ -40,7 +40,7 @@ pub fn cargar(ruta: &Path) -> Result<Imagen, String> {
         png::ColorType::Rgb => 3,
         png::ColorType::GrayscaleAlpha => 2,
         png::ColorType::Grayscale => 1,
-        png::ColorType::Indexed => return Err("PNG indexado sin expandir".into()),
+        png::ColorType::Indexed => return Err("PNG indexado sin expandir".into()), // no-tr
     };
     let (w, h) = (info.width as usize, info.height as usize);
     let rgb = |i: usize| -> [f32; 3] {

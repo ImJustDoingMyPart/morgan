@@ -195,21 +195,21 @@ impl Default for Atajos {
     fn default() -> Self {
         let t = |s: &str| s.to_owned();
         Atajos {
-            launcher: t("SUPER + space"),
-            simbolos: t("SUPER + ALT + U"),
-            portapapeles: t("SUPER + V"),
+            launcher: t("SUPER + space"), // no-tr
+            simbolos: t("SUPER + ALT + U"), // no-tr
+            portapapeles: t("SUPER + V"), // no-tr
             atajos: String::new(),
-            calculadora: t("SUPER + ALT + C"),
-            menu: t("SUPER + comma"),
-            fondos: t("SUPER + Y"),
-            menu_fondos: t("SUPER + SHIFT + Y"),
-            ventanas: t("SUPER + Tab"),
-            centro: t("SUPER + N"),
-            no_molestar: t("SUPER + SHIFT + N"),
+            calculadora: t("SUPER + ALT + C"), // no-tr
+            menu: t("SUPER + comma"), // no-tr
+            fondos: t("SUPER + Y"), // no-tr
+            menu_fondos: t("SUPER + SHIFT + Y"), // no-tr
+            ventanas: t("SUPER + Tab"), // no-tr
+            centro: t("SUPER + N"), // no-tr
+            no_molestar: t("SUPER + SHIFT + N"), // no-tr
             retirada_notas: None,
-            sesion: t("SUPER + X"),
-            bloquear: t("SUPER + ALT + L"),
-            rescate: t("SUPER + ALT + SHIFT + L"),
+            sesion: t("SUPER + X"), // no-tr
+            bloquear: t("SUPER + ALT + L"), // no-tr
+            rescate: t("SUPER + ALT + SHIFT + L"), // no-tr
             multimedia: true,
             propios: Vec::new(),
             modos: Vec::new(),
@@ -356,7 +356,7 @@ fn kelvin<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
         Ok(v @ 2500..=6500) => Ok(v),
         _ => Err(de::Error::invalid_value(
             de::Unexpected::Signed(v),
-            &"kelvin from 2500 to 6500",
+            &"kelvin from 2500 to 6500", // no-tr
         )),
     }
 }
@@ -374,7 +374,7 @@ fn hora<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
     } else {
         Err(de::Error::invalid_value(
             de::Unexpected::Str(&v),
-            &"a time HH:MM",
+            &"a time HH:MM", // no-tr
         ))
     }
 }
@@ -423,7 +423,7 @@ fn tipo_matugen<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
     } else {
         Err(de::Error::invalid_value(
             de::Unexpected::Str(&v),
-            &"a matugen type (scheme-tonal-spot, scheme-vibrant, …)",
+            &"a matugen type (scheme-tonal-spot, scheme-vibrant, …)", // no-tr
         ))
     }
 }
@@ -434,7 +434,7 @@ fn modo_matugen<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
         "dark" | "light" => Ok(v),
         _ => Err(de::Error::invalid_value(
             de::Unexpected::Str(&v),
-            &"dark or light",
+            &"dark or light", // no-tr
         )),
     }
 }
@@ -446,7 +446,7 @@ fn contraste<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
     } else {
         Err(de::Error::invalid_value(
             de::Unexpected::Float(v),
-            &"a number from -1 to 1",
+            &"a number from -1 to 1", // no-tr
         ))
     }
 }
@@ -504,7 +504,7 @@ fn paso<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
         2 | 5 | 10 => Ok(v as u32),
         _ => Err(de::Error::invalid_value(
             de::Unexpected::Signed(v),
-            &"2, 5 or 10 (percentage points)",
+            &"2, 5 or 10 (percentage points)", // no-tr
         )),
     }
 }
@@ -543,7 +543,7 @@ pub const MODO: &str = "mode:";
 fn workspace<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
     let v = u32::deserialize(d)?;
     if v > 10 {
-        return Err(de::Error::invalid_value(de::Unexpected::Unsigned(v.into()), &"0 to 10"));
+        return Err(de::Error::invalid_value(de::Unexpected::Unsigned(v.into()), &"0 to 10")); // no-tr
     }
     Ok(v)
 }
@@ -551,7 +551,7 @@ fn workspace<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
 fn tamano_regla<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
     let v = u32::deserialize(d)?;
     if v > 100 {
-        return Err(de::Error::invalid_value(de::Unexpected::Unsigned(v.into()), &"0 to 100"));
+        return Err(de::Error::invalid_value(de::Unexpected::Unsigned(v.into()), &"0 to 100")); // no-tr
     }
     Ok(v)
 }
@@ -559,7 +559,7 @@ fn tamano_regla<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
 fn opacidad_regla<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
     let v = f64::deserialize(d)?;
     if !(0.0..=1.0).contains(&v) {
-        return Err(de::Error::invalid_value(de::Unexpected::Float(v), &"0 to 1"));
+        return Err(de::Error::invalid_value(de::Unexpected::Float(v), &"0 to 1")); // no-tr
     }
     Ok(v)
 }
@@ -567,7 +567,7 @@ fn opacidad_regla<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
 fn tecla<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
     let v = String::deserialize(d)?;
     if v.contains(['"', '\\', '\n', '\r']) {
-        return Err(serde::de::Error::custom(format!("key {v:?}: no quotes, backslashes or line breaks")));
+        return Err(serde::de::Error::custom(format!("key {v:?}: no quotes, backslashes or line breaks"))); // no-tr
     }
     Ok(v.trim().to_owned())
 }
@@ -576,7 +576,7 @@ fn idioma<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
     let v = String::deserialize(d)?;
     match morgan_idioma::Idioma::de_config(&v) {
         Some(_) => Ok(v),
-        None => Err(de::Error::invalid_value(de::Unexpected::Str(&v), &"auto, en or es")),
+        None => Err(de::Error::invalid_value(de::Unexpected::Str(&v), &"auto, en or es")), // no-tr
     }
 }
 
@@ -691,7 +691,7 @@ fn minutos<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
         Ok(v @ 0..=1440) => Ok(v),
         _ => Err(de::Error::invalid_value(
             de::Unexpected::Signed(v),
-            &"whole minutes from 0 (never) to 1440",
+            &"whole minutes from 0 (never) to 1440", // no-tr
         )),
     }
 }
@@ -700,7 +700,7 @@ fn por_app<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
     let v = i64::deserialize(d)?;
     match u32::try_from(v) {
         Ok(v @ 1..=100) => Ok(v),
-        _ => Err(de::Error::invalid_value(de::Unexpected::Signed(v), &"from 1 to 100")),
+        _ => Err(de::Error::invalid_value(de::Unexpected::Signed(v), &"from 1 to 100")), // no-tr
     }
 }
 
@@ -710,7 +710,7 @@ fn horas<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
         Ok(v @ 1..=720) => Ok(v),
         _ => Err(de::Error::invalid_value(
             de::Unexpected::Signed(v),
-            &"whole hours from 1 to 720",
+            &"whole hours from 1 to 720", // no-tr
         )),
     }
 }
@@ -721,7 +721,7 @@ fn dias<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
         Ok(v @ 1..=365) => Ok(v),
         _ => Err(de::Error::invalid_value(
             de::Unexpected::Signed(v),
-            &"whole days from 1 to 365",
+            &"whole days from 1 to 365", // no-tr
         )),
     }
 }
@@ -788,7 +788,7 @@ fn fraccion<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
         type Value = f64;
 
         fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.write_str("a number from 0 to 1")
+            f.write_str("a number from 0 to 1") // no-tr
         }
 
         fn visit_f64<E: de::Error>(self, v: f64) -> Result<f64, E> {
@@ -819,8 +819,8 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Error::NoConfigDir => f.write_str("no hay XDG_CONFIG_HOME ni HOME"),
-            Error::Read(p, e) => write!(f, "no se pudo leer {}: {e}", p.display()),
+            Error::NoConfigDir => f.write_str(tr!("no hay XDG_CONFIG_HOME ni HOME")),
+            Error::Read(p, e) => f.write_str(&trf!("no se pudo leer {}: {}", p.display(), e)),
             // El error de toml ya trae la línea, la columna y el fragmento señalado.
             Error::Parse(p, e) => write!(f, "{}: {e}", p.display()),
         }
@@ -873,7 +873,7 @@ pub fn guardar(path: &Path, c: &Config) -> Result<(), String> {
         std::fs::write(&tmp, texto)?;
         std::fs::rename(&tmp, path)
     })();
-    r.map_err(|e| format!("no se pudo escribir {}: {e}", path.display()))
+    r.map_err(|e| trf!("no se pudo escribir {}: {}", path.display(), e))
 }
 
 pub fn escribir_sobre(previo: &str, c: &Config) -> Result<String, String> {

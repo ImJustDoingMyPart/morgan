@@ -20,19 +20,19 @@ impl Clip {
 }
 
 pub fn leer(datos: &[u8]) -> Result<Clip, String> {
-    let resto = datos.strip_prefix(b"MRGN1").ok_or("no es un clip de morgan")?;
+    let resto = datos.strip_prefix(b"MRGN1").ok_or("no es un clip de morgan")?; // no-tr
     let [ancho, alto, c0, c1, fps, colores, resto @ ..] = resto else {
-        return Err("cabecera corta".into());
+        return Err("cabecera corta".into()); // no-tr
     };
     if ancho != alto {
-        return Err("el clip no es cuadrado".into());
+        return Err("el clip no es cuadrado".into()); // no-tr
     }
     let lado = *ancho as usize;
     let total = u16::from_le_bytes([*c0, *c1]) as usize;
     // 0 colores es 256: el script escribe el número módulo 256.
     let colores = if *colores == 0 { 256 } else { *colores as usize };
     if resto.len() < colores * 3 {
-        return Err("paleta corta".into());
+        return Err("paleta corta".into()); // no-tr
     }
     let (paleta, mut resto) = resto.split_at(colores * 3);
     let paleta: Vec<[u8; 3]> = paleta.chunks(3).map(|c| [c[0], c[1], c[2]]).collect();
@@ -45,7 +45,7 @@ pub fn leer(datos: &[u8]) -> Result<Clip, String> {
         let mut p = 0;
         while p < area {
             let [op, tras @ ..] = resto else {
-                return Err("cuadro cortado".into());
+                return Err("cuadro cortado".into()); // no-tr
             };
             resto = tras;
             if *op < 0x80 {
@@ -53,7 +53,7 @@ pub fn leer(datos: &[u8]) -> Result<Clip, String> {
             } else {
                 let n = (*op - 0x7F) as usize;
                 if resto.len() < n || p + n > area {
-                    return Err("cuadro cortado".into());
+                    return Err("cuadro cortado".into()); // no-tr
                 }
                 cuadro[p..p + n].copy_from_slice(&resto[..n]);
                 resto = &resto[n..];
@@ -61,16 +61,16 @@ pub fn leer(datos: &[u8]) -> Result<Clip, String> {
             }
         }
         if p != area {
-            return Err("un cuadro se pasa del área".into());
+            return Err("un cuadro se pasa del área".into()); // no-tr
         }
         if cuadro.iter().any(|&i| i as usize >= paleta.len()) {
-            return Err("índice fuera de la paleta".into());
+            return Err("índice fuera de la paleta".into()); // no-tr
         }
         cuadros.push(cuadro);
         anterior = cuadros.last().unwrap().clone();
     }
     if !resto.is_empty() {
-        return Err("sobran bytes después del último cuadro".into());
+        return Err("sobran bytes después del último cuadro".into()); // no-tr
     }
     Ok(Clip { lado, fps: *fps as f32, paleta, cuadros })
 }

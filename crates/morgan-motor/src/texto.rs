@@ -11,7 +11,7 @@ use vello::peniko::{Brush, Fill};
 
 use crate::color::Color;
 
-pub const FAMILIA: &str = "JetBrainsMono Nerd Font";
+pub const FAMILIA: &str = "JetBrainsMono Nerd Font"; // no-tr
 
 /// Los tamaños que en la hoja de GTK estaban en puntos; GTK los pasa a píxeles a 96 ppp.
 pub fn pt(p: f32) -> f32 {

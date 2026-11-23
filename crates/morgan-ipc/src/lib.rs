@@ -1,5 +1,8 @@
 //! Sin GTK, para que `morganctl` arranque rápido desde los binds.
 
+#[macro_use]
+extern crate morgan_idioma;
+
 pub mod bloqueo;
 pub mod compositor;
 pub mod hyprland;
@@ -182,12 +185,12 @@ pub enum NivelMenu {
 impl ModoLauncher {
     pub fn prompt(self) -> &'static str {
         match self {
-            ModoLauncher::Apps => "Apps",
-            ModoLauncher::Simbolos => "Símbolos",
-            ModoLauncher::Portapapeles => "Portapapeles",
-            ModoLauncher::Atajos => "Atajos",
-            ModoLauncher::Ciudad => "Ciudad",
-            ModoLauncher::Calendario => "Calendario",
+            ModoLauncher::Apps => tr_const!("Apps"),
+            ModoLauncher::Simbolos => tr_const!("Símbolos"),
+            ModoLauncher::Portapapeles => tr_const!("Portapapeles"),
+            ModoLauncher::Atajos => tr_const!("Atajos"),
+            ModoLauncher::Ciudad => tr_const!("Ciudad"),
+            ModoLauncher::Calendario => tr_const!("Calendario"),
         }
     }
 }
@@ -217,7 +220,7 @@ trait Nombres: Sized + Copy + 'static {
             .map(|(_, v)| *v)
             .ok_or_else(|| {
                 let hay: Vec<_> = Self::TODOS.iter().map(|(n, _)| *n).collect();
-                format!("unknown {} «{s}» (one of: {})", Self::QUE, hay.join(", "))
+                format!("unknown {} «{s}» (one of: {})", Self::QUE, hay.join(", ")) // no-tr
             })
     }
 }
@@ -228,7 +231,7 @@ impl Nombres for AccionVolumen {
         ("down", Self::Bajar),
         ("mute", Self::Silenciar),
     ];
-    const QUE: &str = "volume action";
+    const QUE: &str = "volume action"; // no-tr
 }
 
 impl Nombres for AccionInterruptor {
@@ -246,7 +249,7 @@ impl Nombres for AccionSuperficie {
         ("open", Self::Abrir),
         ("close", Self::Cerrar),
     ];
-    const QUE: &str = "surface action";
+    const QUE: &str = "surface action"; // no-tr
 }
 
 impl Nombres for ModoLauncher {
@@ -258,7 +261,7 @@ impl Nombres for ModoLauncher {
         ("city", Self::Ciudad),
         ("calendar", Self::Calendario),
     ];
-    const QUE: &str = "launcher mode";
+    const QUE: &str = "launcher mode"; // no-tr
 }
 
 impl Nombres for NivelMenu {
@@ -267,7 +270,7 @@ impl Nombres for NivelMenu {
         ("wallpapers", Self::Fondos),
         ("weather", Self::Clima),
     ];
-    const QUE: &str = "menu branch";
+    const QUE: &str = "menu branch"; // no-tr
 }
 
 impl Nombres for AccionReproductor {
@@ -276,7 +279,7 @@ impl Nombres for AccionReproductor {
         ("next", Self::Siguiente),
         ("previous", Self::Anterior),
     ];
-    const QUE: &str = "player action";
+    const QUE: &str = "player action"; // no-tr
 }
 
 /// Lo más que se deja trabar el hilo principal a propósito.
@@ -317,7 +320,7 @@ impl Request {
                 let o = Opciones::parse(resto, &["--icon", "--ms", "--title"], &[])?;
                 let valor = valor
                     .parse()
-                    .map_err(|_| format!("progress is not a number: «{valor}»"))?;
+                    .map_err(|_| format!("progress is not a number: «{valor}»"))?; // no-tr
                 Request::Osd {
                     icono: o.valor("--icon"),
                     contenido: Contenido::Progreso(valor),
@@ -328,7 +331,7 @@ impl Request {
                 }
             }
             ["osd", ..] => {
-                return Err("usage: morganctl osd message <title> | progress <0-1>".into());
+                return Err("usage: morganctl osd message <title> | progress <0-1>".into()); // no-tr
             }
             ["volume", accion, resto @ ..] => {
                 let o = Opciones::parse(resto, &["--device"], &["--mic"])?;
@@ -352,7 +355,7 @@ impl Request {
             },
             ["wallpaper", ruta] => {
                 if !ruta.starts_with('/') {
-                    return Err(format!("the wallpaper path is not absolute: «{ruta}»"));
+                    return Err(format!("the wallpaper path is not absolute: «{ruta}»")); // no-tr
                 }
                 Request::Fondo {
                     pedido: PedidoFondo::Poner((*ruta).into()),
@@ -366,7 +369,7 @@ impl Request {
             ["brightness", "down"] => Request::Brillo { pedido: PedidoBrillo::Bajar },
             ["brightness", n] => match n.parse() {
                 Ok(v @ 0..=100) => Request::Brillo { pedido: PedidoBrillo::Poner(v) },
-                _ => return Err(format!("brightness: up, down or 0 to 100, not «{n}»")),
+                _ => return Err(format!("brightness: up, down or 0 to 100, not «{n}»")), // no-tr
             },
             ["caffeine", "status"] => Request::Caffeine { accion: None },
             ["caffeine", accion] => Request::Caffeine {
@@ -376,7 +379,7 @@ impl Request {
             ["notifications", "clear"] => Request::Limpiar,
             ["screenshot", ruta] => {
                 if !ruta.starts_with('/') {
-                    return Err(format!("the screenshot path is not absolute: «{ruta}»"));
+                    return Err(format!("the screenshot path is not absolute: «{ruta}»")); // no-tr
                 }
                 Request::Captura {
                     ruta: (*ruta).into(),
@@ -398,7 +401,7 @@ impl Request {
             ["windows"] => Request::Ventanas { soltar: false },
             ["windows", "release"] => Request::Ventanas { soltar: true },
             ["dev", "block", ms] => Request::Trabar {
-                ms: ms.parse().map_err(|_| format!("not a number of ms: {ms}"))?,
+                ms: ms.parse().map_err(|_| format!("not a number of ms: {ms}"))?, // no-tr
             },
             ["menu", accion] => Request::Menu {
                 accion: AccionSuperficie::parse(accion)?,
@@ -416,8 +419,8 @@ impl Request {
                 accion: AccionSuperficie::parse(accion)?,
                 modo: ModoLauncher::parse(modo)?,
             },
-            [] => return Err("missing command".into()),
-            [cmd, ..] => return Err(format!("unknown or malformed command: «{cmd}»")),
+            [] => return Err("missing command".into()), // no-tr
+            [cmd, ..] => return Err(format!("unknown or malformed command: «{cmd}»")), // no-tr
         };
         request.validar()?;
         Ok(request)
@@ -428,14 +431,14 @@ impl Request {
         if let Request::Trabar { ms } = self
             && *ms > TRABA_MAX
         {
-            return Err(format!("block too long: {ms} ms (at most {TRABA_MAX})"));
+            return Err(format!("block too long: {ms} ms (at most {TRABA_MAX})")); // no-tr
         }
         if let Request::Osd { contenido, ms, .. } = self {
             if let Some(ms) = ms
                 && !OSD_MS_RANGO.contains(ms)
             {
                 return Err(format!(
-                    "duration out of range: {ms} ms (from {} to {})",
+                    "duration out of range: {ms} ms (from {} to {})", // no-tr
                     OSD_MS_RANGO.start(),
                     OSD_MS_RANGO.end()
                 ));
@@ -443,7 +446,7 @@ impl Request {
             if let Contenido::Progreso(v) = contenido
                 && !(0.0..=1.0).contains(v)
             {
-                return Err(format!("progress out of range: {v} (from 0 to 1)"));
+                return Err(format!("progress out of range: {v} (from 0 to 1)")); // no-tr
             }
         }
         Ok(())
@@ -465,17 +468,17 @@ impl<'a> Opciones<'a> {
         while let Some(&a) = args.next() {
             let repetida = o.valores.iter().any(|(n, _)| *n == a) || o.banderas.contains(&a);
             if repetida {
-                return Err(format!("repeated option: {a}"));
+                return Err(format!("repeated option: {a}")); // no-tr
             }
             if con_valor.contains(&a) {
                 let v = args
                     .next()
-                    .ok_or_else(|| format!("missing value for {a}"))?;
+                    .ok_or_else(|| format!("missing value for {a}"))?; // no-tr
                 o.valores.push((a, v));
             } else if banderas.contains(&a) {
                 o.banderas.push(a);
             } else {
-                return Err(format!("unknown option: «{a}»"));
+                return Err(format!("unknown option: «{a}»")); // no-tr
             }
         }
         Ok(o)
@@ -492,7 +495,7 @@ impl<'a> Opciones<'a> {
         self.valor(nombre)
             .map(|v| {
                 v.parse()
-                    .map_err(|_| format!("{nombre} is not an integer: «{v}»"))
+                    .map_err(|_| format!("{nombre} is not an integer: «{v}»")) // no-tr
             })
             .transpose()
     }
@@ -511,8 +514,8 @@ pub enum PathError {
 impl fmt::Display for PathError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PathError::NoRuntimeDir => f.write_str("XDG_RUNTIME_DIR no está definido"),
-            PathError::NoWaylandDisplay => f.write_str("WAYLAND_DISPLAY no está definido"),
+            PathError::NoRuntimeDir => f.write_str(tr!("XDG_RUNTIME_DIR no está definido")),
+            PathError::NoWaylandDisplay => f.write_str(tr!("WAYLAND_DISPLAY no está definido")),
         }
     }
 }
@@ -557,7 +560,7 @@ pub fn bind(path: &Path) -> io::Result<UnixListener> {
             if UnixStream::connect(path).is_ok() {
                 return Err(io::Error::new(
                     io::ErrorKind::AddrInUse,
-                    format!("ya hay un morgan atendiendo en {}", path.display()),
+                    format!("ya hay un morgan atendiendo en {}", path.display()), // no-tr
                 ));
             }
             std::fs::remove_file(path)?;
@@ -573,7 +576,7 @@ pub fn serve(stream: &mut UnixStream, handle: impl FnOnce(Request) -> Response) 
     let response = match read_line::<Request>(stream) {
         Ok(request) => handle(request),
         Err(e) if e.kind() == io::ErrorKind::InvalidData => Response::Error {
-            message: format!("petición inválida: {e}"),
+            message: trf!("petición inválida: {}", e),
         },
         Err(e) => return Err(e),
     };
@@ -593,7 +596,7 @@ fn read_line<T: for<'de> Deserialize<'de>>(stream: &mut UnixStream) -> io::Resul
     if !line.ends_with('\n') {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "línea cortada o demasiado larga",
+            "línea cortada o demasiado larga", // no-tr
         ));
     }
     serde_json::from_str(&line).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))

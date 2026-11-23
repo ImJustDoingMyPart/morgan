@@ -265,7 +265,7 @@ impl Inner {
             if !tooltip.is_empty() {
                 tooltip.push('\n');
             }
-            tooltip.push_str("TV prendida");
+            tooltip.push_str(tr!("TV prendida"));
         }
         let _ = self.hilo.send(Orden::Privacidad {
             glifos: glifos.join(" "),

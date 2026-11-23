@@ -31,7 +31,7 @@ usage: morganctl ping
        morganctl launcher toggle|open|close [apps|symbols|clipboard|keybinds|city|calendar]
        morganctl theme list|current|reload
        morganctl theme apply <theme>
-       morganctl theme wallpaper [image]";
+       morganctl theme wallpaper [image]"; // no-tr
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -54,7 +54,7 @@ fn main() -> ExitCode {
     };
     match morgan_ipc::send(&path, &request) {
         Ok(Response::Pong { version }) => {
-            println!("morgan {version}");
+            println!("morgan {version}"); // no-tr
             ExitCode::SUCCESS
         }
         Ok(Response::Done) => ExitCode::SUCCESS,

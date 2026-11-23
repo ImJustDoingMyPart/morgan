@@ -29,7 +29,7 @@ fn opciones() -> Result<Opciones, String> {
         match a.as_str() {
             "--pam" => o.servicio = args.next().ok_or("--pam necesita un servicio")?,
             "--sin-logind" => o.logind = false,
-            otro => return Err(format!("argumento desconocido: {otro}")),
+            otro => return Err(format!("argumento desconocido: {otro}")), // no-tr
         }
     }
     Ok(o)

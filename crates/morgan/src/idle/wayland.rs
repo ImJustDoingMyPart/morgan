@@ -104,10 +104,10 @@ impl Notificador {
         let qh = cola.handle();
         let notifier: ExtIdleNotifierV1 = globals
             .bind(&qh, 1..=2, ())
-            .map_err(|e| format!("ext_idle_notifier_v1: {e}"))?;
+            .map_err(|e| format!("ext_idle_notifier_v1: {e}"))?; // no-tr
         let seat: wl_seat::WlSeat = globals
             .bind(&qh, 1..=1, ())
-            .map_err(|e| format!("wl_seat: {e}"))?;
+            .map_err(|e| format!("wl_seat: {e}"))?; // no-tr
         let n = Rc::new(Notificador {
             conn,
             cola: RefCell::new(cola),

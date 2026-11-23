@@ -62,11 +62,11 @@ pub fn tiempos(c: &config::Idle, inhibido: bool) -> Vec<(Accion, u32)> {
 
 pub fn aviso_caffeine(activo: bool) -> Aviso {
     let (texto, icono) = if activo {
-        ("Activado", "󰅶")
+        (tr!("Activado"), "󰅶")
     } else {
-        ("Desactivado", "󰅶")
+        (tr!("Desactivado"), "󰅶")
     };
-    Aviso::estado(icono, "Caffeine", texto, activo, 2000)
+    Aviso::estado(icono, tr!("Caffeine"), texto, activo, 2000)
 }
 
 #[derive(Clone)]

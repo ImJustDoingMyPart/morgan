@@ -62,7 +62,7 @@ pub async fn aplicar(c: Cambio) -> Result<(), String> {
             let familia = f.clone();
             gio::spawn_blocking(move || fuentes::validar(a, &familia))
                 .await
-                .map_err(|_| "apariencia: el hilo se cayó".to_owned())??;
+                .map_err(|_| "apariencia: el hilo se cayó".to_owned())??; // no-tr
             fuentes::aplicar(a, &f);
             Ok(())
         }
@@ -77,7 +77,7 @@ pub async fn aplicar(c: Cambio) -> Result<(), String> {
 fn comparar_con_la_sesion() {
     let p = puesto();
     let o = opciones();
-    println!("PUESTO\t{}\t{}\t{}\t{} {}", p.fuente_sistema, p.fuente_terminal, p.iconos, p.cursor.0, p.cursor.1);
+    println!("PUESTO\t{}\t{}\t{}\t{} {}", p.fuente_sistema, p.fuente_terminal, p.iconos, p.cursor.0, p.cursor.1); // no-tr
     println!("CANTIDADES\t{}\t{}\t{}\t{}", o.fuentes_sistema.len(), o.fuentes_terminal.len(), o.iconos.len(), o.cursores.len());
     for (f, s) in o.fuentes_sistema.iter().chain(&o.fuentes_terminal) {
         println!("FUENTE\t{f}\t{s}");

@@ -19,7 +19,7 @@ use guion::Texto;
 
 const CUADROS: &[u8] = include_bytes!("cuadros.bin");
 const SONIDO: &[u8] = include_bytes!("sonido.ogg");
-const MEMORIA: &str = "In memory of Morgan";
+const MEMORIA: &str = "In memory of Morgan"; // no-tr
 
 pub fn correr() -> ExitCode {
     let clip = match clip::leer(CUADROS) {
@@ -61,18 +61,18 @@ pub fn correr() -> ExitCode {
 fn ficha() -> Vec<String> {
     let version = env!("CARGO_PKG_VERSION");
     let morgan = match env!("MORGAN_COMMIT") {
-        "" => format!("morgan {version}"),
-        commit => format!("morgan {version} · {commit}"),
+        "" => format!("morgan {version}"), // no-tr
+        commit => format!("morgan {version} · {commit}"), // no-tr
     };
     let rust = match env!("MORGAN_RUSTC") {
-        "" => "Rust".to_owned(),
-        v => format!("Rust {v}"),
+        "" => "Rust".to_owned(), // no-tr
+        v => format!("Rust {v}"), // no-tr
     };
     vec![
         morgan,
-        "a desktop shell for Hyprland".to_owned(),
-        format!("{rust} · vello · wgpu"),
-        "zbus · PipeWire · matugen".to_owned(),
+        "a desktop shell for Hyprland".to_owned(), // no-tr
+        format!("{rust} · vello · wgpu"), // no-tr
+        "zbus · PipeWire · matugen".to_owned(), // no-tr
     ]
 }
 

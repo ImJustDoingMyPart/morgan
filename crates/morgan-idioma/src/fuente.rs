@@ -7,6 +7,110 @@ use std::path::{Path, PathBuf};
 /// Los archivos (relativos a `crates/`) donde todo texto visible ya pasa por la tabla. Uno
 /// que se traduce entra acá, y desde entonces el test no deja agregarle textos sueltos.
 const TRADUCIDOS: &[&str] = &[
+    "morgan-motor/src/texto.rs",
+    "morganctl/src/main.rs",
+    "morgan-temas/src/render.rs",
+    "morgan-temas/src/paleta.rs",
+    "morgan-temas/src/integraciones.rs",
+    "morgan-temas/src/lib.rs",
+    "morgan-ipc/src/umbriel.rs",
+    "morgan-ipc/src/lib.rs",
+    "morgan-lock/src/xray.rs",
+    "morgan-lock/src/perfil.rs",
+    "morgan-lock/src/pam.rs",
+    "morgan-lock/src/main.rs",
+    "morgan-lock/src/logind.rs",
+    "morgan-lock/src/instalar.rs",
+    "morgan-lock/src/greeter.rs",
+    "morgan-lock/src/greetd.rs",
+    "morgan-lock/src/fondo.rs",
+    "morgan-lock/src/foco.rs",
+    "morgan-lock/src/dibujo.rs",
+    "morgan-lock/src/bin/morgan-greet.rs",
+    "morgan/src/ventanas/mod.rs",
+    "morgan/src/ventanas/captura_ext.rs",
+    "morgan/src/ventanas/captura.rs",
+    "morgan/src/teclas.rs",
+    "morgan/src/privacidad.rs",
+    "morgan/src/notificaciones/servidor.rs",
+    "morgan/src/notificaciones/modelo.rs",
+    "morgan/src/notificaciones/mod.rs",
+    "morgan/src/notificaciones/markup.rs",
+    "morgan/src/notificaciones/captura.rs",
+    "morgan/src/main.rs",
+    "morgan/src/luz.rs",
+    "morgan/src/ipc.rs",
+    "morgan/src/idle/wayland.rs",
+    "morgan/src/idle/unidad.rs",
+    "morgan/src/idle/mod.rs",
+    "morgan/src/idle/logind.rs",
+    "morgan/src/icono/mod.rs",
+    "morgan/src/gama.rs",
+    "morgan/src/fondos/motor.rs",
+    "morgan/src/fondos/mod.rs",
+    "morgan/src/escucha.rs",
+    "morgan/src/config.rs",
+    "morgan/src/comando.rs",
+    "morgan/src/brillo.rs",
+    "morgan/src/ayuda.rs",
+    "morgan/src/apariencia/mod.rs",
+    "morgan/src/apariencia/iconos.rs",
+    "morgan/src/apariencia/fuentes.rs",
+    "morgan/src/apariencia/cursores.rs",
+    "morgan/src/apariencia/archivos.rs",
+    "morgan/src/acerca/mod.rs",
+    "morgan/src/acerca/clip.rs",
+    "morgan/src/calculadora/mod.rs",
+    "morgan/src/bandeja/mod.rs",
+    "morgan/src/agenda.rs",
+    "morgan/src/ical.rs",
+    "morgan/src/dock/mod.rs",
+    "morgan/src/clima.rs",
+    "morgan/src/barra/bandeja.rs",
+    "morgan/src/barra/mod.rs",
+    "morgan/src/barra/dibujo.rs",
+    "morgan/src/barra/modelo.rs",
+    "morgan/src/calendario/dibujo.rs",
+    "morgan/src/calendario/modelo.rs",
+    "morgan/src/bluetooth.rs",
+    "morgan/src/audio.rs",
+    "morgan/src/reproductor.rs",
+    "morgan/src/red.rs",
+    "morgan/src/mpris.rs",
+    "morgan/src/energia.rs",
+    "morgan/src/dispositivos.rs",
+    "morgan/src/cuotas.rs",
+    "morgan/src/centro/dibujo/ventanas.rs",
+    "morgan/src/centro/dibujo/calculadora.rs",
+    "morgan/src/centro/dibujo/avisos.rs",
+    "morgan/src/centro/dibujo/armar.rs",
+    "morgan/src/centro/dibujo/ajustes.rs",
+    "morgan/src/centro/vumetro.rs",
+    "morgan/src/centro/ecualizador.rs",
+    "morgan/src/centro/resumen.rs",
+    "morgan/src/launcher/umbriel_atajos.rs",
+    "morgan/src/launcher/mod.rs",
+    "morgan/src/launcher/fuentes.rs",
+    "morgan/src/launcher/busqueda.rs",
+    "morgan/src/compositor/mod.rs",
+    "morgan/src/compositor/umbriel.rs",
+    "morgan/src/compositor/hyprland.rs",
+    "morgan/src/compositor/compartir.rs",
+    "morgan/src/atajos_base.rs",
+    "morgan/src/umbriel_cfg.rs",
+    "morgan/src/sonidos.rs",
+    "morgan/src/hypr_cfg.rs",
+    "morgan/src/animaciones.rs",
+    "morgan/src/menu/monitores.rs",
+    "morgan/src/menu/mod.rs",
+    "morgan/src/menu/lectura.rs",
+    "morgan/src/menu/sistema.rs",
+    "morgan/src/menu/reglas.rs",
+    "morgan/src/menu/cursores.rs",
+    "morgan/src/menu/carpeta.rs",
+    "morgan/src/menu/hora.rs",
+    "morgan/src/menu/atajos.rs",
+    "morgan/src/menu/compositor.rs",
     "morgan/src/menu/arbol.rs",
     "morgan/src/launcher/binds.rs",
     "morgan/src/centro/mod.rs",
@@ -146,7 +250,7 @@ pub fn literales(fuente: &str) -> Vec<Literal> {
             '"' => {
                 let inicio = linea;
                 let (texto, sig) = string(&c, i + 1, &mut linea);
-                empujar(&mut v, &macros, nivel, en_atributo.is_some(), en_tests, inicio, texto, false, &no_tr);
+                empujar(&mut v, &macros, nivel, en_atributo.is_some(), en_tests, (inicio, linea), texto, false, &no_tr);
                 i = sig;
                 pendiente = None;
                 continue;
@@ -215,7 +319,7 @@ pub fn literales(fuente: &str) -> Vec<Literal> {
                         }
                         let texto: String = c[j + hashes + 1..k.min(c.len())].iter().collect();
                         if palabra == "r" {
-                            empujar(&mut v, &macros, nivel, en_atributo.is_some(), en_tests, inicio, texto, true, &no_tr);
+                            empujar(&mut v, &macros, nivel, en_atributo.is_some(), en_tests, (inicio, linea), texto, true, &no_tr);
                         }
                         i = k + cierre.len();
                         pendiente = None;
@@ -263,7 +367,7 @@ fn empujar(
     nivel: usize,
     atributo: bool,
     en_tests: bool,
-    linea: usize,
+    (linea, fin): (usize, usize),
     texto: String,
     crudo: bool,
     no_tr: &dyn Fn(usize) -> bool,
@@ -271,7 +375,10 @@ fn empujar(
     let directa = macros.last().filter(|m| m.nivel == nivel);
     let marca = directa.and_then(|m| MARCAS.iter().find(|n| **n == m.nombre)).copied();
     let exento = atributo || macros.iter().any(|m| SIN_TRADUCIR.contains(&m.nombre.as_str()));
-    v.push(Literal { linea, texto, marca, exento, en_tests, no_tr: no_tr(linea), crudo });
+    // Un texto de varias líneas lleva la marca al final de la última: en la primera quedaría
+    // adentro del texto.
+    let no_tr = no_tr(linea) || no_tr(fin);
+    v.push(Literal { linea, texto, marca, exento, en_tests, no_tr, crudo });
 }
 
 /// ¿Parece un texto para una persona? Con espacio y letras, con letras del castellano, o
@@ -377,6 +484,8 @@ fn f<'a>(x: &'a str) -> char {
              pantalla";
     let g = x.expect("no puede fallar");
     h(tr_const!("Constante"), "Suelto"); // no-tr
+    let i = "Varias \
+             líneas"; // no-tr
     '\''
 }
 #[derive(Debug)]
@@ -392,7 +501,8 @@ mod tests {
             textos,
             [
                 "Apagar", "Hace {} min", "morgan: {}", "dentro", "crudo \"con\" comillas",
-                "Bloquear pantalla", "no puede fallar", "Constante", "Suelto", "en tests"
+                "Bloquear pantalla", "no puede fallar", "Constante", "Suelto", "Varias líneas",
+                "en tests"
             ]
         );
         let m: Vec<Option<&str>> = v.iter().map(|l| l.marca).collect();
@@ -405,7 +515,8 @@ mod tests {
         assert_eq!(v[5].linea, 10);
         assert_eq!(m[7], Some("tr_const"));
         assert!(v[8].no_tr && v[8].marca.is_none());
-        assert!(v[9].en_tests && !v[8].en_tests);
+        assert!(v[9].no_tr && v[9].linea == 14, "la marca al final de la última línea");
+        assert!(v[10].en_tests && !v[8].en_tests);
     }
 
     #[test]

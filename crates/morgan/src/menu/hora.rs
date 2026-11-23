@@ -44,7 +44,7 @@ pub async fn leer() -> Lectura {
         };
         let bool_de = |v: zbus::Result<OwnedValue>| v.ok().and_then(|v| bool::try_from(v).ok());
         Ok::<_, zbus::Error>(Lectura {
-            zona: prop("Timezone")
+            zona: prop("Timezone") // no-tr
                 .await
                 .ok()
                 .and_then(|v| String::try_from(v).ok())
@@ -64,11 +64,11 @@ pub async fn leer() -> Lectura {
 pub async fn aplicar(c: Cambio) -> Result<(), String> {
     let p = sistema::proxy(TD, RUTA, TD)
         .await
-        .map_err(|e| format!("timedated: {e}"))?;
+        .map_err(|e| format!("timedated: {e}"))?; // no-tr
     let zona: String = p
-        .get_property("Timezone")
+        .get_property("Timezone") // no-tr
         .await
-        .map_err(|e| format!("timedated: {e}"))?;
+        .map_err(|e| format!("timedated: {e}"))?; // no-tr
     let zona = zona.as_str();
     let r = match c {
         Cambio::Ntp(si) => p.call::<_, _, ()>("SetNTP", &(si, true)).await,
@@ -79,7 +79,7 @@ pub async fn aplicar(c: Cambio) -> Result<(), String> {
             p.call::<_, _, ()>("SetTime", &(usec, false, true)).await
         }
     };
-    r.map_err(|e| format!("timedated: {e}"))
+    r.map_err(|e| format!("timedated: {e}")) // no-tr
 }
 
 /// Microsegundos desde 1970 de la fecha o la hora escrita, completada con la otra mitad de
@@ -87,45 +87,45 @@ pub async fn aplicar(c: Cambio) -> Result<(), String> {
 pub fn instante(c: &Cambio, zona: &str, ahora: chrono::DateTime<Utc>) -> Result<i64, String> {
     let tz: chrono_tz::Tz = zona
         .parse()
-        .map_err(|_| format!("zona desconocida: {zona}"))?;
+        .map_err(|_| trf!("zona desconocida: {}", zona))?;
     let local = ahora.with_timezone(&tz).naive_local();
     let nueva = match c {
         Cambio::Fecha(s) => NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d")
-            .map_err(|_| format!("fecha inválida: {s}"))?
+            .map_err(|_| trf!("fecha inválida: {}", s))?
             .and_time(local.time()),
         Cambio::Reloj(s) => local.date().and_time(
             NaiveTime::parse_from_str(s.trim(), "%H:%M")
-                .map_err(|_| format!("hora inválida: {s}"))?,
+                .map_err(|_| trf!("hora inválida: {}", s))?,
         ),
-        _ => return Err("no es una fecha ni una hora".into()),
+        _ => return Err(tr!("no es una fecha ni una hora").into()),
     };
     tz.from_local_datetime(&nueva)
         .earliest()
         .map(|t| t.timestamp_micros())
-        .ok_or_else(|| format!("esa hora no existe en {zona}"))
+        .ok_or_else(|| trf!("esa hora no existe en {}", zona))
 }
 
 /// La región de una zona: lo que va antes de la primera barra («America»); las sueltas
 /// («UTC») y las de `Etc` van juntas.
 pub fn region(zona: &str) -> &str {
     match zona.split_once('/') {
-        Some(("Etc", _)) | None => "Etc",
+        Some(("Etc", _)) | None => "Etc", // no-tr
         Some((r, _)) => r,
     }
 }
 
 pub fn nombre_region(r: &str) -> &'static str {
     match r {
-        "Africa" => tr!("África"),
-        "America" => tr!("América"),
-        "Antarctica" => tr!("Antártida"),
-        "Arctic" => tr!("Ártico"),
-        "Asia" => tr!("Asia"),
-        "Atlantic" => tr!("Atlántico"),
-        "Australia" => tr!("Australia"),
-        "Europe" => tr!("Europa"),
-        "Indian" => tr!("Índico"),
-        "Pacific" => tr!("Pacífico"),
+        "Africa" => tr!("África"), // no-tr
+        "America" => tr!("América"), // no-tr
+        "Antarctica" => tr!("Antártida"), // no-tr
+        "Arctic" => tr!("Ártico"), // no-tr
+        "Asia" => tr!("Asia"), // no-tr
+        "Atlantic" => tr!("Atlántico"), // no-tr
+        "Australia" => tr!("Australia"), // no-tr
+        "Europe" => tr!("Europa"), // no-tr
+        "Indian" => tr!("Índico"), // no-tr
+        "Pacific" => tr!("Pacífico"), // no-tr
         _ => tr!("Otras"),
     }
 }

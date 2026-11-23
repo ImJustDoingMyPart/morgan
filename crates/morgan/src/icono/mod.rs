@@ -113,8 +113,8 @@ fn leer_indice(texto: &str) -> Tema {
         })
         .unwrap_or_default()
     };
-    let cabecera = secciones.get("Icon Theme");
-    let mut nombres = lista(cabecera.and_then(|c| c.get("Directories")));
+    let cabecera = secciones.get("Icon Theme"); // no-tr
+    let mut nombres = lista(cabecera.and_then(|c| c.get("Directories"))); // no-tr
     nombres.extend(lista(cabecera.and_then(|c| c.get("ScaledDirectories"))));
     let mut vistos = HashSet::new();
     let carpetas: Vec<Carpeta> = nombres
@@ -123,20 +123,20 @@ fn leer_indice(texto: &str) -> Tema {
         .filter_map(|n| {
             let s = secciones.get(&n)?;
             let num = |k: &str| s.get(k).and_then(|v| v.parse::<u32>().ok());
-            let tam = num("Size")?;
-            let tipo = match s.get("Type").map(String::as_str) {
-                Some("Fixed") => Tipo::Fijo,
-                Some("Scalable") => Tipo::Escalable,
+            let tam = num("Size")?; // no-tr
+            let tipo = match s.get("Type").map(String::as_str) { // no-tr
+                Some("Fixed") => Tipo::Fijo, // no-tr
+                Some("Scalable") => Tipo::Escalable, // no-tr
                 _ => Tipo::Umbral,
             };
             Some(Carpeta {
                 ruta: n,
                 tam,
-                escala: num("Scale").unwrap_or(1).max(1),
+                escala: num("Scale").unwrap_or(1).max(1), // no-tr
                 tipo,
                 min: num("MinSize").unwrap_or(tam),
                 max: num("MaxSize").unwrap_or(tam),
-                umbral: num("Threshold").unwrap_or(2),
+                umbral: num("Threshold").unwrap_or(2), // no-tr
             })
         })
         .collect();
@@ -150,7 +150,7 @@ fn leer_indice(texto: &str) -> Tema {
         indices: Vec::new(),
         carpetas,
         por_ruta,
-        hereda: lista(cabecera.and_then(|c| c.get("Inherits"))),
+        hereda: lista(cabecera.and_then(|c| c.get("Inherits"))), // no-tr
     }
 }
 

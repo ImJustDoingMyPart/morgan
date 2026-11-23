@@ -143,7 +143,7 @@ struct Datos {
 
 pub fn autenticar(servicio: &str, usuario: &str, clave: Secreto) -> Resultado {
     let (Ok(c_servicio), Ok(c_usuario)) = (CString::new(servicio), CString::new(usuario)) else {
-        return Resultado::Error("servicio o usuario con nul".into());
+        return Resultado::Error("servicio o usuario con nul".into()); // no-tr
     };
     if clave.bytes().contains(&0) {
         return Resultado::Fallo(Vec::new());
@@ -167,7 +167,7 @@ pub fn autenticar(servicio: &str, usuario: &str, clave: Secreto) -> Resultado {
     let r = unsafe { pam_start(c_servicio.as_ptr(), c_usuario.as_ptr(), &conv, &mut h) };
     if r != PAM_SUCCESS {
         borrar(&mut datos.clave);
-        return Resultado::Error(format!("pam_start: {r}"));
+        return Resultado::Error(format!("pam_start: {r}")); // no-tr
     }
     // SAFETY: `h` salió de un `pam_start` exitoso.
     let r = unsafe { pam_authenticate(h, PAM_DISALLOW_NULL_AUTHTOK) };
@@ -186,7 +186,7 @@ pub fn autenticar(servicio: &str, usuario: &str, clave: Secreto) -> Resultado {
         PAM_SUCCESS => Resultado::Bien,
         // Módulo que no carga, error del sistema o de memoria, conversación, aborto: la pila
         // está rota, no la contraseña.
-        1..=5 | PAM_CONV_ERR | 26 | 28 => Resultado::Error(format!("pam_authenticate: {texto}")),
+        1..=5 | PAM_CONV_ERR | 26 | 28 => Resultado::Error(format!("pam_authenticate: {texto}")), // no-tr
         _ => Resultado::Fallo(datos.mensajes),
     }
 }

@@ -32,9 +32,9 @@ const NOMBRES: &[&str] = &[
 
 /// Una fuente de video que es una pantalla (no una cámara).
 pub fn es_pantalla(clase: &str, rol: &str, nombre: &str) -> bool {
-    clase.contains("Video")
-        && !clase.contains("Audio")
-        && (rol == "Screen" || NOMBRES.iter().any(|n| nombre.starts_with(n)))
+    clase.contains("Video") // no-tr
+        && !clase.contains("Audio") // no-tr
+        && (rol == "Screen" || NOMBRES.iter().any(|n| nombre.starts_with(n))) // no-tr
 }
 
 /// Lo visto de PipeWire: qué nodos son pantallas y de qué nodo sale cada enlace.

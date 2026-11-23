@@ -77,7 +77,7 @@ pub fn leer_sesion(id: &str, texto: &str, existe: impl Fn(&str) -> bool) -> Opti
     for l in texto.lines() {
         let l = l.trim();
         if l.starts_with('[') {
-            en_entrada = l == "[Desktop Entry]";
+            en_entrada = l == "[Desktop Entry]"; // no-tr
             continue;
         }
         if !en_entrada {
@@ -87,8 +87,8 @@ pub fn leer_sesion(id: &str, texto: &str, existe: impl Fn(&str) -> bool) -> Opti
             continue;
         };
         match k.trim() {
-            "Name" => nombre = Some(v.trim().to_owned()),
-            "Exec" => exec = Some(v.trim().to_owned()),
+            "Name" => nombre = Some(v.trim().to_owned()), // no-tr
+            "Exec" => exec = Some(v.trim().to_owned()), // no-tr
             "DesktopNames" => {
                 escritorios = v
                     .split(';')
@@ -96,7 +96,7 @@ pub fn leer_sesion(id: &str, texto: &str, existe: impl Fn(&str) -> bool) -> Opti
                     .map(str::to_owned)
                     .collect();
             }
-            "NoDisplay" | "Hidden" if v.trim() == "true" => return None,
+            "NoDisplay" | "Hidden" if v.trim() == "true" => return None, // no-tr
             "TryExec" if !existe(v.trim()) => return None,
             _ => {}
         }
@@ -253,7 +253,7 @@ pub fn teclado(conf: &str) -> Teclado {
     for l in conf.lines() {
         let mut p = l.split('"').skip(1).step_by(2);
         let l = l.trim();
-        if !l.starts_with("Option") {
+        if !l.starts_with("Option") { // no-tr
             continue;
         }
         let (Some(k), Some(v)) = (p.next(), p.next()) else {
@@ -287,7 +287,7 @@ fn lua(s: &str) -> String {
 /// más alta de cada salida y, entre esas, la mayor resolución. Con `preferred` el monitor
 /// elige, y uno de 300 Hz suele pedir 60.
 pub fn config_hyprland(pantalla: &[String], t: &Teclado) -> String {
-    let cmd = format!("{}; hyprctl dispatch 'hl.dsp.exit()'", sh(pantalla));
+    let cmd = format!("{}; hyprctl dispatch 'hl.dsp.exit()'", sh(pantalla)); // no-tr
     format!(
         r#"-- Generado por morgan-greet: se reescribe en cada arranque.
 hl.monitor({{ output = "", mode = "highrr", position = "auto", scale = 1 }})
@@ -357,7 +357,7 @@ options = {}
 /// termina, Umbriel sale. Lo lanzado tiene `UMBRIEL_SOCKET` del Umbriel del greeter.
 pub fn arranque_umbriel(pantalla: &[String]) -> String {
     format!(
-        "{}; umbriel msg session-quit skip-confirmation",
+        "{}; umbriel msg session-quit skip-confirmation", // no-tr
         sh(pantalla)
     )
 }

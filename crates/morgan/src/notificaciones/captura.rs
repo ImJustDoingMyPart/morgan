@@ -28,18 +28,18 @@ pub fn notificacion(ruta: &Path, llegada: i64) -> Notificacion {
     };
     Notificacion {
         id: 0,
-        app: "Captura".into(),
+        app: tr!("Captura").into(),
         entrada: None,
         nombre_app: None,
         icono_app: Some(Imagen::Nombre(ICONO.into())),
-        resumen: "Captura guardada".into(),
-        cuerpo: glib::markup_escape_text(&format!("{nombre}\nCopiada al portapapeles")).to_string(),
+        resumen: tr!("Captura guardada").into(),
+        cuerpo: glib::markup_escape_text(&trf!("{}\nCopiada al portapapeles", nombre)).to_string(),
         acciones: vec![
             // `default` es el clic en la tarjeta, que no se dibuja como botón.
-            accion("default", "Abrir"),
-            accion("abrir", "Abrir"),
-            accion("carpeta", "Carpeta"),
-            accion("borrar", "Borrar"),
+            accion("default", tr!("Abrir")),
+            accion("abrir", tr!("Abrir")),
+            accion("carpeta", tr!("Carpeta")),
+            accion("borrar", tr!("Borrar")),
         ],
         urgencia: Urgencia::Normal,
         categoria: Some(CATEGORIA.into()),

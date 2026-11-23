@@ -21,43 +21,44 @@ const DIAS: usize = 7;
 /// El sol despejado es U+F05A8 y no U+F0599: ese dibuja 10 px de tinta fina contra los 13×13
 /// del resto.
 const CODIGOS: &[(i64, &str, &str, &str)] = &[
-    (0, "Despejado", "󰖨", "󰖔"),
-    (1, "Mayormente despejado", "󰖕", "󰼱"),
-    (2, "Parcialmente nublado", "󰖕", "󰼱"),
-    (3, "Nublado", "󰖐", "󰖐"),
-    (45, "Niebla", "󰖑", "󰖑"),
-    (48, "Niebla con escarcha", "󰖑", "󰖑"),
-    (51, "Llovizna leve", "󰖗", "󰖗"),
-    (53, "Llovizna", "󰖗", "󰖗"),
-    (55, "Llovizna intensa", "󰖗", "󰖗"),
-    (56, "Llovizna helada", "󰙿", "󰙿"),
-    (57, "Llovizna helada intensa", "󰙿", "󰙿"),
-    (61, "Lluvia leve", "󰖗", "󰖗"),
-    (63, "Lluvia", "󰖖", "󰖖"),
-    (65, "Lluvia intensa", "󰖖", "󰖖"),
-    (66, "Lluvia helada", "󰙿", "󰙿"),
-    (67, "Lluvia helada intensa", "󰙿", "󰙿"),
-    (71, "Nevada leve", "󰖘", "󰖘"),
-    (73, "Nevada", "󰖘", "󰖘"),
-    (75, "Nevada intensa", "󰖘", "󰖘"),
-    (77, "Granos de nieve", "󰖘", "󰖘"),
-    (80, "Chaparrones leves", "󰖗", "󰖗"),
-    (81, "Chaparrones", "󰖖", "󰖖"),
-    (82, "Chaparrones fuertes", "󰖖", "󰖖"),
-    (85, "Chubascos de nieve", "󰖘", "󰖘"),
-    (86, "Chubascos de nieve fuertes", "󰖘", "󰖘"),
-    (95, "Tormenta", "󰖓", "󰖓"),
-    (96, "Tormenta con granizo", "󰙾", "󰙾"),
-    (99, "Tormenta con granizo fuerte", "󰙾", "󰙾"),
+    (0, tr_const!("Despejado"), "󰖨", "󰖔"),
+    (1, tr_const!("Mayormente despejado"), "󰖕", "󰼱"),
+    (2, tr_const!("Parcialmente nublado"), "󰖕", "󰼱"),
+    (3, tr_const!("Nublado"), "󰖐", "󰖐"),
+    (45, tr_const!("Niebla"), "󰖑", "󰖑"),
+    (48, tr_const!("Niebla con escarcha"), "󰖑", "󰖑"),
+    (51, tr_const!("Llovizna leve"), "󰖗", "󰖗"),
+    (53, tr_const!("Llovizna"), "󰖗", "󰖗"),
+    (55, tr_const!("Llovizna intensa"), "󰖗", "󰖗"),
+    (56, tr_const!("Llovizna helada"), "󰙿", "󰙿"),
+    (57, tr_const!("Llovizna helada intensa"), "󰙿", "󰙿"),
+    (61, tr_const!("Lluvia leve"), "󰖗", "󰖗"),
+    (63, tr_const!("Lluvia"), "󰖖", "󰖖"),
+    (65, tr_const!("Lluvia intensa"), "󰖖", "󰖖"),
+    (66, tr_const!("Lluvia helada"), "󰙿", "󰙿"),
+    (67, tr_const!("Lluvia helada intensa"), "󰙿", "󰙿"),
+    (71, tr_const!("Nevada leve"), "󰖘", "󰖘"),
+    (73, tr_const!("Nevada"), "󰖘", "󰖘"),
+    (75, tr_const!("Nevada intensa"), "󰖘", "󰖘"),
+    (77, tr_const!("Granos de nieve"), "󰖘", "󰖘"),
+    (80, tr_const!("Chaparrones leves"), "󰖗", "󰖗"),
+    (81, tr_const!("Chaparrones"), "󰖖", "󰖖"),
+    (82, tr_const!("Chaparrones fuertes"), "󰖖", "󰖖"),
+    (85, tr_const!("Chubascos de nieve"), "󰖘", "󰖘"),
+    (86, tr_const!("Chubascos de nieve fuertes"), "󰖘", "󰖘"),
+    (95, tr_const!("Tormenta"), "󰖓", "󰖓"),
+    (96, tr_const!("Tormenta con granizo"), "󰙾", "󰙾"),
+    (99, tr_const!("Tormenta con granizo fuerte"), "󰙾", "󰙾"),
 ];
 
-const DESCONOCIDO: (&str, &str) = ("Sin datos", "󰼯");
+const DESCONOCIDO: (&str, &str) = (tr_const!("Sin datos"), "󰼯");
 
 fn codigo(c: i64, de_dia: bool) -> (&'static str, &'static str) {
-    CODIGOS
+    let (nombre, glifo) = CODIGOS
         .iter()
         .find(|x| x.0 == c)
-        .map_or(DESCONOCIDO, |x| (x.1, if de_dia { x.2 } else { x.3 }))
+        .map_or(DESCONOCIDO, |x| (x.1, if de_dia { x.2 } else { x.3 }));
+    (morgan_idioma::t(nombre), glifo)
 }
 
 /// Con el medio hacia arriba: una máxima de 12,5 es 13 (redondear al par la mostraría como 12).

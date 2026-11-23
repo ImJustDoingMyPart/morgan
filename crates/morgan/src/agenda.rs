@@ -331,7 +331,7 @@ fn curl(url: &str) -> Result<String, Option<i32>> {
         .map_err(|_| None)?;
     if let Some(mut entrada) = hijo.stdin.take() {
         entrada
-            .write_all(format!("url = \"{url}\"\n").as_bytes())
+            .write_all(format!("url = \"{url}\"\n").as_bytes()) // no-tr
             .map_err(|_| None)?;
     }
     let fin = hijo.wait_with_output().map_err(|_| None)?;

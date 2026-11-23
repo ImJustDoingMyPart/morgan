@@ -74,10 +74,10 @@ impl Servidor {
                 id: tx,
             })
             .await
-            .map_err(|_| zbus::fdo::Error::Failed("morgan se está cerrando".into()))?;
+            .map_err(|_| zbus::fdo::Error::Failed("morgan se está cerrando".into()))?; // no-tr
         rx.recv()
             .await
-            .map_err(|_| zbus::fdo::Error::Failed("morgan se está cerrando".into()))
+            .map_err(|_| zbus::fdo::Error::Failed("morgan se está cerrando".into())) // no-tr
     }
 
     async fn close_notification(&self, id: u32) {

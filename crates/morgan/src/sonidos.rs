@@ -54,16 +54,16 @@ impl Evento {
 }
 
 pub const MUESTRAS: &[(&str, &str)] = &[
-    ("message-new-instant", "Notificación"),
-    ("dialog-warning", "Notificación crítica"),
-    ("audio-volume-change", "Volumen"),
-    ("device-added", "Dispositivo conectado"),
-    ("device-removed", "Dispositivo desconectado"),
-    ("network-connectivity-established", "Red conectada"),
-    ("network-connectivity-lost", "Red perdida"),
-    ("service-logout", "Bloqueo"),
-    ("service-login", "Desbloqueo"),
-    ("complete", "Grabación guardada"),
+    ("message-new-instant", tr_const!("Notificación")),
+    ("dialog-warning", tr_const!("Notificación crítica")),
+    ("audio-volume-change", tr_const!("Volumen")),
+    ("device-added", tr_const!("Dispositivo conectado")),
+    ("device-removed", tr_const!("Dispositivo desconectado")),
+    ("network-connectivity-established", tr_const!("Red conectada")),
+    ("network-connectivity-lost", tr_const!("Red perdida")),
+    ("service-logout", tr_const!("Bloqueo")),
+    ("service-login", tr_const!("Desbloqueo")),
+    ("complete", tr_const!("Grabación guardada")),
 ];
 
 const DEMO: &[&str] = &[
@@ -161,13 +161,13 @@ fn leer_index(index: &str) -> Option<Index> {
     let mut i = Index::default();
     for l in index.lines().map(str::trim) {
         if l.starts_with('[') {
-            en_tema = l == "[Sound Theme]";
+            en_tema = l == "[Sound Theme]"; // no-tr
         } else if en_tema {
             match l.split_once('=').map(|(k, v)| (k.trim(), v.trim())) {
-                Some(("Name", v)) => i.nombre = v.to_owned(),
-                Some(("Directories", v)) => i.directorios = lista(v),
-                Some(("Inherits", v)) => i.hereda = lista(v),
-                Some(("Hidden", "true")) => return None,
+                Some(("Name", v)) => i.nombre = v.to_owned(), // no-tr
+                Some(("Directories", v)) => i.directorios = lista(v), // no-tr
+                Some(("Inherits", v)) => i.hereda = lista(v), // no-tr
+                Some(("Hidden", "true")) => return None, // no-tr
                 _ => {}
             }
         }
@@ -451,7 +451,7 @@ impl Sonidos {
             "org.freedesktop.NetworkManager",
         )
         .await?;
-        let mut antes: Option<u32> = nm.get_property("State").await.ok();
+        let mut antes: Option<u32> = nm.get_property("State").await.ok(); // no-tr
         let mut cambios = nm.receive_signal("StateChanged").await?;
         while let Some(m) = cambios.next().await {
             let Ok(ahora) = m.body().deserialize::<u32>() else {
@@ -489,7 +489,7 @@ impl Sonidos {
             SESION,
         )
         .await?;
-        let id: String = auto.get_property("Id").await?;
+        let id: String = auto.get_property("Id").await?; // no-tr
         let manager = Proxy::new(
             &conn,
             LOGIND,

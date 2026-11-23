@@ -58,7 +58,7 @@ impl Captura {
             Ok(c) => Ok(Captura::Hyprland(c)),
             Err(e) => super::captura_ext::CapturadorExt::conectar()
                 .map(Captura::Ext)
-                .map_err(|e2| format!("{e}; {e2}")),
+                .map_err(|e2| format!("{e}; {e2}")), // no-tr
         }
     }
 
@@ -176,10 +176,10 @@ impl Capturador {
         let qh = cola.handle();
         let manager: HyprlandToplevelExportManagerV1 = globals
             .bind(&qh, 1..=1, ())
-            .map_err(|e| format!("hyprland_toplevel_export_manager_v1: {e}"))?;
+            .map_err(|e| format!("hyprland_toplevel_export_manager_v1: {e}"))?; // no-tr
         let shm: wl_shm::WlShm = globals
             .bind(&qh, 1..=1, ())
-            .map_err(|e| format!("wl_shm: {e}"))?;
+            .map_err(|e| format!("wl_shm: {e}"))?; // no-tr
         let c = Rc::new(Capturador {
             conn,
             cola: RefCell::new(cola),

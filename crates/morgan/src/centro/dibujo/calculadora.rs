@@ -341,7 +341,7 @@ impl CalculadoraUi {
             });
             let lr = self
                 .rotulos
-                .recortada(&format!("= {resultado}"), 13.0, RESULTADO_MAX);
+                .recortada(&format!("= {resultado}"), 13.0, RESULTADO_MAX); // no-tr
             let wr = self.ancho(&lr);
             let xr = r.x1 - FILA_X - wr;
             let max = (xr - ENTRE_FILA - FILA_X).max(0.0);

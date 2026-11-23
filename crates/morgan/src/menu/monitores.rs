@@ -198,7 +198,7 @@ fn descripcion(m: &serde_json::Value) -> String {
     } else {
         marca
     };
-    let marca_modelo = format!("{marca} {}", s("model"));
+    let marca_modelo = format!("{marca} {}", s("model")); // no-tr
     marca_modelo.trim().to_owned()
 }
 
@@ -317,7 +317,7 @@ fn posicion_regla(s: &str) -> Option<(i32, i32)> {
 
 /// `"2560x1440@299.94Hz"`.
 fn modo(s: &str) -> Option<(u32, u32, f64)> {
-    let (tam, hz) = s.trim_end_matches("Hz").split_once('@')?;
+    let (tam, hz) = s.trim_end_matches("Hz").split_once('@')?; // no-tr
     let (a, b) = tam.split_once('x')?;
     Some((a.parse().ok()?, b.parse().ok()?, hz.parse().ok()?))
 }
@@ -405,23 +405,23 @@ impl Regla {
 
     /// `hl.monitor({ output = "DP-3", scale = 1.5 })`, solo con lo que tiene.
     fn lua(&self, salida: &str) -> String {
-        let mut campos = vec![format!("output = {salida:?}")];
+        let mut campos = vec![format!("output = {salida:?}")]; // no-tr
         if let Some(m) = &self.mode {
-            campos.push(format!("mode = {m:?}"));
+            campos.push(format!("mode = {m:?}")); // no-tr
         }
         if let Some(p) = &self.position {
-            campos.push(format!("position = {p:?}"));
+            campos.push(format!("position = {p:?}")); // no-tr
         }
         if let Some(s) = self.scale {
-            campos.push(format!("scale = {}", numero(s)));
+            campos.push(format!("scale = {}", numero(s))); // no-tr
         }
         if let Some(t) = self.transform {
-            campos.push(format!("transform = {t}"));
+            campos.push(format!("transform = {t}")); // no-tr
         }
         if let Some(d) = self.disabled {
-            campos.push(format!("disabled = {d}"));
+            campos.push(format!("disabled = {d}")); // no-tr
         }
-        format!("hl.monitor({{ {} }})", campos.join(", "))
+        format!("hl.monitor({{ {} }})", campos.join(", ")) // no-tr
     }
 }
 
@@ -505,9 +505,9 @@ fn mismo(a: f64, b: f64) -> bool {
 
 fn texto_hz(hz: f64) -> String {
     if mismo(hz, hz.round()) {
-        format!("{} Hz", hz.round())
+        format!("{} Hz", hz.round()) // no-tr
     } else {
-        format!("{hz:.2} Hz")
+        format!("{hz:.2} Hz") // no-tr
     }
 }
 
@@ -608,7 +608,7 @@ fn resolucion(s: &Salida) -> Fila {
                 .filter(|m| (m.0, m.1) == (a, b))
                 .map(|m| m.2)
                 .fold(0.0, f64::max);
-            opcion(&format!("{a} × {b}"), "", que(s, Campo::Modo(a, b, hz)))
+            opcion(&format!("{a} × {b}"), "", que(s, Campo::Modo(a, b, hz))) // no-tr
                 .activa((a, b) == (s.ancho, s.alto))
         })
         .collect();

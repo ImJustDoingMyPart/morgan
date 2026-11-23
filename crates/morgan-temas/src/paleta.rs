@@ -80,13 +80,13 @@ fn resolver(p: &toml::Table, v: &toml::Value, vistos: &[&str]) -> Result<String,
             let t = match &m[2] {
                 toml::Value::Float(f) => *f,
                 toml::Value::Integer(i) => *i as f64,
-                otro => return Err(format!("proporción inválida: {otro}")),
+                otro => return Err(trf!("proporción inválida: {}", otro)),
             };
             Ok(mezcla(&resolver(p, &m[0], vistos)?, &resolver(p, &m[1], vistos)?, t))
         }
         toml::Value::String(s) if s.starts_with('#') => match rgb(s) {
             Some(_) => Ok(s.to_ascii_lowercase()),
-            None => Err(format!("color inválido: {s:?}")),
+            None => Err(trf!("color inválido: {}", format!("{s:?}"))),
         },
         toml::Value::String(s) => match p.get(s) {
             Some(otro) if !vistos.contains(&s.as_str()) => {
@@ -94,18 +94,18 @@ fn resolver(p: &toml::Table, v: &toml::Value, vistos: &[&str]) -> Result<String,
                 v.push(s);
                 resolver(p, otro, &v)
             }
-            _ => Err(format!("color sin resolver: {s:?}")),
+            _ => Err(trf!("color sin resolver: {}", format!("{s:?}"))),
         },
-        otro => Err(format!("color sin resolver: {otro}")),
+        otro => Err(trf!("color sin resolver: {}", otro)),
     }
 }
 
 pub fn roles_curado(texto: &str) -> Result<BTreeMap<String, String>, String> {
-    let p: toml::Table = texto.parse().map_err(|e| format!("palette.toml: {e}"))?;
+    let p: toml::Table = texto.parse().map_err(|e| format!("palette.toml: {e}"))?; // no-tr
     let p = traducir(p);
     let faltan: Vec<&str> = PALETA.into_iter().filter(|k| !p.contains_key(*k)).collect();
     if !faltan.is_empty() {
-        return Err(format!("a palette.toml le faltan: {}", faltan.join(", ")));
+        return Err(trf!("a palette.toml le faltan: {}", faltan.join(", ")));
     }
     let c = |k: &str| resolver(&p, &p[k], &[]);
     let (f0, f, tx) = (c("bg0")?, c("bg")?, c("text")?);
@@ -162,7 +162,7 @@ pub fn roles_curado(texto: &str) -> Result<BTreeMap<String, String>, String> {
     }
     let term = match p.get("terminal") {
         Some(toml::Value::Array(t)) if t.len() == 16 => t,
-        _ => return Err("`terminal` tiene que traer los 16 colores ANSI".into()),
+        _ => return Err(tr!("`terminal` tiene que traer los 16 colores ANSI").into()),
     };
     for (i, v) in term.iter().enumerate() {
         poner(&format!("term{i}"), &resolver(&p, v, &[])?);
@@ -201,12 +201,12 @@ pub fn json_matugen(mut volcado: Value) -> Result<Value, String> {
     let colores = volcado
         .get_mut("colors")
         .and_then(Value::as_object_mut)
-        .ok_or("el volcado de matugen no trae `colors`")?;
+        .ok_or(tr!("el volcado de matugen no trae `colors`"))?;
     for (i, rol) in TERM_MATUGEN.iter().enumerate() {
         let v = colores
             .get(*rol)
             .cloned()
-            .ok_or_else(|| format!("el volcado de matugen no trae `{rol}`"))?;
+            .ok_or_else(|| trf!("el volcado de matugen no trae `{}`", rol))?;
         colores.insert(format!("term{i}"), v);
     }
     Ok(volcado)

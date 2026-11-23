@@ -69,7 +69,7 @@ pub fn candidatas(fc: &str, ambito: Ambito) -> Vec<(String, String)> {
         let entra = match ambito {
             Ambito::Terminal => mono,
             Ambito::Sistema => {
-                !mono && !["Nerd Font", "Mono", "Math"].iter().any(|x| fam.contains(x))
+                !mono && !["Nerd Font", "Mono", "Math"].iter().any(|x| fam.contains(x)) // no-tr
             }
         };
         if !entra {
@@ -93,18 +93,22 @@ pub fn candidatas(fc: &str, ambito: Ambito) -> Vec<(String, String)> {
         .into_iter()
         .filter(|(f, _)| ambito == Ambito::Terminal || !impronunciable(f))
         .map(|(f, (n, negrita, italica))| {
-            let mut sub = format!("{n} variante{}", if n == 1 { "" } else { "s" });
+            let mut sub = if n == 1 {
+                tr!("1 variante").to_owned()
+            } else {
+                trf!("{} variantes", n)
+            };
             sub.push_str(match (negrita, italica) {
-                (true, true) => " · negrita e itálica",
-                (true, false) => " · solo negrita",
-                (false, true) => " · solo itálica",
-                (false, false) => " · sin negrita ni itálica",
+                (true, true) => tr!(" · negrita e itálica"),
+                (true, false) => tr!(" · solo negrita"),
+                (false, true) => tr!(" · solo itálica"),
+                (false, false) => tr!(" · sin negrita ni itálica"),
             });
             // "Mono" mete cada glifo de ícono en una celda; la otra los deja ocupar dos.
-            if f.ends_with("Nerd Font Mono") {
-                sub.push_str(" · Nerd Font, íconos de una celda");
-            } else if f.ends_with("Nerd Font") {
-                sub.push_str(" · Nerd Font, íconos anchos");
+            if f.ends_with("Nerd Font Mono") { // no-tr
+                sub.push_str(tr!(" · Nerd Font, íconos de una celda"));
+            } else if f.ends_with("Nerd Font") { // no-tr
+                sub.push_str(tr!(" · Nerd Font, íconos anchos"));
             }
             (f.to_owned(), sub)
         })
@@ -142,7 +146,7 @@ pub fn validar(ambito: Ambito, familia: &str) -> Result<(), String> {
     if candidatas(&fc_list(), ambito).iter().any(|(f, _)| f == familia) {
         Ok(())
     } else {
-        Err(format!("«{familia}» no está entre las familias instaladas"))
+        Err(trf!("«{}» no está entre las familias instaladas", familia))
     }
 }
 

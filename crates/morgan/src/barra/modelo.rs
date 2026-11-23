@@ -69,26 +69,11 @@ pub fn etiqueta(id: i64) -> String {
 
 /// Sin depender del locale del proceso.
 pub fn fecha(dia: i32, mes: i32) -> String {
-    const MESES: [&str; 12] = [
-        "enero",
-        "febrero",
-        "marzo",
-        "abril",
-        "mayo",
-        "junio",
-        "julio",
-        "agosto",
-        "septiembre",
-        "octubre",
-        "noviembre",
-        "diciembre",
-    ];
     let mes = usize::try_from(mes - 1)
         .ok()
-        .and_then(|i| MESES.get(i))
-        .copied()
-        .unwrap_or("?");
-    format!("{dia} de {mes}")
+        .and_then(|i| crate::calendario::modelo::MESES.get(i))
+        .map_or("?", |m| morgan_idioma::t(m));
+    trf!("{} de {}", dia, mes)
 }
 
 pub fn campana(cantidad: usize, no_molestar: bool) -> (Vec<&'static str>, String) {
@@ -100,9 +85,9 @@ pub fn campana(cantidad: usize, no_molestar: bool) -> (Vec<&'static str>, String
         clases.push("no-molestar");
     }
     let tooltip = match cantidad {
-        0 => "Sin notificaciones".to_owned(),
-        1 => "1 notificación".to_owned(),
-        n => format!("{n} notificaciones"),
+        0 => tr!("Sin notificaciones").to_owned(),
+        1 => tr!("1 notificación").to_owned(),
+        n => trf!("{} notificaciones", n),
     };
     (clases, tooltip)
 }

@@ -33,7 +33,7 @@ pub fn poner(si: bool) {
     let Some(dir) = dir_from(|k| std::env::var_os(k)) else {
         return;
     };
-    let lua = format!("eval hl.config({{ misc = {{ session_lock_xray = {si} }} }})");
+    let lua = format!("eval hl.config({{ misc = {{ session_lock_xray = {si} }} }})"); // no-tr
     match pedir_ya(&dir.join(".socket.sock"), &lua) {
         Ok(r) if r.trim() == "ok" || r.trim().is_empty() => {}
         Ok(r) => eprintln!("morgan-lock: session_lock_xray: {}", r.trim()),

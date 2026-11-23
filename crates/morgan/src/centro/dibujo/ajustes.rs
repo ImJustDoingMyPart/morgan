@@ -828,7 +828,7 @@ impl AjustesUi {
         let lt = self.rotulos.recortada(texto_titulo, px_titulo, max);
         let ls = (!sub.is_empty()).then(|| self.rotulos.recortada(sub, px_sub, max));
         let ln = (!nota.is_empty()).then(|| {
-            let t = super::armar::glib_escape(&format!("{ATENCION}  {nota}"));
+            let t = super::armar::glib_escape(&format!("{ATENCION}  {nota}")); // no-tr
             self.rotulos.parrafo(&t, 12.0, max, 0)
         });
         let mut alto_textos = self.alto(&lt);

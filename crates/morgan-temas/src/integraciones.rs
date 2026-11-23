@@ -74,7 +74,7 @@ const PROPIAS: &[Propia] = &[
     Propia { nombre: "vesktop", plantilla: "vesktop.css", programas: &["vesktop"], enlaces: &["vesktop/themes/theme.css"], aviso: Aviso::Vesktop },
     Propia { nombre: "starship", plantilla: "starship.toml", programas: &["starship"], enlaces: &[], aviso: Aviso::Starship },
     // `morgan.lua` (lo escribe morgan) lo carga desde el render: no hace falta enlace.
-    Propia { nombre: "hyprland", plantilla: "hyprland.lua", programas: &["Hyprland"], enlaces: &[], aviso: Aviso::Hyprland },
+    Propia { nombre: "hyprland", plantilla: "hyprland.lua", programas: &["Hyprland"], enlaces: &[], aviso: Aviso::Hyprland }, // no-tr
     // `morgan.toml` de Umbriel (lo escribe morgan) lo incluye desde el render; Umbriel relee solo.
     Propia { nombre: "umbriel", plantilla: "umbriel.toml", programas: &["umbriel"], enlaces: &[], aviso: Aviso::Nada },
 ];
@@ -152,7 +152,7 @@ pub fn desplegar(r: &Rutas) -> Informe {
     for i in &usuario.integracion {
         let src = render.join(&i.plantilla);
         if !src.is_file() {
-            inf.avisos.push(format!("themes.toml: no hay plantilla {}", i.plantilla));
+            inf.avisos.push(trf!("themes.toml: no hay plantilla {}", i.plantilla));
             continue;
         }
         for d in &i.enlazar {
@@ -173,18 +173,18 @@ pub fn desplegar(r: &Rutas) -> Informe {
     for a in avisos {
         let res = match a {
             Aviso::Nada => Ok(()),
-            Aviso::Kitty => lanzar(&["pkill", "-USR1", "-x", "kitty"]).map_err(|e| format!("kitty: {e}")),
+            Aviso::Kitty => lanzar(&["pkill", "-USR1", "-x", "kitty"]).map_err(|e| format!("kitty: {e}")), // no-tr
             Aviso::Gtk => gtk(r),
             Aviso::Vesktop => {
                 let link = r.config.join("vesktop/themes/theme.css");
-                lanzar(&["touch".as_ref(), "-h".as_ref(), link.as_os_str()]).map_err(|e| format!("vesktop: {e}"))
+                lanzar(&["touch".as_ref(), "-h".as_ref(), link.as_os_str()]).map_err(|e| format!("vesktop: {e}")) // no-tr
             }
             Aviso::Bat => bat(r),
             Aviso::Starship => starship(&render.join("starship.toml"), &r.config.join("starship.toml")),
             // Solo si la sesión es de Hyprland: desde otro compositor anidado, `hyprctl`
             // recargaría el de afuera. Umbriel recarga solo al ver el archivo cambiado.
             Aviso::Hyprland if morgan_ipc::compositor::actual() == morgan_ipc::compositor::Tipo::Hyprland => {
-                lanzar(&["hyprctl", "reload", "config-only"]).map_err(|e| format!("hyprland: {e}"))
+                lanzar(&["hyprctl", "reload", "config-only"]).map_err(|e| format!("hyprland: {e}")) // no-tr
             }
             Aviso::Hyprland => Ok(()),
         };
@@ -212,7 +212,7 @@ fn enlazar(src: &Path, dst: &Path) -> Result<(), String> {
         std::fs::create_dir_all(d).map_err(err)?;
     }
     if dst.is_dir() && !dst.is_symlink() {
-        return Err(format!("{}: es una carpeta", dst.display()));
+        return Err(trf!("{}: es una carpeta", dst.display()));
     }
     let tmp = dst.with_file_name(format!(".{}.morgan", dst.file_name().unwrap_or_default().to_string_lossy()));
     let _ = std::fs::remove_file(&tmp);
@@ -307,7 +307,7 @@ fn inyectar_json(src: &Path, dst: &Path, claves: &[Vec<String>]) -> Result<(), S
             obj = &mut obj[k.as_str()];
         }
         if !obj.is_object() {
-            return Err(err("la raíz no es un objeto".into()));
+            return Err(err(tr!("la raíz no es un objeto").into()));
         }
         obj[ultima.as_str()] = v.clone();
     }
@@ -334,9 +334,9 @@ fn bloque_starship(texto: &str, bloque: &str) -> String {
     }
     let t = format!("{}\n\n{INICIO}\n{}\n{FIN}\n", t.trim_end(), bloque.trim());
     let mut lineas: Vec<&str> = t.lines().collect();
-    match lineas.iter().position(|l| l.trim().starts_with("palette ") && l.contains('=')) {
-        Some(n) => lineas[n] = "palette = \"theme\"",
-        None => lineas.insert(0, "palette = \"theme\""),
+    match lineas.iter().position(|l| l.trim().starts_with("palette ") && l.contains('=')) { // no-tr
+        Some(n) => lineas[n] = "palette = \"theme\"", // no-tr
+        None => lineas.insert(0, "palette = \"theme\""), // no-tr
     }
     lineas.join("\n") + "\n"
 }
@@ -366,12 +366,12 @@ fn bat(r: &Rutas) -> Result<(), String> {
     lanzar(&[
         "sh".as_ref(),
         "-c".as_ref(),
-        "bat cache --build && cp \"$1\" \"$2\"".as_ref(),
+        "bat cache --build && cp \"$1\" \"$2\"".as_ref(), // no-tr
         "sh".as_ref(),
         tm.as_os_str(),
         marca.as_os_str(),
     ])
-    .map_err(|e| format!("bat: {e}"))
+    .map_err(|e| format!("bat: {e}")) // no-tr
 }
 
 /// GTK3 (y Chromium en modo GTK) lee `gtk-3.0/gtk.css` una vez, pero relee el tema con
@@ -396,7 +396,7 @@ fn gtk(r: &Rutas) -> Result<(), String> {
         .args(CLAVE)
         .arg(&otro)
         .status()
-        .map_err(|e| format!("gsettings: {e}"))?;
+        .map_err(|e| format!("gsettings: {e}"))?; // no-tr
     // settings.ini, para lo que no lee gsettings (X11).
     let ini = r.config.join("gtk-3.0/settings.ini");
     if let Ok(s) = std::fs::read_to_string(&ini) {
@@ -428,8 +428,8 @@ pub fn esquema(r: &Rutas, oscuro: bool, inf: &mut Informe) {
         let res = Command::new("gsettings")
             .args(["set", "org.gnome.desktop.interface", "color-scheme", valor])
             .status()
-            .map_err(|e| format!("gsettings: {e}"))
-            .and_then(|s| if s.success() { Ok(()) } else { Err(format!("gsettings color-scheme: {s}")) });
+            .map_err(|e| format!("gsettings: {e}")) // no-tr
+            .and_then(|s| if s.success() { Ok(()) } else { Err(format!("gsettings color-scheme: {s}")) }); // no-tr
         anotar(inf, res);
     }
     for ini in ["gtk-3.0/settings.ini", "gtk-4.0/settings.ini"] {

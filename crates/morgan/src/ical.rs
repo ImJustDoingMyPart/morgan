@@ -69,7 +69,7 @@ pub fn eventos(ics: &str, desde: DateTime<Local>, hasta: DateTime<Local>) -> Vec
                     inicio: local.to_rfc3339(),
                     dia_entero,
                     resumen: if c.resumen.is_empty() {
-                        "(sin título)".into()
+                        tr!("(sin título)").into()
                     } else {
                         c.resumen.clone()
                     },

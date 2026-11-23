@@ -26,9 +26,9 @@ pub fn pedir(salida: &str, centro: (i32, i32)) {
         .filter(|c| c.is_ascii_alphanumeric() || "-_.".contains(*c))
         .collect();
     for lua in [
-        format!("dispatch hl.dsp.focus({{ monitor = \"{nombre}\" }})"),
+        format!("dispatch hl.dsp.focus({{ monitor = \"{nombre}\" }})"), // no-tr
         format!(
-            "dispatch hl.dsp.cursor.move({{ x = {}, y = {} }})",
+            "dispatch hl.dsp.cursor.move({{ x = {}, y = {} }})", // no-tr
             centro.0, centro.1
         ),
     ] {

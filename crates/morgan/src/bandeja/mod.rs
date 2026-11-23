@@ -150,7 +150,7 @@ pub fn item_de(clave: &str, p: &HashMap<String, OwnedValue>) -> Item {
             .and_then(|v| String::try_from(v.try_clone().ok()?).ok())
             .unwrap_or_default()
     };
-    let estado = texto("Status");
+    let estado = texto("Status"); // no-tr
     let tooltip = p
         .get("ToolTip")
         .and_then(|v| Tooltip::try_from(v.try_clone().ok()?).ok())
@@ -168,16 +168,16 @@ pub fn item_de(clave: &str, p: &HashMap<String, OwnedValue>) -> Item {
         .and_then(|v| v.into_iter().max_by_key(|(w, h, _)| w * h))
         .and_then(|(w, h, argb)| Some((w, h, rgba(w, h, &argb)?)));
     let menu = p
-        .get("Menu")
+        .get("Menu") // no-tr
         .and_then(|v| OwnedObjectPath::try_from(v.try_clone().ok()?).ok())
         .map(|o| o.to_string())
         .filter(|o| o != "/");
     let item = Item {
         clave: clave.to_owned(),
-        id: texto("Id"),
-        titulo: texto("Title"),
+        id: texto("Id"), // no-tr
+        titulo: texto("Title"), // no-tr
         tooltip,
-        pasivo: estado == "Passive",
+        pasivo: estado == "Passive", // no-tr
         atencion: estado == "NeedsAttention",
         icono: texto("IconName"),
         icono_atencion: texto("AttentionIconName"),
@@ -378,7 +378,7 @@ impl Bandeja {
                 Some(WATCHER),
                 RUTA_WATCHER,
                 Some("org.freedesktop.DBus.Properties"),
-                "Get",
+                "Get", // no-tr
                 &(WATCHER, "RegisteredStatusNotifierItems"),
             )
             .await?;
@@ -537,7 +537,7 @@ impl Bandeja {
         metodo: &str,
         cuerpo: &(impl serde::Serialize + zbus::zvariant::DynamicType),
     ) -> zbus::Result<()> {
-        let conn = self.conn().ok_or(zbus::Error::Failure("sin bus".into()))?;
+        let conn = self.conn().ok_or(zbus::Error::Failure("sin bus".into()))?; // no-tr
         conn.call_method(
             Some(bus_de(clave)),
             ruta_de(clave).as_str(),
@@ -555,7 +555,7 @@ impl Bandeja {
         if self.item(clave).is_some_and(|i| i.es_menu) {
             return false;
         }
-        match self.llamar_item(clave, "Activate", &(0i32, 0i32)).await {
+        match self.llamar_item(clave, "Activate", &(0i32, 0i32)).await { // no-tr
             Ok(()) => true,
             Err(e) => {
                 eprintln!("morgan: bandeja: {clave}: Activate: {e}");
@@ -579,7 +579,7 @@ impl Bandeja {
     pub fn desplazar(&self, clave: &str, delta: i32) {
         let (yo, clave) = (self.clone(), clave.to_owned());
         glib::MainContext::default().spawn_local(async move {
-            let _ = yo.llamar_item(&clave, "Scroll", &(delta, "vertical")).await;
+            let _ = yo.llamar_item(&clave, "Scroll", &(delta, "vertical")).await; // no-tr
         });
     }
 
@@ -634,7 +634,7 @@ impl Bandeja {
                     Some(bus_de(&clave)),
                     ruta.as_str(),
                     Some(DBUSMENU),
-                    "Event",
+                    "Event", // no-tr
                     &(id, "clicked", Value::from(0i32), ahora),
                 )
                 .await;

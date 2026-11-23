@@ -1587,6 +1587,7 @@ dependencies = [
 name = "morgan-ipc"
 version = "0.3.2"
 dependencies = [
+ "morgan-idioma",
  "serde",
  "serde_json",
 ]
@@ -1598,6 +1599,7 @@ dependencies = [
  "async-channel",
  "futures-lite",
  "libc",
+ "morgan-idioma",
  "morgan-ipc",
  "morgan-motor",
  "parley",
@@ -1630,6 +1632,7 @@ name = "morgan-temas"
 version = "0.3.2"
 dependencies = [
  "libc",
+ "morgan-idioma",
  "morgan-ipc",
  "serde",
  "serde_json",

@@ -35,7 +35,7 @@ const PAPIRUS: &[(&str, &str, &str)] = &[
 ];
 
 const TELA_FAMILIA: &str = "Tela-circle";
-const PAPIRUS_FAMILIA: &str = "Papirus";
+const PAPIRUS_FAMILIA: &str = "Papirus"; // no-tr
 const PAPIRUS_TEMA: &str = "Papirus-Dark";
 
 fn hsl(hex: &str) -> Option<(f64, f64, f64)> {
@@ -169,7 +169,7 @@ fn poner_tema(tema: &str) {
 
 pub fn aplicar(familia: &str) -> Result<(), String> {
     if !listar().iter().any(|f| f == familia) {
-        return Err(format!("no existe el paquete de íconos «{familia}»"));
+        return Err(trf!("no existe el paquete de íconos «{}»", familia));
     }
     let hex = primary();
     match familia {
@@ -228,7 +228,7 @@ fn pintar_papirus(hex: &str) {
     }
     std::thread::spawn(move || {
         let local = papirus_local();
-        for variante in ["Papirus", "Papirus-Dark", "Papirus-Light"] {
+        for variante in ["Papirus", "Papirus-Dark", "Papirus-Light"] { // no-tr
             let (src, dst) = (PathBuf::from("/usr/share/icons").join(variante), local.join(variante));
             if src.is_dir() && !dst.exists() {
                 let _ = std::fs::create_dir_all(&local);

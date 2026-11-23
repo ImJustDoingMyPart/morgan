@@ -81,7 +81,7 @@ impl Fondos {
 
     pub fn aplicar(&self, img: PathBuf) -> Result<(), String> {
         if !img.is_absolute() || std::fs::File::open(&img).is_err() {
-            return Err(format!("no es una imagen legible: «{}»", img.display()));
+            return Err(trf!("no es una imagen legible: «{}»", img.display()));
         }
         self.inner.motor.aplicar(img);
         Ok(())

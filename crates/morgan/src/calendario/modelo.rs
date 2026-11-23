@@ -2,18 +2,18 @@
 use crate::agenda::Evento;
 
 pub const MESES: [&str; 12] = [
-    "enero",
-    "febrero",
-    "marzo",
-    "abril",
-    "mayo",
-    "junio",
-    "julio",
-    "agosto",
-    "septiembre",
-    "octubre",
-    "noviembre",
-    "diciembre",
+    tr_const!("enero"),
+    tr_const!("febrero"),
+    tr_const!("marzo"),
+    tr_const!("abril"),
+    tr_const!("mayo"),
+    tr_const!("junio"),
+    tr_const!("julio"),
+    tr_const!("agosto"),
+    tr_const!("septiembre"),
+    tr_const!("octubre"),
+    tr_const!("noviembre"),
+    tr_const!("diciembre"),
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,7 +95,15 @@ pub fn dias_con_eventos(evs: &[Evento], mes: (i32, i32), zona: &glib::TimeZone) 
     v
 }
 
-const DIAS: [&str; 7] = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+const DIAS: [&str; 7] = [
+    tr_const!("lun"),
+    tr_const!("mar"),
+    tr_const!("mié"),
+    tr_const!("jue"),
+    tr_const!("vie"),
+    tr_const!("sáb"),
+    tr_const!("dom"),
+];
 
 /// El mes ya está en el rótulo.
 pub fn cuando(e: &Evento, zona: &glib::TimeZone) -> String {
@@ -104,13 +112,13 @@ pub fn cuando(e: &Evento, zona: &glib::TimeZone) -> String {
     };
     let dia = format!(
         "{} {}",
-        DIAS[(i.day_of_week() - 1) as usize],
+        morgan_idioma::t(DIAS[(i.day_of_week() - 1) as usize]),
         i.day_of_month()
     );
     if e.dia_entero {
         dia
     } else {
-        format!("{dia} · {:02}:{:02}", i.hour(), i.minute())
+        format!("{dia} · {:02}:{:02}", i.hour(), i.minute()) // no-tr
     }
 }
 

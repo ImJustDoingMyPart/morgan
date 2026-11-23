@@ -103,7 +103,7 @@ pub fn leer(r: &mut impl Read) -> io::Result<Respuesta> {
     r.read_exact(&mut largo)?;
     let n = u32::from_ne_bytes(largo);
     if n > MAXIMO {
-        return Err(io::Error::other(format!("greetd: mensaje de {n} bytes")));
+        return Err(io::Error::other(format!("greetd: mensaje de {n} bytes"))); // no-tr
     }
     let mut buf = vec![0u8; n as usize];
     r.read_exact(&mut buf)?;
@@ -122,7 +122,7 @@ impl Greetd<UnixStream> {
     /// Por `GREETD_SOCK`, como lo deja greetd en el entorno del greeter.
     pub fn conectar(usuario: &str) -> io::Result<Self> {
         let ruta = std::env::var_os("GREETD_SOCK")
-            .ok_or_else(|| io::Error::other("greetd: falta GREETD_SOCK"))?;
+            .ok_or_else(|| io::Error::other("greetd: falta GREETD_SOCK"))?; // no-tr
         Ok(Greetd::sobre(UnixStream::connect(ruta)?, usuario))
     }
 }
@@ -155,7 +155,7 @@ impl<S: Read + Write> Greetd<S> {
         match self.pedir(&Pedido::CancelSession)? {
             Respuesta::Success => Ok(()),
             otra => Err(io::Error::other(format!(
-                "greetd: cancel_session: {otra:?}"
+                "greetd: cancel_session: {otra:?}" // no-tr
             ))),
         }
     }
@@ -190,7 +190,7 @@ impl<S: Read + Write> Greetd<S> {
                         // AUTH_ERR»), no algo para mostrar: como en el bloqueo, solo los
                         // avisos de la conversación.
                         TipoError::AuthError => Resultado::Fallo(mensajes),
-                        TipoError::Error => Resultado::Error(format!("greetd: {description}")),
+                        TipoError::Error => Resultado::Error(format!("greetd: {description}")), // no-tr
                     });
                 }
                 Respuesta::AuthMessage {
@@ -210,7 +210,7 @@ impl<S: Read + Write> Greetd<S> {
                     TipoMensaje::Secret | TipoMensaje::Visible => {
                         let _ = self.pedir(&Pedido::CancelSession);
                         return Ok(Resultado::Error(format!(
-                            "greetd pide otro dato que esta pantalla no sabe pedir: {}",
+                            "greetd pide otro dato que esta pantalla no sabe pedir: {}", // no-tr
                             auth_message.trim()
                         )));
                     }
@@ -229,14 +229,14 @@ impl<S: Read + Write> Greetd<S> {
     /// Arranca la sesión verificada: greetd la lanza cuando el greeter termina.
     pub fn iniciar(&mut self, cmd: &[String], env: &[String]) -> io::Result<()> {
         if !self.lista {
-            return Err(io::Error::other("greetd: no hay sesión verificada"));
+            return Err(io::Error::other("greetd: no hay sesión verificada")); // no-tr
         }
         match self.pedir(&Pedido::StartSession { cmd, env })? {
             Respuesta::Success => Ok(()),
             Respuesta::Error { description, .. } => Err(io::Error::other(format!(
-                "greetd: start_session: {description}"
+                "greetd: start_session: {description}" // no-tr
             ))),
-            otra => Err(io::Error::other(format!("greetd: start_session: {otra:?}"))),
+            otra => Err(io::Error::other(format!("greetd: start_session: {otra:?}"))), // no-tr
         }
     }
 }
@@ -245,7 +245,7 @@ impl<S: Read + Write + Send + 'static> Verificador for Greetd<S> {
     fn verificar(&mut self, clave: Secreto) -> Resultado {
         let r = self.intento(&clave);
         drop(clave);
-        r.unwrap_or_else(|e| Resultado::Error(format!("greetd: {e}")))
+        r.unwrap_or_else(|e| Resultado::Error(format!("greetd: {e}"))) // no-tr
     }
 }
 

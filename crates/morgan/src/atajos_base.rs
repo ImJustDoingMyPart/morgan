@@ -63,7 +63,7 @@ const DIRECCIONES: [(&str, &str, [&str; 2]); 4] = [
 ];
 
 fn norep(accion: &str) -> String {
-    format!("{{ action = \"{accion}\", repeat = false }}")
+    format!("{{ action = \"{accion}\", repeat = false }}") // no-tr
 }
 
 fn simple(accion: &str) -> String {
@@ -98,8 +98,8 @@ pub fn tabla(o: &Opciones) -> Vec<Bind> {
         t.ambos(
             tecla,
             &format!("{nombre} (Cycle)"), // no-tr
-            &format!("run_or_cycle({clase:?}, {comando:?})"),
-            norep(&format!("spawn umbriel-ciclar {clase} {comando}")),
+            &format!("run_or_cycle({clase:?}, {comando:?})"), // no-tr
+            norep(&format!("spawn umbriel-ciclar {clase} {comando}")), // no-tr
         );
     }
     t.ambos("Mod+Shift+Return", "Kitty (New)", "hl.dsp.exec_cmd(\"kitty\")", norep("spawn kitty")); // no-tr
@@ -149,43 +149,43 @@ pub fn tabla(o: &Opciones) -> Vec<Bind> {
             _ => tr!("Mover ventana monitor abajo"),
         };
         for k in teclas {
-            t.ambos(&format!("Mod+{k}"), desc_foco, &format!("hl.dsp.layout(\"focus {h}\")"), simple(&format!("window-focus-{u}")));
+            t.ambos(&format!("Mod+{k}"), desc_foco, &format!("hl.dsp.layout(\"focus {h}\")"), simple(&format!("window-focus-{u}"))); // no-tr
             t.ambos(
                 &format!("Mod+Ctrl+{k}"),
                 desc_monitor,
-                &format!("hl.dsp.focus({{ monitor = \"{h}\" }})"),
+                &format!("hl.dsp.focus({{ monitor = \"{h}\" }})"), // no-tr
                 simple(&format!("output-focus-{u}")),
             );
             t.ambos(
                 &format!("Mod+Ctrl+Shift+{k}"),
                 desc_mover_monitor,
-                &format!("hl.dsp.window.move({{ monitor = \"{h}\" }})"),
+                &format!("hl.dsp.window.move({{ monitor = \"{h}\" }})"), // no-tr
                 simple(&format!("window-move-to-output-{u}")),
             );
         }
     }
     // Shift: izquierda y derecha mueven la columna; arriba y abajo, la ventana de workspace.
     for (k, h, u, desc) in [
-        ("Left", "l", "left", tr!("Mover columna izquierda")),
+        ("Left", "l", "left", tr!("Mover columna izquierda")), // no-tr
         ("H", "l", "left", tr!("Mover columna izquierda")),
-        ("Right", "r", "right", tr!("Mover columna derecha")),
+        ("Right", "r", "right", tr!("Mover columna derecha")), // no-tr
         ("L", "r", "right", tr!("Mover columna derecha")),
     ] {
-        t.ambos(&format!("Mod+Shift+{k}"), desc, &format!("hl.dsp.layout(\"swapcol {h}\")"), simple(&format!("column-move-{u}")));
+        t.ambos(&format!("Mod+Shift+{k}"), desc, &format!("hl.dsp.layout(\"swapcol {h}\")"), simple(&format!("column-move-{u}"))); // no-tr
     }
-    for k in ["Up", "K", "I"] {
+    for k in ["Up", "K", "I"] { // no-tr
         t.ambos(
             &format!("Mod+Shift+{k}"),
             tr!("Mover ventana workspace arriba"),
-            "ws_relativo(-1, true)",
+            "ws_relativo(-1, true)", // no-tr
             simple("window-move-to-workspace-previous"),
         );
     }
-    for k in ["Down", "J", "U"] {
+    for k in ["Down", "J", "U"] { // no-tr
         t.ambos(
             &format!("Mod+Shift+{k}"),
             tr!("Mover ventana workspace abajo"),
-            "ws_relativo(1, true)",
+            "ws_relativo(1, true)", // no-tr
             simple("window-move-to-workspace-next"),
         );
     }
@@ -212,13 +212,13 @@ pub fn tabla(o: &Opciones) -> Vec<Bind> {
     t.ambos(
         "Mod+Shift+WheelUp",
         tr!("Columna izquierda (rueda)"),
-        "hl.dsp.focus({ direction = \"left\" })",
+        "hl.dsp.focus({ direction = \"left\" })", // no-tr
         simple("window-focus-left"),
     );
     t.ambos(
         "Mod+Shift+WheelDown",
         tr!("Columna derecha (rueda)"),
-        "hl.dsp.focus({ direction = \"right\" })",
+        "hl.dsp.focus({ direction = \"right\" })", // no-tr
         simple("window-focus-right"),
     );
 
@@ -230,45 +230,45 @@ pub fn tabla(o: &Opciones) -> Vec<Bind> {
         } else {
             (tr!("Workspace"), tr!("Mover a workspace"))
         };
-        let con_n = |d: &str| if n == 0 { d.to_owned() } else { format!("{d} {n}") };
-        t.ambos(&format!("Mod+{n}"), &con_n(ir), &format!("hl.dsp.focus({{ workspace = {ws} }})"), simple(&format!("workspace-switch {ws}")));
-        for mods in ["Ctrl", "Shift"] {
+        let con_n = |d: &str| if n == 0 { d.to_owned() } else { format!("{d} {n}") }; // no-tr
+        t.ambos(&format!("Mod+{n}"), &con_n(ir), &format!("hl.dsp.focus({{ workspace = {ws} }})"), simple(&format!("workspace-switch {ws}"))); // no-tr
+        for mods in ["Ctrl", "Shift"] { // no-tr
             t.ambos(
                 &format!("Mod+{mods}+{n}"),
                 &con_n(mover),
-                &format!("hl.dsp.window.move({{ workspace = {ws} }})"),
-                simple(&format!("window-move-to-workspace {ws}")),
+                &format!("hl.dsp.window.move({{ workspace = {ws} }})"), // no-tr
+                simple(&format!("window-move-to-workspace {ws}")), // no-tr
             );
         }
     }
 
     // Layout scrolling.
-    t.ambos("Mod+F", tr!("Maximizar columna (scrolling)"), "hl.dsp.window.fullscreen({ mode = \"maximized\" })", norep("window-toggle-maximize"));
+    t.ambos("Mod+F", tr!("Maximizar columna (scrolling)"), "hl.dsp.window.fullscreen({ mode = \"maximized\" })", norep("window-toggle-maximize")); // no-tr
     t.ambos("Mod+Shift+F", tr!("Pantalla completa"), "hl.dsp.window.fullscreen()", norep("window-toggle-fullscreen"));
     t.ambos("Mod+T", tr!("Alternar flotante"), "hl.dsp.window.float()", norep("window-toggle-floating"));
     t.ambos("Mod+W", tr!("Alternar pestaña/grupo"), "hl.dsp.group.toggle()", norep("column-toggle-tabbed"));
     t.ambos("Mod+C", tr!("Centrar columna"), "hl.dsp.layout(\"center\")", norep("column-center"));
-    t.solo_hypr("Mod+Ctrl+C", tr!("Ajustar columnas visibles"), "hl.dsp.layout(\"fit visible\")");
-    t.solo_hypr("Mod+Ctrl+F", tr!("Expandir columna a espacio disponible"), "hl.dsp.layout(\"fit expand\")");
-    t.ambos("Mod+Minus", tr!("Reducir ancho columna"), "hl.dsp.layout(\"colresize -0.1\")", simple("window-modify-primary-extent -0.1"));
-    t.ambos("Mod+plus", tr!("Aumentar ancho columna"), "hl.dsp.layout(\"colresize +0.1\")", simple("window-modify-primary-extent +0.1"));
+    t.solo_hypr("Mod+Ctrl+C", tr!("Ajustar columnas visibles"), "hl.dsp.layout(\"fit visible\")"); // no-tr
+    t.solo_hypr("Mod+Ctrl+F", tr!("Expandir columna a espacio disponible"), "hl.dsp.layout(\"fit expand\")"); // no-tr
+    t.ambos("Mod+Minus", tr!("Reducir ancho columna"), "hl.dsp.layout(\"colresize -0.1\")", simple("window-modify-primary-extent -0.1")); // no-tr
+    t.ambos("Mod+plus", tr!("Aumentar ancho columna"), "hl.dsp.layout(\"colresize +0.1\")", simple("window-modify-primary-extent +0.1")); // no-tr
     t.ambos(
         "Mod+Shift+Minus",
         tr!("Reducir alto ventana"),
-        "hl.dsp.window.resize({ x = 0, y = -40, relative = true })",
-        simple("window-modify-secondary-extent -0.05"),
+        "hl.dsp.window.resize({ x = 0, y = -40, relative = true })", // no-tr
+        simple("window-modify-secondary-extent -0.05"), // no-tr
     );
     t.ambos(
         "Mod+Shift+plus",
         tr!("Aumentar alto ventana"),
-        "hl.dsp.window.resize({ x = 0, y = 40, relative = true })",
-        simple("window-modify-secondary-extent +0.05"),
+        "hl.dsp.window.resize({ x = 0, y = 40, relative = true })", // no-tr
+        simple("window-modify-secondary-extent +0.05"), // no-tr
     );
     // Cada workspace de Umbriel guarda su layout; Hyprland tiene uno solo para todos.
-    t.solo_umbriel("Mod+D", tr!("Alternar el workspace entre scrolling y mosaico"), norep("workspace-set-layout toggle scrolling dwindle"));
+    t.solo_umbriel("Mod+D", tr!("Alternar el workspace entre scrolling y mosaico"), norep("workspace-set-layout toggle scrolling dwindle")); // no-tr
 
     // Sesión.
-    t.solo_umbriel("Ctrl+Alt+Delete", tr!("Cerrar sesión"), norep("session-quit skip-confirmation"));
+    t.solo_umbriel("Ctrl+Alt+Delete", tr!("Cerrar sesión"), norep("session-quit skip-confirmation")); // no-tr
     if o.uwsm {
         t.solo_hypr("Ctrl+Alt+Delete", tr!("Cerrar sesión"), "hl.dsp.exec_cmd(\"uwsm stop\")"); // no-tr
     }
@@ -286,11 +286,11 @@ pub fn a_hypr(tecla: &str) -> String {
     tecla
         .split('+')
         .map(|p| match p {
-            "Mod" => "SUPER",
-            "Shift" => "SHIFT",
-            "Ctrl" => "CTRL",
-            "Alt" => "ALT",
-            "Minus" => "minus",
+            "Mod" => "SUPER", // no-tr
+            "Shift" => "SHIFT", // no-tr
+            "Ctrl" => "CTRL", // no-tr
+            "Alt" => "ALT", // no-tr
+            "Minus" => "minus", // no-tr
             "WheelUp" => "mouse_up",
             "WheelDown" => "mouse_down",
             otra => otra,
@@ -368,7 +368,7 @@ pub fn lua(o: &Opciones, excluidas: &[String]) -> String {
         if excluidas.contains(&clave(&b.tecla)) {
             continue;
         }
-        s.push_str(&format!("hl.bind({:?}, {accion}, {{ desc = {:?} }})\n", a_hypr(&b.tecla), b.desc));
+        s.push_str(&format!("hl.bind({:?}, {accion}, {{ desc = {:?} }})\n", a_hypr(&b.tecla), b.desc)); // no-tr
     }
     s
 }
@@ -384,7 +384,7 @@ pub fn toml(o: &Opciones) -> String {
     s.push_str("[keybinds]\n");
     for b in tabla(o) {
         if let Some(accion) = &b.umbriel {
-            s.push_str(&format!("{:?} = {accion}\n", b.tecla));
+            s.push_str(&format!("{:?} = {accion}\n", b.tecla)); // no-tr
         }
     }
     s

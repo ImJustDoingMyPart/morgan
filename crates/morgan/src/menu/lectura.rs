@@ -24,7 +24,7 @@ fn recientes() -> usize {
 pub fn borrar_recientes() -> Result<(), String> {
     glib::BookmarkFile::new()
         .to_file(archivo_recientes())
-        .map_err(|e| format!("recientes: {e}"))
+        .map_err(|e| trf!("recientes: {}", e))
 }
 
 pub async fn leer(args: &[&str]) -> String {
@@ -254,7 +254,7 @@ fn autoarranque() -> Vec<sistema::Autoarranque> {
         .map(str::to_lowercase)
         .collect();
     let lista = |kf: &glib::KeyFile, k: &str| -> Option<Vec<String>> {
-        kf.string_list("Desktop Entry", k)
+        kf.string_list("Desktop Entry", k) // no-tr
             .ok()
             .map(|v| v.iter().map(|s| s.to_lowercase()).collect())
     };
@@ -276,16 +276,16 @@ fn autoarranque() -> Vec<sistema::Autoarranque> {
             if !le_toca {
                 return None;
             }
-            let verdad = |k: &str| kf.boolean("Desktop Entry", k).ok();
-            let activo = verdad("Hidden") != Some(true)
+            let verdad = |k: &str| kf.boolean("Desktop Entry", k).ok(); // no-tr
+            let activo = verdad("Hidden") != Some(true) // no-tr
                 && verdad("X-GNOME-Autostart-enabled") != Some(false);
             Some(sistema::Autoarranque {
                 nombre: kf
-                    .locale_string("Desktop Entry", "Name", None)
+                    .locale_string("Desktop Entry", "Name", None) // no-tr
                     .map(Into::into)
                     .unwrap_or_else(|_| archivo.trim_end_matches(".desktop").to_owned()),
                 comentario: kf
-                    .locale_string("Desktop Entry", "Comment", None)
+                    .locale_string("Desktop Entry", "Comment", None) // no-tr
                     .map(Into::into)
                     .unwrap_or_default(),
                 archivo,
@@ -311,12 +311,12 @@ pub fn poner_autoarranque(archivo: &str, activar: bool) -> Result<(), String> {
         glib::KeyFileFlags::KEEP_COMMENTS | glib::KeyFileFlags::KEEP_TRANSLATIONS,
     )
     .map_err(|e| e.to_string())?;
-    kf.set_boolean("Desktop Entry", "Hidden", !activar);
+    kf.set_boolean("Desktop Entry", "Hidden", !activar); // no-tr
     if kf
-        .has_key("Desktop Entry", "X-GNOME-Autostart-enabled")
+        .has_key("Desktop Entry", "X-GNOME-Autostart-enabled") // no-tr
         .unwrap_or(false)
     {
-        kf.set_boolean("Desktop Entry", "X-GNOME-Autostart-enabled", activar);
+        kf.set_boolean("Desktop Entry", "X-GNOME-Autostart-enabled", activar); // no-tr
     }
     std::fs::create_dir_all(autostart_usuario()).map_err(|e| e.to_string())?;
     kf.save_to_file(&usuario).map_err(|e| e.to_string())
@@ -379,21 +379,21 @@ pub async fn sistema() -> Vec<Seccion> {
         placa
     };
     let equipo = sistema::equipo(&[
-        ("Nombre", una("/proc/sys/kernel/hostname")),
-        ("Equipo", equipo),
-        ("Placa madre", placa),
-        ("Procesador", sistema::procesador(&archivo("/proc/cpuinfo"))),
-        ("Gráficos", sistema::graficas(&lspci)),
-        ("Memoria", sistema::memoria(&archivo("/proc/meminfo"))),
+        (tr!("Nombre"), una("/proc/sys/kernel/hostname")),
+        (tr!("Equipo"), equipo),
+        (tr!("Placa madre"), placa),
+        (tr!("Procesador"), sistema::procesador(&archivo("/proc/cpuinfo"))),
+        (tr!("Gráficos"), sistema::graficas(&lspci)),
+        (tr!("Memoria"), sistema::memoria(&archivo("/proc/meminfo"))),
         (
-            "Sistema",
+            tr!("Sistema"),
             sistema::distribucion(&archivo("/etc/os-release")),
         ),
-        ("Kernel", una("/proc/sys/kernel/osrelease")),
+        (tr!("Kernel"), una("/proc/sys/kernel/osrelease")),
         (compositor, version),
         ("morgan", env!("CARGO_PKG_VERSION").to_owned()),
         (
-            "Encendida hace",
+            tr!("Encendida hace"),
             sistema::encendida(&archivo("/proc/uptime")),
         ),
     ]);

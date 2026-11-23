@@ -331,7 +331,7 @@ impl VentanasUi {
             e.sel
         };
         let v = &l.ventanas[del_pie];
-        let prompt = self.rotulos.linea("󰖯  Ventanas", PX, 400.0);
+        let prompt = self.rotulos.linea(&format!("󰖯  {}", tr!("Ventanas")), PX, 400.0);
         let detalle = self
             .rotulos
             .linea(&format!("{} · {}", v.clase, v.ws), PX_DETALLE, 400.0);

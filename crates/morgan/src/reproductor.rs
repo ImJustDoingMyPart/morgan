@@ -31,9 +31,9 @@ pub enum Estado {
 impl Estado {
     pub fn de(s: &str) -> Option<Estado> {
         match s {
-            "Playing" => Some(Estado::Reproduciendo),
-            "Paused" => Some(Estado::Pausado),
-            "Stopped" => Some(Estado::Detenido),
+            "Playing" => Some(Estado::Reproduciendo), // no-tr
+            "Paused" => Some(Estado::Pausado), // no-tr
+            "Stopped" => Some(Estado::Detenido), // no-tr
             _ => None,
         }
     }
@@ -59,7 +59,7 @@ pub fn partes(artistas: &[String], titulo: Option<&str>) -> (String, String) {
     match titulo.map(str::trim).filter(|t| !t.is_empty()) {
         Some(t) => (t.to_string(), artistas),
         None if !artistas.is_empty() => (artistas, String::new()),
-        None => ("Reproductor".into(), String::new()),
+        None => (tr!("Reproductor").into(), String::new()),
     }
 }
 
@@ -86,18 +86,18 @@ impl Reproductor {
         let nombre = elegido(&conn).await?;
         let p = zbus::Proxy::new(&conn, nombre.as_str(), RUTA, INTERFAZ)
             .await
-            .map_err(|e| format!("reproductor: {nombre}: {e}"))?;
+            .map_err(|e| format!("reproductor: {nombre}: {e}"))?; // no-tr
         let (metodo, propiedad) = match accion {
             AccionReproductor::PlayPausa => ("PlayPause", "PlaybackStatus"),
-            AccionReproductor::Siguiente => ("Next", "Metadata"),
-            AccionReproductor::Anterior => ("Previous", "Metadata"),
+            AccionReproductor::Siguiente => ("Next", "Metadata"), // no-tr
+            AccionReproductor::Anterior => ("Previous", "Metadata"), // no-tr
         };
         // El primer valor del stream es el actual; el que importa es el siguiente.
         let mut cambios = p.receive_property_changed::<OwnedValue>(propiedad).await;
         let _ = cambios.next().await;
         p.call_method(metodo, &())
             .await
-            .map_err(|e| format!("reproductor: {nombre}: {metodo}: {e}"))?;
+            .map_err(|e| format!("reproductor: {nombre}: {metodo}: {e}"))?; // no-tr
         let _ = glib::future_with_timeout(ESPERA, cambios.next()).await;
 
         let estado = p
@@ -106,7 +106,7 @@ impl Reproductor {
             .ok()
             .and_then(|s| Estado::de(&s));
         let metadata = p
-            .get_property::<HashMap<String, OwnedValue>>("Metadata")
+            .get_property::<HashMap<String, OwnedValue>>("Metadata") // no-tr
             .await
             .unwrap_or_default();
         let artistas = metadata
@@ -134,7 +134,7 @@ impl Reproductor {
         }
         let c = Connection::session()
             .await
-            .map_err(|e| format!("reproductor: bus de sesión: {e}"))?;
+            .map_err(|e| format!("reproductor: bus de sesión: {e}"))?; // no-tr
         self.conexion.replace(Some(c.clone()));
         Ok(c)
     }
@@ -143,11 +143,11 @@ impl Reproductor {
 async fn elegido(conn: &Connection) -> Result<String, String> {
     let dbus = zbus::fdo::DBusProxy::new(conn)
         .await
-        .map_err(|e| format!("reproductor: {e}"))?;
+        .map_err(|e| format!("reproductor: {e}"))?; // no-tr
     let nombres = dbus
         .list_names()
         .await
-        .map_err(|e| format!("reproductor: {e}"))?;
+        .map_err(|e| format!("reproductor: {e}"))?; // no-tr
     let mut candidatos = Vec::new();
     for n in nombres {
         let n = n.to_string();
@@ -171,7 +171,7 @@ async fn elegido(conn: &Connection) -> Result<String, String> {
         };
         candidatos.push((n, estado.as_deref().and_then(Estado::de)));
     }
-    elegir(candidatos).ok_or_else(|| "no hay ningún reproductor MPRIS".into())
+    elegir(candidatos).ok_or_else(|| tr!("no hay ningún reproductor MPRIS").into())
 }
 
 #[cfg(test)]

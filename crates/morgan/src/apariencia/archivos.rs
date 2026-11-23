@@ -42,9 +42,9 @@ pub fn kitty(texto: &str, familia: &str) -> Option<String> {
         Some(match valor.split_once("family=\"") {
             Some((antes, r)) => {
                 let despues = r.split_once('"').map_or("", |(_, d)| d);
-                format!("font_family      {antes}family=\"{familia}\"{despues}")
+                format!("font_family      {antes}family=\"{familia}\"{despues}") // no-tr
             }
-            None => format!("font_family      family=\"{familia}\""),
+            None => format!("font_family      family=\"{familia}\""), // no-tr
         })
     })
 }
@@ -56,7 +56,7 @@ fn linea_kitty(l: &str) -> Option<&str> {
 
 pub fn env_leer(texto: &str, clave: &str) -> Option<String> {
     texto.lines().find_map(|l| {
-        let r = l.strip_prefix("export ")?.strip_prefix(clave)?.strip_prefix('=')?;
+        let r = l.strip_prefix("export ")?.strip_prefix(clave)?.strip_prefix('=')?; // no-tr
         Some(r.trim_matches('"').to_owned())
     })
 }
@@ -68,8 +68,8 @@ pub fn env(texto: &str, pares: &[(&str, &str)]) -> Option<String> {
     for l in texto.split_inclusive('\n') {
         let sin_fin = l.trim_end_matches('\n');
         let nueva = pares.iter().find_map(|(k, v)| {
-            let r = sin_fin.strip_prefix("export ")?.strip_prefix(k)?;
-            r.starts_with('=').then(|| format!("export {k}=\"{v}\""))
+            let r = sin_fin.strip_prefix("export ")?.strip_prefix(k)?; // no-tr
+            r.starts_with('=').then(|| format!("export {k}=\"{v}\"")) // no-tr
         });
         match nueva {
             Some(n) => {
@@ -94,7 +94,7 @@ pub fn sin_tamano(valor: &str) -> &str {
 
 pub fn con_tamano(familia: &str, viejo: &str) -> String {
     match viejo.rsplit_once(' ') {
-        Some((_, t)) if es_numero(t) => format!("{familia} {t}"),
+        Some((_, t)) if es_numero(t) => format!("{familia} {t}"), // no-tr
         _ => familia.to_owned(),
     }
 }

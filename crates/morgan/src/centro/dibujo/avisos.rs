@@ -89,7 +89,7 @@ impl Ui {
         let mut y = y0;
         let hay = !self.datos.grupos.is_empty();
         // El rótulo.
-        let titulo = self.rotulos.linea("notificaciones", 12.0, 700.0);
+        let titulo = self.rotulos.linea(tr!("notificaciones"), 12.0, 700.0);
         let th = self.alto(&titulo);
         h.trazos.push(Trazo::Texto {
             l: titulo,
@@ -98,7 +98,7 @@ impl Ui {
             color: op(&p.on_surface, 0.5),
         });
         if hay {
-            let limpiar = self.rotulos.linea("limpiar", 12.0, 400.0);
+            let limpiar = self.rotulos.linea(tr!("limpiar"), 12.0, 400.0);
             let (w, lh) = (self.ancho(&limpiar), self.alto(&limpiar));
             let r = Rect::new(ANCHO - w, y, ANCHO, y + lh);
             let o = Objetivo::Limpiar;
@@ -125,7 +125,7 @@ impl Ui {
         if !hay {
             // «Nada nuevo», centrado, con 18 arriba y 14 abajo.
             let glifo = self.rotulos.linea("󰂜", 13.0, 400.0);
-            let texto = self.rotulos.linea("Nada nuevo", 13.0, 400.0);
+            let texto = self.rotulos.linea(tr!("Nada nuevo"), 13.0, 400.0);
             let (gw, tw) = (self.ancho(&glifo), self.ancho(&texto));
             let alto = self.alto(&texto).max(self.alto(&glifo));
             let x = ((ANCHO - gw - 8.0 - tw) / 2.0).floor();
@@ -225,7 +225,7 @@ impl Ui {
                 h.deslizables.push((o, r));
                 let dx = self.deslices.get(&o).map_or(0.0, |d| d.dx(ahora));
                 if dx != 0.0 {
-                    self.pista(h, r, dx, Some(("󰆴", "descartar")), Some(("󰆏", "copiar")));
+                    self.pista(h, r, dx, Some(("󰆴", tr!("descartar"))), Some(("󰆏", tr!("copiar"))));
                 }
                 h.trazos.push(Trazo::Grupo {
                     r,
@@ -272,9 +272,9 @@ impl Ui {
         let dx = self.deslices.get(&o).map_or(0.0, |d| d.dx(ahora));
         if dx != 0.0 {
             if varias {
-                self.pista(h, r, dx, Some(("󰆴", "descartar todo")), None);
+                self.pista(h, r, dx, Some(("󰆴", tr!("descartar todo"))), None);
             } else {
-                self.pista(h, r, dx, Some(("󰆴", "descartar")), Some(("󰆏", "copiar")));
+                self.pista(h, r, dx, Some(("󰆴", tr!("descartar"))), Some(("󰆏", tr!("copiar"))));
             }
         }
         h.trazos.push(Trazo::Grupo {

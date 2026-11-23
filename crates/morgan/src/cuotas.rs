@@ -26,9 +26,9 @@ pub const AGENTES: [Agente; 3] = [Agente::Claude, Agente::Codex, Agente::Gemini]
 impl Agente {
     pub fn nombre(self) -> &'static str {
         match self {
-            Agente::Claude => "Claude Code",
-            Agente::Codex => "Codex",
-            Agente::Gemini => "Gemini",
+            Agente::Claude => "Claude Code", // no-tr
+            Agente::Codex => "Codex", // no-tr
+            Agente::Gemini => "Gemini", // no-tr
         }
     }
 
@@ -43,9 +43,9 @@ impl Agente {
 
     pub fn corto(self) -> &'static str {
         match self {
-            Agente::Claude => "Claude",
-            Agente::Codex => "Codex",
-            Agente::Gemini => "Gemini",
+            Agente::Claude => "Claude", // no-tr
+            Agente::Codex => "Codex", // no-tr
+            Agente::Gemini => "Gemini", // no-tr
         }
     }
 }
@@ -105,7 +105,7 @@ pub fn gemini(cuota: &Value, observada: i64) -> Vec<Ventana> {
             let (grupo, ventana) = clave.rsplit_once('-').unwrap_or(("", clave));
             let grupo = match grupo {
                 "gemini" => None,
-                "3p" => Some("otros modelos".to_owned()),
+                "3p" => Some(tr!("otros modelos").to_owned()),
                 otro => Some(otro.to_owned()),
             };
             let minutos = match ventana {
@@ -330,14 +330,14 @@ pub fn glifo(minutos: Option<u32>) -> &'static str {
 
 pub fn nombre_ventana(v: &Ventana) -> String {
     let largo = match v.minutos {
-        Some(10080) => "semana".to_owned(),
+        Some(10080) => tr!("semana").to_owned(),
         Some(m) if m % 1440 == 0 => format!("{} d", m / 1440),
         Some(m) if m % 60 == 0 => format!("{} h", m / 60),
-        Some(m) => format!("{m} min"),
+        Some(m) => format!("{m} min"), // no-tr
         None => v.clave.clone(),
     };
     match &v.grupo {
-        Some(g) => format!("{g} · {largo}"),
+        Some(g) => format!("{g} · {largo}"), // no-tr
         None => largo,
     }
 }
@@ -345,15 +345,15 @@ pub fn nombre_ventana(v: &Ventana) -> String {
 pub fn lapso(segundos: i64) -> String {
     let m = (segundos.max(0) + 59) / 60;
     match m {
-        m if m < 60 => format!("{} min", m.max(1)),
+        m if m < 60 => format!("{} min", m.max(1)), // no-tr
         m if m < 24 * 60 => format!("{} h {:02}", m / 60, m % 60),
-        m => format!("{} d {} h", m / 1440, m % 1440 / 60),
+        m => format!("{} d {} h", m / 1440, m % 1440 / 60), // no-tr
     }
 }
 
 fn antiguedad(segundos: i64) -> String {
     match segundos.max(0) / 60 {
-        m if m < 60 => format!("{m} min"),
+        m if m < 60 => format!("{m} min"), // no-tr
         m if m < 24 * 60 => format!("{} h", m / 60),
         m => format!("{} d", m / 1440),
     }
@@ -366,13 +366,13 @@ pub fn pintar(v: &Ventana, agente: Option<(Agente, Option<i64>)>, ahora: i64) ->
     let mut glifo = glifo(v.minutos);
     if let Some((a, observada)) = agente {
         glifo = a.glifo();
-        nombre = format!("{} · {nombre}", a.nombre());
+        nombre = format!("{} · {nombre}", a.nombre()); // no-tr
         if let Some(o) = observada.filter(|o| ahora - o >= VIEJO) {
-            nombre = format!("{nombre} · hace {}", antiguedad(ahora - o));
+            nombre = trf!("{} · hace {}", nombre, antiguedad(ahora - o));
         }
     }
     let renueva = match (pendiente, v.renueva, vigente) {
-        (true, _, _) => "renovada".to_owned(),
+        (true, _, _) => tr!("renovada").to_owned(),
         // Llena no hay nada que renovar (Antigravity tampoco lo dice).
         (_, _, Some(r)) if r >= 1.0 => String::new(),
         (_, Some(r), _) => format!("↻ {}", lapso(r - ahora)),
@@ -393,7 +393,7 @@ pub fn sin_datos(a: Agente) -> Pintura {
     Pintura {
         glifo: a.glifo(),
         nombre: a.nombre().to_owned(),
-        renueva: "sin datos".to_owned(),
+        renueva: tr!("sin datos").to_owned(),
         porcentaje: "—".to_owned(),
         fraccion: 0.0,
         alerta: false,
@@ -413,7 +413,7 @@ pub fn resumen(lecturas: &[(Agente, Lectura)], ahora: i64) -> (String, bool) {
             let p = pintar(v, None, ahora);
             (format!("{}: {}", a.corto(), p.porcentaje), p.alerta)
         }
-        None => ("Sin datos".to_owned(), false),
+        None => (tr!("Sin datos").to_owned(), false),
     }
 }
 

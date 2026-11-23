@@ -193,7 +193,7 @@ impl Ventanas {
         let t0 = Instant::now();
         glib::MainContext::default().spawn_local(async move {
             let lienzo = yo.leer().await;
-            traza(t0, "leído");
+            traza(t0, "leído"); // no-tr
             let i = &yo.inner;
             i.leyendo.set(false);
             if i.pedido.get() != pedido || yo.abierto() {

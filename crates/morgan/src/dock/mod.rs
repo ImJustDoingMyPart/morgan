@@ -449,14 +449,14 @@ impl Dock {
                 })
                 .unwrap_or_default();
             if app.is_some() {
-                let mut v = vec![fila(ID_NUEVA, "Ventana nueva", true)];
+                let mut v = vec![fila(ID_NUEVA, tr!("Ventana nueva"), true)];
                 v.extend(
                     acciones
                         .iter()
                         .enumerate()
                         .map(|(k, (_, nombre))| fila(ID_ACCIONES - k as i32, nombre, true)),
                 );
-                v.push(fila(ID_CERRAR_TODAS, "Cerrar todas", !p.filas.is_empty()));
+                v.push(fila(ID_CERRAR_TODAS, tr!("Cerrar todas"), !p.filas.is_empty()));
                 secciones.push(v);
             }
             if let Some(item) = &p.bandeja

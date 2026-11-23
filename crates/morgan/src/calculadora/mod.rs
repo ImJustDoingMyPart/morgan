@@ -287,7 +287,7 @@ impl Calculadora {
 }
 
 async fn calcular(expresion: &str, cancelar: &gio::Cancellable) -> Option<String> {
-    let args = ["qalc", "-t", "-s", "update_exchange_rates 1days", expresion];
+    let args = ["qalc", "-t", "-s", "update_exchange_rates 1days", expresion]; // no-tr
     match comando::salida_cortable(&args, TOPE, cancelar).await {
         Ok(s) => modelo::resultado(expresion, &s),
         Err(e) => {

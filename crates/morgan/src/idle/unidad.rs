@@ -28,7 +28,7 @@ impl Unidad {
             "org.freedesktop.systemd1.Manager",
         )
         .await?;
-        m.call::<_, _, ()>("Subscribe", &()).await?;
+        m.call::<_, _, ()>("Subscribe", &()).await?; // no-tr
         let ruta: OwnedObjectPath = m.call("LoadUnit", &(UNIDAD,)).await?;
         Ok(Unidad { conn, ruta })
     }

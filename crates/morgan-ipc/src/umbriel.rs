@@ -80,7 +80,7 @@ pub fn respuesta_de(linea: &str) -> std::io::Result<serde_json::Value> {
     }
     match v.get_mut("ok") {
         Some(ok) => Ok(ok.take()),
-        None => Err(std::io::Error::other(format!("respuesta sin ok: {linea}"))),
+        None => Err(std::io::Error::other(format!("respuesta sin ok: {linea}"))), // no-tr
     }
 }
 

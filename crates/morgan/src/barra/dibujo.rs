@@ -71,14 +71,14 @@ pub struct Estado {
     pub menu: Option<String>,
 }
 
-pub const TOOLTIP_GRABACION: &str = "Grabando la pantalla\nClick: parar";
+pub const TOOLTIP_GRABACION: &str = tr_const!("Grabando la pantalla\nClick: parar");
 
 impl Estado {
     pub fn tooltip(&self, q: Que) -> Option<String> {
         let t = match q {
             Que::Campana => modelo::campana(self.avisos, self.no_molestar).1,
             Que::Privacidad => self.tooltip_privacidad.clone(),
-            Que::Grabacion => TOOLTIP_GRABACION.into(),
+            Que::Grabacion => morgan_idioma::t(TOOLTIP_GRABACION).into(),
             Que::Icono(i) => self.bandeja.get(i)?.tooltip.clone(),
             _ => return None,
         };

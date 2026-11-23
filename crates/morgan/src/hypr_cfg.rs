@@ -14,21 +14,21 @@ use crate::menu::monitores::Reglas;
 pub const SOMBRAS: &[(&str, &str, &str, &str)] = &[
     (
         "black",
-        "Sombra negra",
-        "ceñida, solo en la ventana con foco",
+        tr_const!("Sombra negra"),
+        tr_const!("ceñida, solo en la ventana con foco"),
         // Al 80 % (Roberto, 2026-11-07: opaca pesaba un poco; igual en Umbriel).
         "hl.config({ decoration = { shadow = {\n    enabled = true, range = 6, render_power = 2,\n    \
-         color = \"rgba(000000cc)\", color_inactive = \"rgba(00000000)\", offset = { 0, 0 },\n} } })\n",
+         color = \"rgba(000000cc)\", color_inactive = \"rgba(00000000)\", offset = { 0, 0 },\n} } })\n", // no-tr
     ),
     (
         "glow",
-        "Glow colorido",
-        "el degradé del tema, gira con el borde",
+        tr_const!("Glow colorido"),
+        tr_const!("el degradé del tema, gira con el borde"),
         // Tenue y pegado al borde (Roberto, 2026-10-23: con `range 6` se veía grueso): 3 px
         // lógicos, `render_power 3` concentra la luz contra el borde, y el degradé del tema al
         // 30 % (`templates/hyprland.lua`).
         "hl.config({ decoration = { shadow = {\n    enabled = true, range = 3, render_power = 3,\n    \
-         color_inactive = \"rgba(00000000)\", offset = { 0, 0 },\n} } })\n",
+         color_inactive = \"rgba(00000000)\", offset = { 0, 0 },\n} } })\n", // no-tr
     ),
 ];
 
@@ -154,7 +154,7 @@ pub async fn aplicar(c: &Config, ruta_config: &Path) -> Result<(), String> {
         return Ok(());
     }
     escribir(&destino, &nuevo)?;
-    if comando::salida(&["Hyprland", "--verify-config"])
+    if comando::salida(&["Hyprland", "--verify-config"]) // no-tr
         .await
         .is_err()
     {
@@ -162,7 +162,7 @@ pub async fn aplicar(c: &Config, ruta_config: &Path) -> Result<(), String> {
             Some(a) => escribir(&destino, a),
             None => std::fs::remove_file(&destino).map_err(|e| e.to_string()),
         };
-        return Err("la config de Hyprland quedó inválida; se dejó la de antes".into());
+        return Err(tr!("la config de Hyprland quedó inválida; se dejó la de antes").into());
     }
     // `config-only`: sin eso el reload reaplica los monitores y una salida apagada se prende un
     // instante.

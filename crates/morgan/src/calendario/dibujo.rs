@@ -177,7 +177,7 @@ impl Hoja {
         let (año, mes) = cal.mes;
         let titulo = armar(
             t,
-            &format!("{} {año}", modelo::MESES[(mes - 1) as usize]),
+            &trf!("{} {}", morgan_idioma::t(modelo::MESES[(mes - 1) as usize]), año),
             12.0,
             700.0,
         );
@@ -188,7 +188,7 @@ impl Hoja {
         for (que, s) in [
             (Objetivo::Despues, "󰅂"),
             (Objetivo::Antes, "󰅁"),
-            (Objetivo::Hoy, "hoy"),
+            (Objetivo::Hoy, tr!("hoy")),
         ] {
             if que == Objetivo::Hoy && !ver_hoy {
                 continue;
@@ -223,8 +223,16 @@ impl Hoja {
         y += RELLENO_MES;
         let mut semana = Vec::new();
         let mut alto_semana: f64 = 0.0;
-        for (d, (x, w)) in ["lu", "ma", "mi", "ju", "vi", "sá", "do"]
-            .iter()
+        for (d, (x, w)) in [
+            tr!("lu"),
+            tr!("ma"),
+            tr!("mi"),
+            tr!("ju"),
+            tr!("vi"),
+            tr!("sá"),
+            tr!("do"),
+        ]
+        .iter()
             .zip(columnas(gx, gw, 7, 0.0))
         {
             let l = armar(t, d, 12.0, 400.0);
@@ -331,7 +339,7 @@ impl Hoja {
         {
             y += ENTRE;
             let estado = match cal.ahora.as_deref() {
-                Some(a) if d == hoy => format!("ahora {a} · {}", c.temperaturas),
+                Some(a) if d == hoy => trf!("ahora {} · {}", a, c.temperaturas),
                 _ => c.temperaturas.clone(),
             };
             let (titulo, _, debajo, alto) = renglones(t, &c.descripcion, None, Some(&estado), y);

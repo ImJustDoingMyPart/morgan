@@ -288,7 +288,7 @@ impl Launcher {
         i.carpeta.set(None);
         i.carga.set(i.carga.get() + 1);
         self.mandar(Orden::LauncherAbrir {
-            prompt: modo.prompt().to_owned(),
+            prompt: morgan_idioma::t(modo.prompt()).to_owned(),
             simbolos: modo == Modo::Simbolos,
         });
         // Cada apertura (o cambio de modo) empieza de cero.
@@ -532,7 +532,7 @@ impl Launcher {
         }
         for (g, (_, nombre)) in GRUPOS.iter().enumerate() {
             let nombre = morgan_idioma::t(nombre);
-            let vista = format!("{}  {nombre}", muestra[g].as_deref().unwrap_or("·"));
+            let vista = format!("{}  {nombre}", muestra[g].as_deref().unwrap_or("·")); // no-tr
             self.agregar(
                 &mut c,
                 Entrada::new(&format!("carpeta:{g}"), &vista, &[]), // no-tr
@@ -908,7 +908,7 @@ impl Launcher {
                 });
             }
             Accion::Recorte(linea) => comando::lanzar_con_entrada(
-                &["sh", "-c", "cliphist decode | wl-copy"],
+                &["sh", "-c", "cliphist decode | wl-copy"], // no-tr
                 linea.as_bytes(),
             ),
             Accion::Ciudad(l) => self.volver_al_menu(ParaElMenu::Ciudad(Some(crate::config::Clima {

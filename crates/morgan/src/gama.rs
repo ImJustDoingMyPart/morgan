@@ -231,7 +231,7 @@ fn correr_(kelvin: f64) -> Result<(), String> {
     // La primera vuelta trae los globales; la segunda, el tamaño de cada gama.
     cola.roundtrip(&mut e).map_err(|x| x.to_string())?;
     if e.manager.is_none() {
-        return Err("el compositor no tiene wlr-gamma-control".into());
+        return Err(tr!("el compositor no tiene wlr-gamma-control").into());
     }
     cola.roundtrip(&mut e).map_err(|x| x.to_string())?;
     fundir(&con, &mut cola, &mut e, NEUTRO, kelvin)?;

@@ -4,6 +4,9 @@
 //! teclado y verificación; cada binario le pasa lo suyo (`pantalla::Ajustes`). PAM queda en el
 //! binario del bloqueo.
 
+#[macro_use]
+extern crate morgan_idioma;
+
 pub mod caracteres;
 pub mod clave;
 pub mod dibujo;

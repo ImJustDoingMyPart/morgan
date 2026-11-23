@@ -7,7 +7,7 @@ pub async fn salida(args: &[&str]) -> Result<String, String> {
     salidas(&[args])
         .await
         .pop()
-        .unwrap_or_else(|| Err(format!("{}: sin resultado", args[0])))
+        .unwrap_or_else(|| Err(format!("{}: sin resultado", args[0]))) // no-tr
 }
 
 /// Todo en otro hilo: lanzar un proceso desde el principal (`gio::Subprocess`) cuesta ~1,5 ms
@@ -21,7 +21,7 @@ pub async fn salidas(lista: &[&[&str]]) -> Vec<Result<String, String>> {
     let n = lista.len();
     gio::spawn_blocking(move || correr(&lista))
         .await
-        .unwrap_or_else(|_| vec![Err("comando: el hilo se cayó".into()); n])
+        .unwrap_or_else(|_| vec![Err("comando: el hilo se cayó".into()); n]) // no-tr
 }
 
 fn correr(lista: &[Vec<String>]) -> Vec<Result<String, String>> {
@@ -46,7 +46,7 @@ fn correr(lista: &[Vec<String>]) -> Vec<Result<String, String>> {
                 .wait_with_output()
                 .map_err(|e| format!("{}: {e}", a[0]))?;
             if !fin.status.success() {
-                return Err(format!("{}: terminó con error", a[0]));
+                return Err(format!("{}: terminó con error", a[0])); // no-tr
             }
             Ok(String::from_utf8_lossy(&fin.stdout).trim_end().to_owned())
         })
@@ -69,7 +69,7 @@ pub async fn salida_cortable(
         Some(r) => leer(args, &p, r),
         None => {
             p.force_exit();
-            Err(format!("{}: cortado", args[0]))
+            Err(format!("{}: cortado", args[0])) // no-tr
         }
     }
 }
@@ -91,7 +91,7 @@ fn leer(
 ) -> Result<String, String> {
     let (out, _) = r.map_err(|e| format!("{}: {e}", args[0]))?;
     if !p.is_successful() {
-        return Err(format!("{}: terminó con error", args[0]));
+        return Err(format!("{}: terminó con error", args[0])); // no-tr
     }
     Ok(out.map(|s| s.trim_end().to_owned()).unwrap_or_default())
 }
@@ -173,7 +173,7 @@ fn exec_de_accion(id: &str, accion: &str) -> Option<Vec<String>> {
     let ruta = gio_unix::DesktopAppInfo::new(id)?.filename()?;
     let k = glib::KeyFile::new();
     k.load_from_file(ruta, glib::KeyFileFlags::NONE).ok()?;
-    let exec = k.string(&format!("Desktop Action {accion}"), "Exec").ok()?;
+    let exec = k.string(&format!("Desktop Action {accion}"), "Exec").ok()?; // no-tr
     let v: Vec<String> = glib::shell_parse_argv(exec.as_str())
         .ok()?
         .into_iter()
@@ -192,8 +192,8 @@ pub fn abrir(ruta: &std::path::Path, otro_tipo: &str) -> Result<(), String> {
     };
     let app = gio::AppInfo::default_for_type(&tipo, false)
         .or_else(|| gio::AppInfo::default_for_type(otro_tipo, false))
-        .ok_or_else(|| format!("no hay app predeterminada para {tipo}"))?;
-    let id = app.id().ok_or("la app predeterminada no tiene .desktop")?;
+        .ok_or_else(|| trf!("no hay app predeterminada para {}", tipo))?;
+    let id = app.id().ok_or(tr!("la app predeterminada no tiene .desktop"))?;
     lanzar_app(&id, &[&ruta.to_string_lossy()]);
     Ok(())
 }
@@ -219,7 +219,7 @@ fn es_hyprland() -> bool {
 /// real. Se corta acá, para todo lo que lo lance.
 fn permitido(programa: &str) -> Result<(), String> {
     if programa == "hyprctl" && !es_hyprland() {
-        return Err("hyprctl: la sesión no es de Hyprland".into());
+        return Err("hyprctl: la sesión no es de Hyprland".into()); // no-tr
     }
     Ok(())
 }

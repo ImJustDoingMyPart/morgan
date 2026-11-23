@@ -17,8 +17,8 @@ pub fn ayuda() -> ExitCode {
 
 pub fn version() -> ExitCode {
     match env!("MORGAN_COMMIT") {
-        "" => println!("morgan {}", env!("CARGO_PKG_VERSION")),
-        c => println!("morgan {} ({c})", env!("CARGO_PKG_VERSION")),
+        "" => println!("morgan {}", env!("CARGO_PKG_VERSION")), // no-tr
+        c => println!("morgan {} ({c})", env!("CARGO_PKG_VERSION")), // no-tr
     }
     ExitCode::SUCCESS
 }

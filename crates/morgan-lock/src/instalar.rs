@@ -49,8 +49,8 @@ pub fn instalados(esta: impl Fn(&str) -> bool) -> Vec<&'static str> {
 /// Cómo se le muestra a quien instala.
 pub fn nombre_visible(compositor: &str) -> &str {
     match compositor {
-        "hyprland" => "Hyprland",
-        "umbriel" => "Umbriel",
+        "hyprland" => "Hyprland", // no-tr
+        "umbriel" => "Umbriel", // no-tr
         otro => otro,
     }
 }
@@ -62,7 +62,7 @@ pub fn compositor_puesto(actual: &str, binario: &str) -> Option<String> {
     if c == binario {
         return Some("hyprland".to_owned());
     }
-    let resto = c.strip_prefix(&format!("{binario} "))?;
+    let resto = c.strip_prefix(&format!("{binario} "))?; // no-tr
     let mut p = resto.split_whitespace();
     while let Some(a) = p.next() {
         if a == "--compositor" {
@@ -109,19 +109,19 @@ fn command_de(actual: &str) -> Option<String> {
 /// El `command` de greetd: el greeter con su compositor fijo, así no depende de qué haya
 /// instalado al arrancar.
 pub fn comando(binario: &str, compositor: &str) -> String {
-    format!("{binario} --compositor {compositor}")
+    format!("{binario} --compositor {compositor}") // no-tr
 }
 
 /// Si el `command` de `[default_session]` ya es el greeter (con cualquier compositor): cambiarlo
 /// no lleva respaldo, así `restore` sigue volviendo a la config de antes del greeter.
 pub fn tiene_greeter(actual: &str, binario: &str) -> bool {
-    command_de(actual).is_some_and(|c| c == binario || c.starts_with(&format!("{binario} ")))
+    command_de(actual).is_some_and(|c| c == binario || c.starts_with(&format!("{binario} "))) // no-tr
 }
 
 /// Si greetd no está: el greeter corre sobre él. `None` si está (su config existe).
 pub fn falta_greetd(raiz: &Path) -> Option<String> {
     (!raiz.join(GREETD).is_file()).then(|| {
-        "greetd no está instalado: el greeter corre sobre él. Instalalo (en Arch, `sudo pacman -S greetd`) y volvé a correr esto.".to_owned()
+        tr!("greetd no está instalado: el greeter corre sobre él. Instalalo (en Arch, `sudo pacman -S greetd`) y volvé a correr esto.").to_owned()
     })
 }
 
@@ -138,11 +138,12 @@ pub fn aviso_gestor(raiz: &Path) -> Option<String> {
         .map(str::to_owned);
     match nombre.as_deref() {
         Some("greetd") => None,
-        Some(otro) => Some(format!(
-            "Ojo: el inicio de sesión lo maneja {otro}, no greetd. Para ver el greeter: sudo systemctl disable {otro} && sudo systemctl enable greetd"
+        Some(otro) => Some(trf!(
+            "Ojo: el inicio de sesión lo maneja {0}, no greetd. Para ver el greeter: sudo systemctl disable {0} && sudo systemctl enable greetd",
+            otro
         )),
         None => Some(
-            "Ojo: greetd no está habilitado. Para ver el greeter: sudo systemctl enable greetd"
+            tr!("Ojo: greetd no está habilitado. Para ver el greeter: sudo systemctl enable greetd")
                 .to_owned(),
         ),
     }
@@ -152,11 +153,11 @@ pub fn aviso_gestor(raiz: &Path) -> Option<String> {
 pub fn config_nueva(actual: &str, command: &str) -> Result<String, String> {
     let mut doc: DocumentMut = actual
         .parse()
-        .map_err(|e| format!("{GREETD} no es TOML válido: {e}"))?;
+        .map_err(|e| format!("{GREETD} no es TOML válido: {e}"))?; // no-tr
     let sesion = doc
         .get_mut("default_session")
         .and_then(|t| t.as_table_mut())
-        .ok_or_else(|| format!("{GREETD} no tiene [default_session]"))?;
+        .ok_or_else(|| format!("{GREETD} no tiene [default_session]"))?; // no-tr
     sesion["command"] = value(command);
     if !sesion.contains_key("user") {
         sesion["user"] = value("greeter");
@@ -174,10 +175,10 @@ pub fn pam_nuevo(actual: &str) -> Option<String> {
     let tipo = |l: &str| l.split_whitespace().next().map(str::to_owned);
     let mut v: Vec<String> = actual.lines().map(str::to_owned).collect();
     for (t, linea) in [
-        ("auth", "auth       optional     pam_gnome_keyring.so"),
+        ("auth", "auth       optional     pam_gnome_keyring.so"), // no-tr
         (
             "session",
-            "session    optional     pam_gnome_keyring.so auto_start",
+            "session    optional     pam_gnome_keyring.so auto_start", // no-tr
         ),
     ] {
         let i = v

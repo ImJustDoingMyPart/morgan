@@ -19,6 +19,9 @@
 //! `<datos>` es `$XDG_DATA_HOME` y después cada `$XDG_DATA_DIRS`. Lo renderizado y el tema
 //! activo van en `$XDG_STATE_HOME/morgan/`.
 
+#[macro_use]
+extern crate morgan_idioma;
+
 mod integraciones;
 pub mod paleta;
 mod render;
@@ -148,14 +151,14 @@ pub fn aplicar(r: &Rutas, tema: &str, imagen: Option<&Path>) -> Result<Informe, 
             .into_iter()
             .map(|d| d.join(tema).join("palette.toml"))
             .find(|p| p.is_file())
-            .ok_or_else(|| format!("no existe el tema '{tema}'"))?;
+            .ok_or_else(|| trf!("no existe el tema '{}'", tema))?;
         let texto = std::fs::read_to_string(&paleta).map_err(|e| format!("{}: {e}", paleta.display()))?;
-        let roles = paleta::roles_curado(&texto).map_err(|e| format!("{tema}: {e}"))?;
+        let roles = paleta::roles_curado(&texto).map_err(|e| format!("{tema}: {e}"))?; // no-tr
         (paleta::json_curado(&roles), paleta::es_oscura(&roles))
     };
     let plantillas = render::plantillas(r);
     if plantillas.is_empty() {
-        return Err("no hay plantillas (~/.config/morgan/templates)".into());
+        return Err(tr!("no hay plantillas (~/.config/morgan/templates)").into());
     }
     render::renderizar(r, &plantillas, &datos)?;
     escribir(&r.archivo_activo(), &format!("{tema}\n"))?;
@@ -166,7 +169,7 @@ pub fn aplicar(r: &Rutas, tema: &str, imagen: Option<&Path>) -> Result<Informe, 
 
 pub fn recargar(r: &Rutas) -> Result<Informe, String> {
     match activo(r).as_str() {
-        "" => Err("no hay un tema activo".into()),
+        "" => Err(tr!("no hay un tema activo").into()),
         t => aplicar(r, t, None),
     }
 }

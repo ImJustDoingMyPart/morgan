@@ -131,7 +131,7 @@ pub fn atajos(json: &str) -> Result<Vec<Atajo>, String> {
 }
 
 pub fn binds(json: &str) -> Result<Vec<Atajo>, String> {
-    let binds: Vec<Bind> = serde_json::from_str(json).map_err(|e| format!("binds: {e}"))?;
+    let binds: Vec<Bind> = serde_json::from_str(json).map_err(|e| format!("binds: {e}"))?; // no-tr
     Ok(binds
         .into_iter()
         .filter(|b| !b.description.is_empty())
@@ -150,7 +150,7 @@ pub fn binds(json: &str) -> Result<Vec<Atajo>, String> {
 }
 
 pub fn ocupadas(json: &str) -> Result<Vec<Atajo>, String> {
-    let binds: Vec<Bind> = serde_json::from_str(json).map_err(|e| format!("binds: {e}"))?;
+    let binds: Vec<Bind> = serde_json::from_str(json).map_err(|e| format!("binds: {e}"))?; // no-tr
     Ok(binds
         .into_iter()
         .filter(|b| b.submap.is_empty() && !b.key.is_empty())
@@ -179,7 +179,7 @@ fn modificadores(mascara: u32) -> Vec<String> {
 /// se la despacha, como hace Hyprland al apretar la tecla (`LuaBindingsRegistration.cpp`,
 /// 0.56.2). Lo que no es una función ahí (una referencia vieja) no se toca.
 pub fn ejecutar_bind(referencia: u32) -> String {
-    format!("local f = debug.getregistry()[{referencia}]; if type(f) == 'function' then hl.dispatch(f) end")
+    format!("local f = debug.getregistry()[{referencia}]; if type(f) == 'function' then hl.dispatch(f) end") // no-tr
 }
 
 #[cfg(test)]

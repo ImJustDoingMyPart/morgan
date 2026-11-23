@@ -44,7 +44,7 @@ pub struct Crudo {
 
 pub fn crudos(json: &str) -> Result<Vec<Crudo>, String> {
     let m: BTreeMap<String, Valor> =
-        serde_json::from_str(json).map_err(|e| format!("keybinds: {e}"))?;
+        serde_json::from_str(json).map_err(|e| format!("keybinds: {e}"))?; // no-tr
     Ok(m.into_iter()
         .filter_map(|(k, v)| {
             let accion = match v {
@@ -80,7 +80,7 @@ pub fn a_hypr(tecla: &str) -> String {
 
 /// La acción de un bind de `atajos_base` (lo de la derecha del `=`).
 fn accion_base(valor: &str) -> Option<String> {
-    let t: toml::Table = toml::from_str(&format!("v = {valor}")).ok()?;
+    let t: toml::Table = toml::from_str(&format!("v = {valor}")).ok()?; // no-tr
     match t.get("v")? {
         toml::Value::String(s) => Some(s.clone()),
         toml::Value::Table(t) => t.get("action")?.as_str().map(str::to_owned),
@@ -89,7 +89,7 @@ fn accion_base(valor: &str) -> Option<String> {
 }
 
 fn cabecera_de(accion: &str) -> &'static str {
-    if let Some(cmd) = accion.strip_prefix("spawn ") {
+    if let Some(cmd) = accion.strip_prefix("spawn ") { // no-tr
         let c = cmd.trim_start();
         if ["morganctl volume", "morganctl player", "morganctl brightness"] // no-tr
             .iter()
@@ -97,7 +97,7 @@ fn cabecera_de(accion: &str) -> &'static str {
         {
             return MULTIMEDIA;
         }
-        if ["grim ", "gsr-ui-cli", "morgan-captura"].iter().any(|p| c.contains(p)) {
+        if ["grim ", "gsr-ui-cli", "morgan-captura"].iter().any(|p| c.contains(p)) { // no-tr
             // no-tr
             return CAPTURAS;
         }
@@ -125,7 +125,7 @@ fn describir(
     // Los de morgan, con su nombre: así la página no los repite junto a su fila editable.
     for (cabecera, lista) in binds::acciones(a) {
         for (_, _, cmd, desc, _) in lista {
-            if accion == format!("spawn {cmd}") {
+            if accion == format!("spawn {cmd}") { // no-tr
                 return (desc.to_owned(), cabecera);
             }
         }
@@ -135,11 +135,11 @@ fn describir(
         return (tr!("Lienzo de ventanas").to_owned(), VENTANAS);
     }
     for (_, cmd, desc, _) in binds::multimedia() {
-        if accion == format!("spawn {cmd}") {
+        if accion == format!("spawn {cmd}") { // no-tr
             return (desc.to_owned(), MULTIMEDIA);
         }
     }
-    if accion.contains("morgan-captura") || accion.contains("grim ") {
+    if accion.contains("morgan-captura") || accion.contains("grim ") { // no-tr
         // no-tr
         if let Some((_, desc, _)) = binds::CAPTURAS.iter().find(|(t, _, _)| normalizar(t) == clave) {
             return (morgan_idioma::t(desc).to_owned(), CAPTURAS);
@@ -162,7 +162,7 @@ fn describir(
     if let Some((_, _, desc)) = en_base {
         return (desc.clone(), cabecera_de(accion));
     }
-    if let Some(cmd) = accion.strip_prefix("spawn ") {
+    if let Some(cmd) = accion.strip_prefix("spawn ") { // no-tr
         let cmd = cmd.trim();
         // La última palabra que es una app: `kitty --class btop btop` es btop.
         let nombre = cmd
@@ -238,7 +238,7 @@ pub async fn leer(a: &Atajos) -> Result<Vec<(Atajo, &'static str)>, String> {
 /// corre como un comando de shell.
 pub fn mensaje(accion: &str) -> Vec<String> {
     let mut v = vec!["umbriel".to_owned(), "msg".to_owned()]; // no-tr
-    match accion.strip_prefix("spawn ") {
+    match accion.strip_prefix("spawn ") { // no-tr
         Some(cmd) => v.extend(["spawn".to_owned(), cmd.trim().to_owned()]), // no-tr
         None => v.extend(accion.split_whitespace().map(str::to_owned)),
     }

@@ -9,21 +9,21 @@ use crate::launcher::fuentes::Atajo;
 /// Lo que no cae en ninguna sección va a la última.
 const GRUPOS: &[(&str, &[&str])] = &[
     (
-        "Menús y avisos",
-        &["menú", "lanzador", "notificac", "bloqueo"],
+        tr_const!("Menús y avisos"),
+        &["menú", "lanzador", "notificac", "bloqueo"], // no-tr
     ),
-    ("Aplicaciones", &["aplicac"]),
+    (tr_const!("Aplicaciones"), &["aplicac"]),
     (
-        "Ventanas y workspaces",
+        tr_const!("Ventanas y workspaces"),
         &["ventana", "layout", "workspace", "foco"],
     ),
-    ("Multimedia y brillo", &["multimedia", "brillo", "volumen"]),
-    ("Capturas y grabación", &["captura", "grabaci"]),
+    (tr_const!("Multimedia y brillo"), &["multimedia", "brillo", "volumen"]),
+    (tr_const!("Capturas y grabación"), &["captura", "grabaci"]),
     // Los que se crean acá (`[[keybinds.custom]]`): su cabecera en morgan.lua.
-    ("Propios", &["propios"]),
+    (tr_const!("Propios"), &["propios"]),
     // Los submaps que se crean acá (`[[keybinds.modes]]`), en la misma cabecera que los propios.
-    ("Modos", &[]),
-    ("Sesión y otros", &[]),
+    (tr_const!("Modos"), &[]),
+    (tr_const!("Sesión y otros"), &[]),
 ];
 
 const PROPIOS: usize = 5;
@@ -60,7 +60,7 @@ pub fn grupos_de_binds_lua(lua: &str) -> Vec<(String, bool, usize)> {
             grupo = grupo_de(c.trim_end_matches(['─', ' ']));
             continue;
         }
-        let Some((_, resto)) = l.split_once("desc = \"") else {
+        let Some((_, resto)) = l.split_once("desc = \"") else { // no-tr
             continue;
         };
         let Some((desc, despues)) = resto.split_once('"') else {
@@ -116,7 +116,7 @@ fn juntar_series(g: Vec<(String, Vec<String>)>) -> Vec<(String, Vec<String>)> {
         let ultima = &g[miembros[seguidos - 1]];
         let n1 = n0 + seguidos as u32 - 1;
         let teclas = vec![format!("{} … {}", g[i].1[0], ultima.1[0])];
-        v.push((format!("{prefijo}{n0} a {n1}"), teclas));
+        v.push((trf!("{}{} a {}", prefijo, n0, n1), teclas));
         // Los de esta serie salen; lo demás queda en su lugar.
         let fuera: Vec<usize> = miembros[..seguidos].to_vec();
         let resto: Vec<(String, Vec<String>)> = g[i + 1..]
@@ -134,23 +134,23 @@ fn fila_propia(p: &binds::Propio, defecto: &Atajos) -> Fila {
     let quitar =
         |tecla: &str| Que::Config(Cambio::Teclas(vec![(p.id.to_owned(), tecla.to_owned())]));
     let mut opciones = vec![opcion(
-        "Cambiar la tecla…",
+        tr!("Cambiar la tecla…"),
         "",
         Que::GrabarTecla(p.id.to_owned()),
     )];
     if !p.tecla.is_empty() {
-        opciones.push(opcion("Sin tecla", "", quitar("")));
+        opciones.push(opcion(tr!("Sin tecla"), "", quitar("")));
     }
     let siempre = defecto.tecla(p.id).unwrap_or_default();
     if !siempre.is_empty() && binds::normalizar(&siempre) != binds::normalizar(&p.tecla) {
         opciones.push(opcion(
-            &format!("La de siempre: {siempre}"),
+            &trf!("La de siempre: {}", siempre),
             "",
             quitar(&siempre),
         ));
     }
     let sub = if p.tecla.is_empty() {
-        "Sin tecla"
+        tr!("Sin tecla")
     } else {
         &p.tecla
     };
@@ -332,7 +332,7 @@ fn fila_modo(m: usize, modo: &Modo) -> Fila {
     };
     ajuste(
         &trf!("Modo: {}", modo.name),
-        &format!("{tecla} · {} · {sale}", trf!("{} atajos", modo.binds.len())),
+        &format!("{tecla} · {} · {sale}", trf!("{} atajos", modo.binds.len())), // no-tr
         Control::Lista(o),
     )
 }
@@ -405,8 +405,8 @@ pub fn pagina(
                 .collect();
             if GRUPOS[n].1.contains(&"multimedia") {
                 v.push(ajuste(
-                    "Teclas multimedia de morgan",
-                    "Volumen, brillo y reproductor con su OSD, y el aviso de Bloq Mayús",
+                    tr!("Teclas multimedia de morgan"),
+                    tr!("Volumen, brillo y reproductor con su OSD, y el aviso de Bloq Mayús"),
                     Control::Casilla {
                         activa: c.multimedia,
                         que: Que::Config(Cambio::Multimedia(!c.multimedia)),
@@ -424,7 +424,7 @@ pub fn pagina(
                     }),
             );
             if v.is_empty() {
-                v.push(ajuste("Ninguno", "", Control::Nada));
+                v.push(ajuste(tr!("Ninguno"), "", Control::Nada));
             }
             v
         })

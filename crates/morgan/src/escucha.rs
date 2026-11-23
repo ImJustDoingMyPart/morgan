@@ -36,7 +36,7 @@ pub fn destinos() -> Result<Option<(String, String)>, &'static str> {
 fn destinos_de(v: Option<String>, dev: bool) -> Result<Option<(String, String)>, &'static str> {
     match v.as_deref().and_then(|v| v.split_once(',')) {
         Some((f, s)) => Ok(Some((f.to_owned(), s.to_owned()))),
-        None if dev => Err("MORGAN_DEV sin MORGAN_ESCUCHA_PRUEBA=fuente,salida"),
+        None if dev => Err("MORGAN_DEV sin MORGAN_ESCUCHA_PRUEBA=fuente,salida"), // no-tr
         None => Ok(None),
     }
 }
@@ -44,9 +44,9 @@ fn destinos_de(v: Option<String>, dev: bool) -> Result<Option<(String, String)>,
 /// Propiedades de los streams; en una prueba, sin caer al predeterminado si falta el destino.
 pub fn propiedades(nombre_app: &str, prueba: bool) -> String {
     let mut p =
-        format!("application.name=\"{nombre_app}\" application.icon_name=audio-input-microphone");
+        format!("application.name=\"{nombre_app}\" application.icon_name=audio-input-microphone"); // no-tr
     if prueba {
-        p.push_str(" node.dont-fallback=true");
+        p.push_str(" node.dont-fallback=true"); // no-tr
     }
     p
 }
@@ -78,7 +78,7 @@ pub fn cambio(inicial: Option<&Salida>, ahora: &Salida) -> bool {
 }
 
 pub fn aviso(activa: bool) -> crate::osd::Aviso {
-    let texto = if activa { "Activado" } else { "Desactivado" };
+    let texto = if activa { tr!("Activado") } else { tr!("Desactivado") };
     crate::osd::Aviso::estado("󰋋", tr!("Escucharme"), texto, activa, 2000)
 }
 

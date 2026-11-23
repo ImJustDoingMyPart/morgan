@@ -158,8 +158,8 @@ impl ToastsUi {
                     &mut p,
                     r,
                     dx,
-                    Some(("󰆴", "descartar")),
-                    Some(("󰆏", "copiar")),
+                    Some(("󰆴", tr!("descartar"))),
+                    Some(("󰆏", tr!("copiar"))),
                 );
             }
             let mover = Vec2::new(r.x0, r.y0);

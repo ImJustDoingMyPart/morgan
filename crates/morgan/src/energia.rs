@@ -19,9 +19,9 @@ pub struct Estado {
 
 pub fn etiqueta(perfil: &str) -> (&'static str, &str) {
     match perfil {
-        "power-saver" => ("󰾆", "Ahorro"),
-        "balanced" => ("󰾅", "Equilibrado"),
-        "performance" => ("󰓅", "Rendimiento"),
+        "power-saver" => ("󰾆", tr!("Ahorro")),
+        "balanced" => ("󰾅", tr!("Equilibrado")),
+        "performance" => ("󰓅", tr!("Rendimiento")),
         otro => ("󰾅", otro),
     }
 }
@@ -107,11 +107,11 @@ async fn leer() -> zbus::Result<Estado> {
     let p = sistema::proxy(PPD, RUTA, PPD).await?;
     let activo = p.get_property::<String>("ActiveProfile").await?;
     let perfiles = p
-        .get_property::<Vec<HashMap<String, OwnedValue>>>("Profiles")
+        .get_property::<Vec<HashMap<String, OwnedValue>>>("Profiles") // no-tr
         .await?
         .iter()
         .filter_map(|m| {
-            m.get("Profile")
+            m.get("Profile") // no-tr
                 .and_then(|v| <&str>::try_from(&**v).ok())
                 .map(str::to_owned)
         })

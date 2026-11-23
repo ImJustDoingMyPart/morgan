@@ -339,7 +339,7 @@ impl Umbriel {
         let ruta = self.ruta.clone();
         gio::spawn_blocking(move || pedir_ya(&ruta, &pedido))
             .await
-            .unwrap_or_else(|_| Err(std::io::Error::other("el hilo del pedido entró en pánico")))
+            .unwrap_or_else(|_| Err(std::io::Error::other("el hilo del pedido entró en pánico"))) // no-tr
             .map_err(|e| e.to_string())
     }
 

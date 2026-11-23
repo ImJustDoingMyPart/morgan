@@ -126,7 +126,7 @@ pub fn nombre_usb(
     let nombre = limpio(product)
         .or_else(|| limpio(modelo_db))
         .or_else(|| limpio(modelo.map(|m| m.replace('_', " ")).as_deref()))?;
-    if !nombre.to_lowercase().starts_with("usb ") {
+    if !nombre.to_lowercase().starts_with("usb ") { // no-tr
         return Some(nombre);
     }
     let marca = limpio(manufacturer)
@@ -137,7 +137,7 @@ pub fn nombre_usb(
         })
         .filter(|m| !m.is_empty() && !["generic", "usb"].contains(&m.to_lowercase().as_str()));
     Some(match marca {
-        Some(m) => format!("{m} {nombre}"),
+        Some(m) => format!("{m} {nombre}"), // no-tr
         None => nombre,
     })
 }
@@ -155,9 +155,9 @@ pub fn tipo_bluetooth(icono: &str) -> Tipo {
 
 pub fn aviso(tipo: Tipo, nombre: &str, conectado: bool) -> Aviso {
     let texto = if conectado {
-        "Conectado"
+        tr!("Conectado")
     } else {
-        "Desconectado"
+        tr!("Desconectado")
     };
     Aviso::estado(tipo.glifo(), nombre, texto, conectado, MS)
 }
@@ -294,7 +294,7 @@ async fn seguir_bluetooth(inner: &Rc<Inner>) -> zbus::Result<()> {
             continue;
         };
         let Some(conectado) = cambios
-            .get("Connected")
+            .get("Connected") // no-tr
             .and_then(|v| bool::try_from(v).ok())
         else {
             continue;
@@ -304,10 +304,10 @@ async fn seguir_bluetooth(inner: &Rc<Inner>) -> zbus::Result<()> {
         };
         let props = zbus::Proxy::new(&conn, "org.bluez", ruta, "org.bluez.Device1").await?;
         let nombre: String = props
-            .get_property("Alias")
+            .get_property("Alias") // no-tr
             .await
-            .unwrap_or_else(|_| "Bluetooth".into());
-        let icono: String = props.get_property("Icon").await.unwrap_or_default();
+            .unwrap_or_else(|_| "Bluetooth".into()); // no-tr
+        let icono: String = props.get_property("Icon").await.unwrap_or_default(); // no-tr
         inner.avisar(tipo_bluetooth(&icono), &nombre, conectado);
     }
     Ok(())

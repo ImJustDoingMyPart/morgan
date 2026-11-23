@@ -111,7 +111,7 @@ fn desescapar(nombre: &str) -> Option<char> {
 fn sin_enlaces(m: &str) -> String {
     let mut out = String::with_capacity(m.len());
     let mut resto = m;
-    while let Some(i) = resto.find("<a href=\"").or_else(|| resto.find("</a>")) {
+    while let Some(i) = resto.find("<a href=\"").or_else(|| resto.find("</a>")) { // no-tr
         let j = resto.find("</a>").filter(|j| *j < i).unwrap_or(i);
         out.push_str(&resto[..j]);
         let fin = resto[j..]
@@ -181,7 +181,7 @@ fn aplicar(tag: Tag, out: &mut String, abiertas: &mut Vec<&'static str>) {
             abiertas.push(t);
         }
         Tag::Enlace(url) => {
-            out.push_str("<a href=\"");
+            out.push_str("<a href=\""); // no-tr
             out.push_str(&escapar(&url));
             out.push_str("\">");
             abiertas.push("a");

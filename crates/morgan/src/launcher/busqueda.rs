@@ -158,7 +158,7 @@ impl Historial {
     }
 
     pub fn texto(&self) -> String {
-        self.ordenados().into_iter().map(|(id, n)| format!("{n} {id}\n")).collect()
+        self.ordenados().into_iter().map(|(id, n)| format!("{n} {id}\n")).collect() // no-tr
     }
 }
 

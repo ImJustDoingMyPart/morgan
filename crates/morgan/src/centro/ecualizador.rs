@@ -29,7 +29,7 @@ pub fn config() -> String {
          channels = stereo\n\
          \n\
          [smoothing]\n\
-         noise_reduction = 77\n"
+         noise_reduction = 77\n" // no-tr
     )
 }
 

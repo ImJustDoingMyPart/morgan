@@ -134,7 +134,7 @@ pub fn ahora_local() -> (String, String, String, Duration) {
     (
         formato(c"%H"),
         formato(c"%M"),
-        formato(c"%A %-d de %B"),
+        formato(&std::ffi::CString::new(tr!("%A %-d de %B")).unwrap_or_default()),
         Duration::from_millis(falta.max(1)),
     )
 }

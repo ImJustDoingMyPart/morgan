@@ -75,10 +75,10 @@ pub fn usando_microfono(grabaciones: &[Grabacion], monitores: &HashSet<u32>) -> 
 pub fn tooltip(microfono: &[String], pantalla: bool) -> String {
     let mut l = Vec::new();
     if !microfono.is_empty() {
-        l.push(format!("Micrófono: {}", microfono.join(", ")));
+        l.push(trf!("Micrófono: {}", microfono.join(", ")));
     }
     if pantalla {
-        l.push("Pantalla compartida".to_owned());
+        l.push(tr!("Pantalla compartida").to_owned());
     }
     l.join("\n")
 }

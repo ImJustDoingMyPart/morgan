@@ -27,9 +27,9 @@ pub struct Composicion {
 pub const COMPOSICIONES: &[Composicion] = &[
     Composicion {
         id: "precise",
-        nombre: "Precisa",
-        descripcion: "Crece y se desliza",
-        ventanas: "popin 85%",
+        nombre: tr_const!("Precisa"),
+        descripcion: tr_const!("Crece y se desliza"),
+        ventanas: "popin 85%", // no-tr
         curva: DECEL,
         workspaces: "slidevert",
         curva_workspace: EXPO,
@@ -37,9 +37,9 @@ pub const COMPOSICIONES: &[Composicion] = &[
     },
     Composicion {
         id: "elastic",
-        nombre: "Elástica",
-        descripcion: "Entra con un rebote",
-        ventanas: "popin 80%",
+        nombre: tr_const!("Elástica"),
+        descripcion: tr_const!("Entra con un rebote"),
+        ventanas: "popin 80%", // no-tr
         curva: REBOTE,
         workspaces: "slidevert",
         curva_workspace: REBOTE,
@@ -47,25 +47,25 @@ pub const COMPOSICIONES: &[Composicion] = &[
     },
     Composicion {
         id: "fold",
-        nombre: "Plegada",
-        descripcion: "Se despliega y asoma",
+        nombre: tr_const!("Plegada"),
+        descripcion: tr_const!("Se despliega y asoma"),
         ventanas: "gnomed",
         curva: DECEL,
-        workspaces: "slidefadevert 20%",
+        workspaces: "slidefadevert 20%", // no-tr
         curva_workspace: EXPO,
-        especial: "slidefadevert 20%",
+        especial: "slidefadevert 20%", // no-tr
     },
     Composicion {
         id: "fade",
-        nombre: "Fundido",
-        descripcion: "Se funde con un leve viaje",
-        ventanas: "popin 97%",
+        nombre: tr_const!("Fundido"),
+        descripcion: tr_const!("Se funde con un leve viaje"),
+        ventanas: "popin 97%", // no-tr
         curva: DECEL,
         // El workspace se funde y viaja apenas en vertical: la ventana que se lleva a otro
         // (`window.move`, que lo sigue) sube o baja con él.
-        workspaces: "slidefadevert 20%",
+        workspaces: "slidefadevert 20%", // no-tr
         curva_workspace: DECEL,
-        especial: "slidefadevert 20%",
+        especial: "slidefadevert 20%", // no-tr
     },
 ];
 
@@ -83,20 +83,20 @@ pub struct Velocidad {
 pub const VELOCIDADES: &[Velocidad] = &[
     Velocidad {
         id: "fast",
-        nombre: "Rápida",
-        descripcion: "Abrir en 120 ms",
+        nombre: tr_const!("Rápida"),
+        descripcion: tr_const!("Abrir en 120 ms"),
         ritmo: 0.6,
     },
     Velocidad {
         id: "medium",
-        nombre: "Media",
-        descripcion: "Abrir en 200 ms",
+        nombre: tr_const!("Media"),
+        descripcion: tr_const!("Abrir en 200 ms"),
         ritmo: 1.0,
     },
     Velocidad {
         id: "calm",
-        nombre: "Serena",
-        descripcion: "Abrir en 240 ms",
+        nombre: tr_const!("Serena"),
+        descripcion: tr_const!("Abrir en 240 ms"),
         ritmo: 1.2,
     },
 ];
@@ -164,10 +164,10 @@ pub fn lua(c: &Composicion, v: &Velocidad) -> String {
     );
     let mut hoja = |leaf: &str, ms: u32, curva: &str, estilo: Option<&str>| {
         let estilo = estilo
-            .map(|e| format!(", style = {e:?}"))
+            .map(|e| format!(", style = {e:?}")) // no-tr
             .unwrap_or_default();
         s.push_str(&format!(
-            "hl.animation({{leaf = {leaf:?}, enabled = true, speed = {}, bezier = {curva:?}{estilo}}})\n",
+            "hl.animation({{leaf = {leaf:?}, enabled = true, speed = {}, bezier = {curva:?}{estilo}}})\n", // no-tr
             ds(ms)
         ));
     };
@@ -200,7 +200,7 @@ pub fn lua(c: &Composicion, v: &Velocidad) -> String {
         ("workspaces", c.workspaces),
         ("specialWorkspace", c.especial),
     ] {
-        for sufijo in ["", "In", "Out"] {
+        for sufijo in ["", "In", "Out"] { // no-tr
             hoja(
                 &format!("{padre}{sufijo}"),
                 t.workspace,

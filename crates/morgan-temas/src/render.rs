@@ -81,10 +81,10 @@ fn correr(args: &[&std::ffi::OsStr]) -> Result<Vec<u8>, String> {
         .env("NO_COLOR", "1")
         .stdin(Stdio::null())
         .output()
-        .map_err(|e| format!("no se pudo correr matugen: {e}"))?;
+        .map_err(|e| trf!("no se pudo correr matugen: {}", e))?;
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("matugen falló: {}", err.trim()));
+        return Err(trf!("matugen falló: {}", err.trim()));
     }
     Ok(out.stdout)
 }
@@ -131,7 +131,7 @@ fn wallpaper(r: &Rutas) -> Option<PathBuf> {
     let out = Command::new("awww").arg("query").stderr(Stdio::null()).output().ok()?;
     String::from_utf8_lossy(&out.stdout)
         .lines()
-        .find_map(|l| l.split_once("currently displaying: image: ").map(|(_, p)| PathBuf::from(p)))
+        .find_map(|l| l.split_once("currently displaying: image: ").map(|(_, p)| PathBuf::from(p))) // no-tr
 }
 
 pub fn datos_matugen(r: &Rutas, imagen: Option<&Path>) -> Result<Value, String> {
@@ -139,7 +139,7 @@ pub fn datos_matugen(r: &Rutas, imagen: Option<&Path>) -> Result<Value, String> 
         .map(Path::to_path_buf)
         .or_else(|| wallpaper(r))
         .filter(|p| p.is_file())
-        .ok_or("no hay un wallpaper legible")?;
+        .ok_or(tr!("no hay un wallpaper legible"))?;
     let [tipo, modo, contraste] = ajustes_matugen(r);
     let tmp = Temporal::nueva()?;
     let config = tmp.0.join("config.toml");
@@ -164,7 +164,7 @@ pub fn datos_matugen(r: &Rutas, imagen: Option<&Path>) -> Result<Value, String> 
         "hex".as_ref(),
         "--quiet".as_ref(),
     ])?;
-    let v: Value = serde_json::from_slice(&volcado).map_err(|e| format!("volcado de matugen: {e}"))?;
+    let v: Value = serde_json::from_slice(&volcado).map_err(|e| format!("volcado de matugen: {e}"))?; // no-tr
     crate::paleta::json_matugen(v)
 }
 

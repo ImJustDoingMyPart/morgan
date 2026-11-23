@@ -38,7 +38,7 @@ async fn pedir(titulo: &str, etiqueta: &str, inicial: &Path) -> zbus::Result<Opt
     let pedido = format!("{RUTA}/request/{emisor}/{token}");
     let respuestas = zbus::Proxy::new(&conn, DESTINO, pedido, "org.freedesktop.portal.Request")
         .await?
-        .receive_signal("Response")
+        .receive_signal("Response") // no-tr
         .await?;
     let mut respuestas = respuestas;
 

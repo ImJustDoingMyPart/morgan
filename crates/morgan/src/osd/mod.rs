@@ -80,7 +80,7 @@ pub fn es_glifo(icono: &str) -> bool {
 
 pub fn porcentaje(p: f64, apagada: bool) -> String {
     if apagada {
-        "mudo".into()
+        tr!("mudo").into()
     } else {
         format!("{p:.0}%")
     }

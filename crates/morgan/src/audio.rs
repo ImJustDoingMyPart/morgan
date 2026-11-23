@@ -99,10 +99,10 @@ impl Audio {
         self.fila
             .send(pedido)
             .await
-            .map_err(|_| "audio: la fila está cerrada".to_string())?;
+            .map_err(|_| "audio: la fila está cerrada".to_string())?; // no-tr
         r.recv()
             .await
-            .map_err(|_| "audio: el pedido quedó sin respuesta".to_string())?
+            .map_err(|_| "audio: el pedido quedó sin respuesta".to_string())? // no-tr
     }
 }
 
@@ -144,11 +144,11 @@ pub(crate) struct Conexion {
 impl Conexion {
     pub(crate) async fn abrir() -> Result<Self, String> {
         let mainloop =
-            Mainloop::new(None).ok_or("audio: no se pudo crear el main loop de pulse")?;
-        let mut props = pulse::proplist::Proplist::new().ok_or("audio: proplist")?;
+            Mainloop::new(None).ok_or("audio: no se pudo crear el main loop de pulse")?; // no-tr
+        let mut props = pulse::proplist::Proplist::new().ok_or("audio: proplist")?; // no-tr
         let _ = props.set_str(pulse::proplist::properties::APPLICATION_NAME, "morgan");
         let context = Context::new_with_proplist(&mainloop, "morgan", &props)
-            .ok_or("audio: no se pudo crear el contexto de pulse")?;
+            .ok_or("audio: no se pudo crear el contexto de pulse")?; // no-tr
         let context = Rc::new(RefCell::new(context));
 
         let (aviso, cambios) = async_channel::unbounded();
@@ -160,19 +160,19 @@ impl Conexion {
         context
             .borrow_mut()
             .connect(None, FlagSet::NOAUTOSPAWN, None)
-            .map_err(|e| format!("audio: no se pudo conectar a pulse: {e}"))?;
+            .map_err(|e| format!("audio: no se pudo conectar a pulse: {e}"))?; // no-tr
         loop {
             let estado = context.borrow().get_state();
             match estado {
                 State::Ready => break,
                 State::Failed | State::Terminated => {
-                    return Err("audio: el servidor de pulse rechazó la conexión".into());
+                    return Err("audio: el servidor de pulse rechazó la conexión".into()); // no-tr
                 }
                 _ => {
                     cambios
                         .recv()
                         .await
-                        .map_err(|_| "audio: se perdió el contexto de pulse".to_string())?;
+                        .map_err(|_| "audio: se perdió el contexto de pulse".to_string())?; // no-tr
                 }
             }
         }
@@ -257,7 +257,7 @@ impl Conexion {
             .await
             .ok()
             .flatten()
-            .ok_or_else(|| format!("audio: no existe el dispositivo «{nombre}»"))
+            .ok_or_else(|| trf!("audio: no existe el dispositivo «{}»", nombre))
     }
 
     async fn escribir_volumen(
@@ -298,7 +298,7 @@ async fn confirmar(rx: async_channel::Receiver<bool>, nombre: &str) -> Result<()
     match rx.recv().await {
         Ok(true) => Ok(()),
         _ => Err(format!(
-            "audio: el servidor no aplicó el cambio en «{nombre}»"
+            "audio: el servidor no aplicó el cambio en «{nombre}»" // no-tr
         )),
     }
 }

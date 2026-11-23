@@ -162,7 +162,7 @@ impl CapturadorExt {
         let conn = Connection::connect_to_env().map_err(|e| e.to_string())?;
         let (globals, cola) = registry_queue_init::<Estado>(&conn).map_err(|e| e.to_string())?;
         let qh = cola.handle();
-        let falta = |n: &str, e: wayland_client::globals::BindError| format!("{n}: {e}");
+        let falta = |n: &str, e: wayland_client::globals::BindError| format!("{n}: {e}"); // no-tr
         let _lista: ExtForeignToplevelListV1 = globals
             .bind(&qh, 1..=1, ())
             .map_err(|e| falta("ext_foreign_toplevel_list_v1", e))?;

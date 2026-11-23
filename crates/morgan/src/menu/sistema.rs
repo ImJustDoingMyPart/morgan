@@ -5,23 +5,23 @@ use crate::config::Capturas;
 /// del grupo.
 pub const PREDETERMINADAS: &[(&str, &[&str])] = &[
     (
-        "Navegador",
+        tr_const!("Navegador"),
         &[
             "x-scheme-handler/https",
             "x-scheme-handler/http",
             "text/html",
         ],
     ),
-    ("Archivos", &["inode/directory"]),
-    ("Editor de texto", &["text/plain"]),
+    (tr_const!("Archivos"), &["inode/directory"]),
+    (tr_const!("Editor de texto"), &["text/plain"]),
     (
-        "Imágenes",
+        tr_const!("Imágenes"),
         &["image/png", "image/jpeg", "image/webp", "image/gif"],
     ),
     ("PDF", &["application/pdf"]),
-    ("Video", &["video/mp4", "video/x-matroska", "video/webm"]),
-    ("Música", &["audio/mpeg", "audio/flac", "audio/ogg"]),
-    ("Correo", &["x-scheme-handler/mailto"]),
+    (tr_const!("Video"), &["video/mp4", "video/x-matroska", "video/webm"]),
+    (tr_const!("Música"), &["audio/mpeg", "audio/flac", "audio/ogg"]),
+    (tr_const!("Correo"), &["x-scheme-handler/mailto"]),
 ];
 
 #[derive(Debug, Clone, PartialEq)]
@@ -60,7 +60,7 @@ pub fn aplicaciones(
                 .as_ref()
                 .and_then(|id| p.candidatas.iter().find(|a| &a.id == id))
                 .map_or_else(
-                    || p.puesta.clone().unwrap_or_else(|| "ninguna".into()),
+                    || p.puesta.clone().unwrap_or_else(|| tr!("ninguna").into()),
                     |a| a.nombre.clone(),
                 );
             let opciones: Vec<Opcion> = p
@@ -83,13 +83,13 @@ pub fn aplicaciones(
             } else {
                 Control::Lista(opciones)
             };
-            ajuste(titulo, &puesta, control)
+            ajuste(morgan_idioma::t(titulo), &puesta, control)
         })
         .collect();
     let autoarranque: Vec<Fila> = if auto.is_empty() {
         vec![ajuste(
-            "Nada arranca solo",
-            "no hay archivos en ~/.config/autostart ni en /etc/xdg/autostart",
+            tr!("Nada arranca solo"),
+            tr!("no hay archivos en ~/.config/autostart ni en /etc/xdg/autostart"),
             Control::Nada,
         )]
     } else {
@@ -108,15 +108,15 @@ pub fn aplicaciones(
     };
     vec![
         Seccion {
-            titulo: "Predeterminadas",
+            titulo: tr!("Predeterminadas"),
             filas: predeterminadas,
         },
         Seccion {
-            titulo: "Autoarranque",
+            titulo: tr!("Autoarranque"),
             filas: autoarranque,
         },
         Seccion {
-            titulo: "Capturas de pantalla",
+            titulo: tr!("Capturas de pantalla"),
             filas: filas_capturas(capturas, imagenes),
         },
     ]
@@ -130,7 +130,7 @@ fn filas_capturas(c: &Capturas, imagenes: &str) -> Vec<Fila> {
     };
     let destinos = [
         (
-            "Imágenes › Screenshots",
+            tr!("Imágenes › Screenshots"),
             !c.portapapeles && c.carpeta.is_empty(),
             con(&|n| {
                 n.portapapeles = false;
@@ -138,7 +138,7 @@ fn filas_capturas(c: &Capturas, imagenes: &str) -> Vec<Fila> {
             }),
         ),
         (
-            "Imágenes",
+            tr!("Imágenes"),
             !c.portapapeles && c.carpeta == imagenes,
             con(&|n| {
                 n.portapapeles = false;
@@ -146,7 +146,7 @@ fn filas_capturas(c: &Capturas, imagenes: &str) -> Vec<Fila> {
             }),
         ),
         (
-            "Solo al portapapeles, sin archivo",
+            tr!("Solo al portapapeles, sin archivo"),
             c.portapapeles,
             con(&|n| n.portapapeles = true),
         ),
@@ -157,16 +157,16 @@ fn filas_capturas(c: &Capturas, imagenes: &str) -> Vec<Fila> {
         .map_or(c.carpeta.as_str(), |(t, _, _)| t);
     vec![
         ajuste(
-            "Congelar la pantalla al elegir una región",
-            "la región se marca sobre una imagen quieta",
+            tr!("Congelar la pantalla al elegir una región"),
+            tr!("la región se marca sobre una imagen quieta"),
             Control::Casilla {
                 activa: c.congelar,
                 que: con(&|n| n.congelar = !n.congelar),
             },
         ),
         ajuste(
-            "Dónde van",
-            &format!("{puesto} · siempre también al portapapeles"),
+            tr!("Dónde van"),
+            &trf!("{} · siempre también al portapapeles", puesto),
             Control::Lista(
                 destinos
                     .into_iter()
@@ -211,8 +211,8 @@ pub fn hay_snapper() -> bool {
 pub fn snapshots(csv: Option<&str>) -> Vec<Fila> {
     let Some(csv) = csv else {
         return vec![ajuste(
-            "Sin permiso para listarlos",
-            "snapper los muestra a quien figura en ALLOW_USERS de /etc/snapper/configs/root",
+            tr!("Sin permiso para listarlos"),
+            tr!("snapper los muestra a quien figura en ALLOW_USERS de /etc/snapper/configs/root"),
             Control::Nada,
         )];
     };
@@ -229,20 +229,20 @@ pub fn snapshots(csv: Option<&str>) -> Vec<Fila> {
             let desc = c.get(2).map_or("", |s| s.as_str());
             let despues = c.get(3).is_some_and(|p| !p.is_empty());
             let titulo = match (desc.is_empty(), despues) {
-                (true, _) => "Sin descripción".to_owned(),
-                (false, true) => format!("{desc} · después"),
+                (true, _) => tr!("Sin descripción").to_owned(),
+                (false, true) => trf!("{} · después", desc),
                 (false, false) => desc.to_owned(),
             };
             Some((
                 n,
-                ajuste(&titulo, &format!("nº {n} · {fecha}"), Control::Nada),
+                ajuste(&titulo, &trf!("nº {} · {}", n, fecha), Control::Nada),
             ))
         })
         .collect();
     if v.is_empty() {
         return vec![ajuste(
-            "Ninguno",
-            "snapper no tiene snapshots",
+            tr!("Ninguno"),
+            tr!("snapper no tiene snapshots"),
             Control::Nada,
         )];
     }
@@ -279,12 +279,12 @@ pub fn procesador(cpuinfo: &str) -> String {
         .count();
     let modelo = cpuinfo
         .lines()
-        .find_map(|l| l.strip_prefix("model name")?.split_once(':'))
+        .find_map(|l| l.strip_prefix("model name")?.split_once(':')) // no-tr
         .map(|(_, m)| m.split_whitespace().collect::<Vec<_>>().join(" "))
         .unwrap_or_default();
     match nucleos {
         0 => modelo,
-        n => format!("{modelo} · {n} hilos"),
+        n => trf!("{} · {} hilos", modelo, n),
     }
 }
 
@@ -293,7 +293,14 @@ pub fn memoria(meminfo: &str) -> String {
         .lines()
         .find_map(|l| l.strip_prefix("MemTotal:"))
         .and_then(|v| v.split_whitespace().next()?.parse::<f64>().ok())
-        .map(|kib| format!("{:.1} GiB", kib / 1024.0 / 1024.0).replace('.', ","))
+        .map(|kib| {
+            let n = format!("{:.1}", kib / 1024.0 / 1024.0);
+            let n = match morgan_idioma::actual() {
+                morgan_idioma::Idioma::Es => n.replace('.', ","),
+                morgan_idioma::Idioma::En => n,
+            };
+            format!("{n} GiB") // no-tr
+        })
         .unwrap_or_default()
 }
 
@@ -308,7 +315,7 @@ pub fn distribucion(os_release: &str) -> String {
 pub fn graficas(lspci: &str) -> String {
     lspci
         .lines()
-        .filter(|l| l.contains("\"VGA compatible controller\"") || l.contains("\"3D controller\""))
+        .filter(|l| l.contains("\"VGA compatible controller\"") || l.contains("\"3D controller\"")) // no-tr
         .filter_map(|l| {
             let campos: Vec<&str> = l.split('"').collect();
             // 0: slot, 1: clase, 3: fabricante, 5: modelo.
@@ -329,9 +336,9 @@ pub fn encendida(uptime: &str) -> String {
     let m = (s / 60.0) as u64;
     let (d, h, m) = (m / 1440, m / 60 % 24, m % 60);
     match (d, h) {
-        (0, 0) => format!("{m} min"),
-        (0, h) => format!("{h} h {m} min"),
-        (d, h) => format!("{d} d {h} h"),
+        (0, 0) => format!("{m} min"), // no-tr
+        (0, h) => format!("{h} h {m} min"), // no-tr
+        (d, h) => format!("{d} d {h} h"), // no-tr
     }
 }
 

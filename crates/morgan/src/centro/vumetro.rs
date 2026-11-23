@@ -26,7 +26,7 @@ pub fn argumentos(nombre_app: &str, fuente: Option<&str>) -> Vec<String> {
     .map(str::to_owned)
     .into();
     v.push(format!(
-        "{} node.name=morgan-vumetro",
+        "{} node.name=morgan-vumetro", // no-tr
         crate::escucha::propiedades(nombre_app, fuente.is_some())
     ));
     if let Some(f) = fuente {

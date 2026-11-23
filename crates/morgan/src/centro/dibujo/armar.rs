@@ -463,7 +463,7 @@ impl Ui {
         let cx = x + CUADRO + AL_TEXTO;
         let cw = x + ancho - cx;
         let porcentaje = if n.mudo {
-            "mudo".to_owned()
+            tr!("mudo").to_owned()
         } else {
             format!("{valor:.0}%")
         };
@@ -906,12 +906,12 @@ impl Ui {
             true,
         ));
         if let Some(rep) = &r.repetir {
-            let icono = if rep == "Track" {
+            let icono = if rep == "Track" { // no-tr
                 self.datos.iconos.repetir_uno.clone()
             } else {
                 self.datos.iconos.repetir.clone()
             };
-            botones.push((BotonRepro::Repetir, icono, true, rep != "None"));
+            botones.push((BotonRepro::Repetir, icono, true, rep != "None")); // no-tr
         }
         let total = botones.len() as f64 * BOTON_REPRO + (botones.len() as f64 - 1.0) * 6.0;
         let mut bx = ((ANCHO - total) / 2.0).floor();
@@ -1232,7 +1232,7 @@ pub fn pista(
         color: op(&p.on_surface, 0.04),
     });
     if let Some((glifo, texto)) = accion {
-        let l = rotulos.linea(&format!("{glifo}  {texto}"), 12.0, 400.0);
+        let l = rotulos.linea(&format!("{glifo}  {texto}"), 12.0, 400.0); // no-tr
         let e = f64::from(rotulos.escala());
         let (w, al) = (texto::caja(&l).0 / e, texto::alto_de_linea(&l) / e);
         let x = if a_la_izquierda {

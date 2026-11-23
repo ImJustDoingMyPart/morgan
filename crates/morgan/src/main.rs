@@ -292,7 +292,7 @@ fn main() -> ExitCode {
         servicios.compositor.al_cambiar_espacios(move |e| {
             let prendida = e.prendida(&salida);
             if estaba.replace(Some(prendida)).is_some_and(|antes| antes != prendida) {
-                let texto = if prendida { "Encendida" } else { "Apagada" };
+                let texto = if prendida { tr!("Encendida") } else { tr!("Apagada") };
                 osd.mostrar(&Aviso::estado("󰔂", "TV", texto, prendida, 2000));
             }
         });
@@ -483,7 +483,7 @@ async fn dispatch(request: &Request, s: &Servicios) -> Response {
         Request::Caffeine { accion } => {
             if !s.idle.activo() {
                 return Response::Error {
-                    message: "el idle no es de morgan (org.freedesktop.ScreenSaver es de otro)"
+                    message: tr!("el idle no es de morgan (org.freedesktop.ScreenSaver es de otro)")
                         .into(),
                 };
             }
@@ -514,7 +514,7 @@ async fn dispatch(request: &Request, s: &Servicios) -> Response {
                 Some(prendido) => teclas::aviso(prendido),
                 None => {
                     return Response::Error {
-                        message: "no se pudo leer Bloq Mayús".into(),
+                        message: tr!("no se pudo leer Bloq Mayús").into(),
                     };
                 }
             }
@@ -616,7 +616,7 @@ async fn dispatch(request: &Request, s: &Servicios) -> Response {
         Request::Trabar { ms } => {
             if std::env::var_os("MORGAN_DEV").is_none() {
                 return Response::Error {
-                    message: "solo en desarrollo (MORGAN_DEV)".into(),
+                    message: tr!("solo en desarrollo (MORGAN_DEV)").into(),
                 };
             }
             let desde = lamina::ahora_us();
@@ -711,9 +711,9 @@ fn esquina_ventanas(s: &Servicios, salida: String) {
 
 fn aviso_no_molestar(activo: bool) -> Aviso {
     let (texto, icono) = if activo {
-        ("Activado", "󰂛")
+        (tr!("Activado"), "󰂛")
     } else {
-        ("Desactivado", "󰂛")
+        (tr!("Desactivado"), "󰂛")
     };
-    Aviso::estado(icono, "No molestar", texto, activo, 2000)
+    Aviso::estado(icono, tr!("No molestar"), texto, activo, 2000)
 }

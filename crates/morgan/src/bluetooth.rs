@@ -69,25 +69,25 @@ pub fn interpretar(objetos: &Objetos) -> Estado {
         .map(|r| (*r).clone());
     let encendido = adaptador
         .as_ref()
-        .is_some_and(|a| booleano(&objetos[a][ADAPTADOR], "Powered"));
+        .is_some_and(|a| booleano(&objetos[a][ADAPTADOR], "Powered")); // no-tr
     let mut dispositivos = Vec::new();
     let mut cercanos = Vec::new();
     for r in &rutas {
         let Some(d) = objetos[*r].get(DISPOSITIVO) else {
             continue;
         };
-        let emparejado = booleano(d, "Paired");
+        let emparejado = booleano(d, "Paired"); // no-tr
         // Sin `Name`, el alias es la dirección: nadie sabe qué es.
-        if !emparejado && (!d.contains_key("Name") || !d.contains_key("RSSI")) {
+        if !emparejado && (!d.contains_key("Name") || !d.contains_key("RSSI")) { // no-tr
             continue;
         }
         let disp = Dispositivo {
             ruta: (*r).clone(),
-            nombre: texto(d, "Alias")
-                .or_else(|| texto(d, "Name"))
+            nombre: texto(d, "Alias") // no-tr
+                .or_else(|| texto(d, "Name")) // no-tr
                 .unwrap_or_else(|| r.to_string()),
-            icono: texto(d, "Icon").unwrap_or_default(),
-            conectado: booleano(d, "Connected"),
+            icono: texto(d, "Icon").unwrap_or_default(), // no-tr
+            conectado: booleano(d, "Connected"), // no-tr
         };
         if emparejado {
             dispositivos.push(disp);
@@ -278,7 +278,7 @@ impl Bluetooth {
         };
         let yo = self.clone();
         glib::MainContext::default().spawn_local(async move {
-            let metodo = if d.conectado { "Disconnect" } else { "Connect" };
+            let metodo = if d.conectado { "Disconnect" } else { "Connect" }; // no-tr
             let r = match sistema::proxy(BLUEZ, d.ruta.clone(), DISPOSITIVO).await {
                 Ok(p) => p.call::<_, _, ()>(metodo, &()).await,
                 Err(e) => Err(e),
@@ -324,7 +324,7 @@ impl Bluetooth {
         let d = sistema::proxy(BLUEZ, ruta.clone(), DISPOSITIVO)
             .await
             .map_err(otra)?;
-        let r = match d.call::<_, _, ()>("Pair", &()).await {
+        let r = match d.call::<_, _, ()>("Pair", &()).await { // no-tr
             Ok(()) => Ok(()),
             Err(zbus::Error::MethodError(nombre, ..))
                 if nombre.as_str() == "org.bluez.Error.AuthenticationCanceled" =>
@@ -336,10 +336,10 @@ impl Bluetooth {
         let _ = gestor.call::<_, _, ()>("UnregisterAgent", &(&agente,)).await;
         r?;
         // Confiado, se vuelve a conectar solo; si no conecta ahora, queda emparejado igual.
-        if let Err(e) = d.set_property("Trusted", true).await {
+        if let Err(e) = d.set_property("Trusted", true).await { // no-tr
             eprintln!("morgan: bluetooth: Trusted: {e}");
         }
-        if let Err(e) = d.call::<_, _, ()>("Connect", &()).await {
+        if let Err(e) = d.call::<_, _, ()>("Connect", &()).await { // no-tr
             eprintln!("morgan: bluetooth: conectar: {e}");
         }
         Ok(())
@@ -361,7 +361,7 @@ impl Bluetooth {
         glib::MainContext::default().spawn_local(async move {
             let adaptador = yo.inner.estado.borrow().adaptador.clone();
             let r = async {
-                let a = adaptador.ok_or_else(|| zbus::Error::Failure("no hay adaptador".into()))?;
+                let a = adaptador.ok_or_else(|| zbus::Error::Failure("no hay adaptador".into()))?; // no-tr
                 sistema::proxy(BLUEZ, a, ADAPTADOR)
                     .await?
                     .call::<_, _, ()>("RemoveDevice", &(&ruta,))
@@ -612,7 +612,7 @@ async fn encender(v: bool) -> Result<(), Error> {
         match bloqueo_de(&radios()) {
             Bloqueo::Hardware => return Err(Error::Hardware),
             Bloqueo::Software => {
-                desbloquear().map_err(|e| zbus::Error::Failure(format!("rfkill: {e}")))?;
+                desbloquear().map_err(|e| zbus::Error::Failure(format!("rfkill: {e}")))?; // no-tr
                 desbloqueado = true;
             }
             Bloqueo::Ninguno => {}
@@ -628,7 +628,7 @@ async fn encender(v: bool) -> Result<(), Error> {
         adaptador = leer(true).await?.adaptador;
     }
     let Some(a) = adaptador else {
-        return Err(zbus::Error::Failure("no hay adaptador".into()).into());
+        return Err(zbus::Error::Failure("no hay adaptador".into()).into()); // no-tr
     };
     let proxy = sistema::proxy(BLUEZ, a, ADAPTADOR).await?;
     // Recién desbloqueado, BlueZ puede tardar en enterarse.
@@ -638,7 +638,7 @@ async fn encender(v: bool) -> Result<(), Error> {
         if n > 0 {
             glib::timeout_future(Duration::from_millis(250)).await;
         }
-        ultimo = proxy.set_property("Powered", v).await.map_err(zbus::Error::from);
+        ultimo = proxy.set_property("Powered", v).await.map_err(zbus::Error::from); // no-tr
         if ultimo.is_ok() {
             break;
         }
