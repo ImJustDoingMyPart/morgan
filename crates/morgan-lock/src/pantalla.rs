@@ -423,10 +423,20 @@ impl App {
     }
 
     fn tecla(&mut self, ev: KeyEvent) {
+        let paso = self.eleccion.as_ref().map(Eleccion::actual);
+        // Al registro del greeter, solo las teclas de los pasos de elegir: nunca las de la clave.
+        if self.greeter && matches!(paso, Some(Paso::Elegir(_))) {
+            let estado = if self.saliendo || self.ocupado || self.avanzando {
+                " (ignorada: ocupada)"
+            } else {
+                ""
+            };
+            eprintln!("morgan-greet: tecla {:?}{estado}", ev.keysym);
+        }
         if self.saliendo || self.ocupado || self.avanzando {
             return;
         }
-        if let Some(paso) = self.eleccion.as_ref().map(Eleccion::actual) {
+        if let Some(paso) = paso {
             match paso {
                 Paso::Elegir(q) => return self.tecla_eleccion(q, ev.keysym),
                 // Con el campo vacío, Escape vuelve un paso.
