@@ -137,24 +137,23 @@ fn colores_tema() -> PathBuf {
         .join("umbriel.toml")
 }
 
-/// La sombra elegida en el menú (Apariencia), con los valores de `hypr_cfg::SOMBRAS`:
-/// `(alcance, potencia, glow)`. El alcance es también el `padding` del efecto.
-fn sombra(c: &Config) -> (u32, u32, bool) {
-    if c.apariencia.sombra == "glow" {
-        (3, 3, true) // no-tr
-    } else {
-        (6, 2, false)
-    }
+/// Lo que ocupa la sombra afuera del anillo, en px lógicos: el `padding` del efecto. La negra
+/// (spread 1, sigma 3) baja de 0,001 a los 10 px; el glow (offset 1, spread 1, sigma 2,5), a
+/// los 9,5.
+const MARGEN: u32 = 10;
+
+/// Si la sombra elegida en el menú (Apariencia) es el glow. Las dos copian la de los paneles
+/// (`morgan_motor::forma::panel`), no la de Hyprland (`hypr_cfg::SOMBRAS`).
+fn glow(c: &Config) -> bool {
+    c.apariencia.sombra == "glow" // no-tr
 }
 
-/// El shader del borde con las constantes de la sombra elegida. GLSL ES 1.00 no convierte
-/// enteros a float: van con `.0`.
+/// El shader del borde con la sombra elegida. GLSL ES 1.00 no convierte enteros a float: van
+/// con `.0`.
 pub fn shader(c: &Config) -> String {
-    let (rango, potencia, glow) = sombra(c);
     include_str!("umbriel_borde.glsl")
-        .replace("@RANGO@", &format!("{rango}.0"))
-        .replace("@POTENCIA@", &format!("{potencia}.0"))
-        .replace("@GLOW@", if glow { "1.0" } else { "0.0" }) // no-tr
+        .replace("@MARGEN@", &format!("{MARGEN}.0"))
+        .replace("@GLOW@", if glow(c) { "1.0" } else { "0.0" }) // no-tr
 }
 
 fn tabla(texto: &str) -> toml::Table {
@@ -173,7 +172,6 @@ fn apariencia(c: &Config) -> toml::Table {
         "fade" => "fade",   // no-tr
         _ => "popin",       // no-tr
     };
-    let (rango, _, _) = sombra(c);
     tabla(&format!(
         "[animation]\nenabled = true\n\n\
          [animation.beziers]\n\
@@ -186,7 +184,7 @@ fn apariencia(c: &Config) -> toml::Table {
          [animation.workspaces]\nenabled = true\nstyle = \"slide\"\ncurve = \"{c_w}\"\nduration_ms = {w}\n\n\
          [animation.layers]\nenabled = true\ncurve = \"morgan_decel\"\nduration_ms = {e}\n\n\
          [appearance.shadow]\nenabled = false\n\n\
-         [effects.preset.{PRESET}]\nkind = \"border\"\nshader = \"{SHADER}\"\npalette = true\nanimated = false\npadding = {rango}\n\n\
+         [effects.preset.{PRESET}]\nkind = \"border\"\nshader = \"{SHADER}\"\npalette = true\nanimated = false\npadding = {MARGEN}\n\n\
          [effects]\nborder = \"{PRESET}\"\n", // no-tr
         c_v = comp.curva,
         c_w = comp.curva_workspace,
@@ -571,7 +569,7 @@ mod tests {
         assert_eq!(v["effects"]["border"].as_str(), Some(PRESET));
         let preset = &v["effects"]["preset"][PRESET];
         assert_eq!(preset["shader"].as_str(), Some(SHADER));
-        assert_eq!(preset["padding"].as_integer(), Some(3));
+        assert_eq!(preset["padding"].as_integer(), Some(MARGEN.into()));
         // Lo del menú se junta con las tablas de morgan, no las pisa.
         assert_eq!(v["appearance"]["blur"]["radius"].as_integer(), Some(6));
         assert_eq!(v["animation"]["dim_unfocused"]["enabled"].as_bool(), Some(true));
@@ -638,12 +636,10 @@ mod tests {
     fn el_shader_de_cada_sombra() {
         let mut c = Config::default();
         let negra = shader(&c);
-        assert!(negra.contains("const float RANGO = 6.0;"));
-        assert!(negra.contains("const float POTENCIA = 2.0;"));
+        assert!(negra.contains("const float MARGEN = 10.0;"));
         assert!(negra.contains("const float GLOW = 0.0;"));
         c.apariencia.sombra = "glow".into();
         let glow = shader(&c);
-        assert!(glow.contains("const float RANGO = 3.0;"));
         assert!(glow.contains("const float GLOW = 1.0;"));
         assert!(!glow.contains('@'));
         assert!(glow.contains("vec4 border(vec2 uv)"));
