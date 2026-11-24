@@ -125,7 +125,7 @@ morgan)
         # El idle del anidado no apaga ni bloquea a mitad de una prueba.
         printf '[idle]\nscreen_off = 0\nlock = 0\nsuspend = 0\n' >"$conf/morgan/config.toml"
     fi
-    u msg spawn "env -u HYPRLAND_INSTANCE_SIGNATURE -u HYPRLAND_CMD PATH='$falsos:$raiz/target/debug:$PATH' MORGAN_SIN_LOGIND=1 MORGAN_APARIENCIA_SECO=1 MORGAN_SIN_PORTAL=1 MORGAN_DEV=1 ${MORGAN_TRAZA:+MORGAN_TRAZA=1} ${MORGAN_MUESTRA_BATERIA:+MORGAN_MUESTRA_BATERIA=1} GSETTINGS_BACKEND=memory MORGAN_UMBRIEL_CFG='$estado/morgan.toml' XDG_STATE_HOME='$estado/state' XDG_CACHE_HOME='$estado/cache' XDG_CONFIG_HOME='$conf' ${MORGAN_BIN:-$raiz/target/debug/morgan} >>'$estado/morgan.log' 2>&1"
+    u msg spawn "env -u HYPRLAND_INSTANCE_SIGNATURE -u HYPRLAND_CMD PATH='$falsos:$raiz/target/debug:$PATH' MORGAN_SIN_LOGIND=1 MORGAN_APARIENCIA_SECO=1 MORGAN_SIN_PORTAL=1 MORGAN_DEV=1 ${MORGAN_TRAZA:+MORGAN_TRAZA=1} ${MORGAN_MUESTRA_NIVELES:+MORGAN_MUESTRA_NIVELES=1} GSETTINGS_BACKEND=memory MORGAN_UMBRIEL_CFG='$estado/morgan.toml' XDG_STATE_HOME='$estado/state' XDG_CACHE_HOME='$estado/cache' XDG_CONFIG_HOME='$conf' ${MORGAN_BIN:-$raiz/target/debug/morgan} >>'$estado/morgan.log' 2>&1"
     for _ in $(seq 50); do
         sleep 0.1
         WAYLAND_DISPLAY=$display "$raiz/target/debug/morganctl" ping >/dev/null 2>&1 && exit 0

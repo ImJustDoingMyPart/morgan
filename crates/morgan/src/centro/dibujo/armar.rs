@@ -395,22 +395,45 @@ impl Ui {
 
     // ── Niveles ──
 
+    /// Tres cajas, cada una solo si tiene algo: el audio (salida, apps, micrófono), el brillo y
+    /// la batería (a la vista como un nivel, con la barra de las cuotas: no se arrastra).
     fn armar_niveles(&mut self, h: &mut Hoja, y0: f64, ahora: Instant) -> f64 {
-        let niveles = self.datos.niveles.clone();
+        let (brillo, audio): (Vec<Nivel>, Vec<Nivel>) = self
+            .datos
+            .niveles
+            .iter()
+            .cloned()
+            .partition(|n| n.id == crate::centro::vista::NivelId::Brillo);
         let bateria = self.datos.bateria.clone();
-        if niveles.is_empty() && bateria.is_none() {
-            return y0 - ENTRE;
+        let mut y = y0 - ENTRE;
+        for grupo in [audio, brillo] {
+            if grupo.is_empty() {
+                continue;
+            }
+            y = self.caja_de_niveles(h, y + ENTRE, |ui, h, y| {
+                grupo
+                    .iter()
+                    .fold(y, |y, n| ui.armar_nivel(h, n, 8.0, ANCHO - 16.0, y, ahora))
+            });
         }
-        let inicio = h.trazos.len();
-        let mut y = y0 + 4.0;
-        for n in &niveles {
-            y = self.armar_nivel(h, n, 8.0, ANCHO - 16.0, y, ahora);
-        }
-        // La batería, a la vista como un nivel, con la barra de las cuotas (no se arrastra).
         if let Some(c) = &bateria {
-            y = self.armar_cuota(h, c, None, 8.0, ANCHO - 16.0, y, ahora);
+            y = self.caja_de_niveles(h, y + ENTRE, |ui, h, y| {
+                ui.armar_cuota(h, c, None, 8.0, ANCHO - 16.0, y, ahora)
+            });
         }
-        y += 4.0;
+        y
+    }
+
+    /// Una caja `cc-niveles` desde `y0`, con 4 arriba y abajo alrededor de lo que arma `filas`;
+    /// devuelve dónde termina.
+    fn caja_de_niveles(
+        &mut self,
+        h: &mut Hoja,
+        y0: f64,
+        filas: impl FnOnce(&mut Self, &mut Hoja, f64) -> f64,
+    ) -> f64 {
+        let inicio = h.trazos.len();
+        let y = filas(self, h, y0 + 4.0) + 4.0;
         h.trazos.insert(
             inicio,
             Trazo::Caja {

@@ -86,6 +86,9 @@ struct Inner {
     mezclador: Mezclador,
     escucha: Escucha,
     bateria: crate::bateria::Bateria,
+    /// `MORGAN_MUESTRA_NIVELES`: la batería pasa por cada estado cada 2 s y hay un brillo de
+    /// mentira, haya o no batería y monitor, para ver los niveles completos.
+    muestra: bool,
     red: Red,
     bluetooth: Bluetooth,
     energia: Energia,
@@ -193,6 +196,7 @@ impl Centro {
             mezclador: Mezclador::new(),
             escucha: Escucha::default(),
             bateria: crate::bateria::Bateria::new(),
+            muestra: std::env::var_os("MORGAN_MUESTRA_NIVELES").is_some(),
             red: Red::default(),
             bluetooth: Bluetooth::default(),
             energia: Energia::default(),
@@ -618,8 +622,7 @@ impl Centro {
         i.brillo.al_cambiar(move || yo.mostrar_niveles());
         let yo = self.clone();
         i.mezclador.al_cambiar(move || yo.mostrar_audio());
-        // `MORGAN_MUESTRA_BATERIA`: la fila pasa por cada estado cada 2 s, haya o no batería.
-        if std::env::var_os("MORGAN_MUESTRA_BATERIA").is_some() {
+        if i.muestra {
             let muestras = crate::bateria::muestras();
             let n = Cell::new(0);
             let yo = self.clone();
@@ -1037,12 +1040,13 @@ impl Centro {
                 Some(ListaId::Microfono),
             )),
         }
-        if i.brillo.disponible() {
+        if i.brillo.disponible() || i.muestra {
+            let valor = if i.brillo.disponible() { i.brillo.valor() } else { 60.0 };
             niveles.push(nivel(
                 NivelId::Brillo,
                 "󰖙",
                 tr!("Brillo"),
-                i.brillo.valor(),
+                valor,
                 false,
                 None,
             ));

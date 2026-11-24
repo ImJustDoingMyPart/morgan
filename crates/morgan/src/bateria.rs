@@ -131,7 +131,7 @@ pub fn tiempo(segundos: i64) -> String {
     }
 }
 
-/// Estados de mentira, uno de cada, para verla sin batería (`MORGAN_MUESTRA_BATERIA`).
+/// Estados de mentira, uno de cada, para verla sin batería (`MORGAN_MUESTRA_NIVELES`).
 pub fn muestras() -> Vec<Estado> {
     use Carga::*;
     let e = |porcentaje, carga, segundos| Estado {
