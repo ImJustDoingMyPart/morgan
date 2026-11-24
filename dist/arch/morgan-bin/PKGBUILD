@@ -9,7 +9,7 @@
 
 pkgname=morgan-bin
 _nombre=morgan
-pkgver=0.3.3
+pkgver=0.3.4
 pkgrel=1
 pkgdesc='Shell de escritorio para Hyprland: barra, centro de control, notificaciones, launcher, OSD y bloqueo (binario)'
 arch=('x86_64')
@@ -38,6 +38,7 @@ optdepends=(
     'libvips: miniaturas de la banda de fondos'
     'hyprsunset: luz nocturna'
     'ddcutil: brillo de monitores externos (DDC/CI)'
+    'upower: nivel de batería en notebooks'
     'hyprshot: capturas de pantalla'
     'cliphist: launcher, portapapeles'
     'wtype: launcher, escribir símbolos'

@@ -42,7 +42,7 @@ here is what you want, welcome.
 - **Dock** with your most used and open apps, one dot per window and their titles on hover. It
   can hide itself, and never shows up over a game.
 - **Control center**: network, Bluetooth, do not disturb, caffeine, night light, power,
-  AI quotas, volume per app, microphone, brightness, the media player and your
+  AI quotas, volume per app, microphone, brightness, the laptop battery, the media player and your
   notifications. [More below](#the-control-center).
 - **Notifications**: a full freedesktop notification server, with do-not-disturb and a
   game mode that keeps quiet while you play.
@@ -98,7 +98,9 @@ holds, never past the edge of the screen, and scrolls inside when it has to.
 - **Levels**: the output (click its name to switch outputs), **every app that's playing
   with its own volume**, mute and output, the microphone, and brightness (laptop backlight,
   or external monitors over DDC/CI). Turning the volume with the panel open doesn't pop up
-  the OSD: the slider already shows it.
+  the OSD: the slider already shows it. Audio, brightness and battery each get their own box.
+- **Battery** (laptops): level, whether it's charging and the time left, from UPower. It turns
+  red when UPower reports it as low. On a desktop it doesn't show up.
 - **The media player**: title (scrolling when it doesn't fit), controls, shuffle and repeat
   when the player has them, and an equalizer drawn behind it while music plays.
 - **Notifications**: grouped by app, critical ones first, groups stacked until you open
@@ -136,6 +138,7 @@ list is also a good set of tools to start from.
 | NetworkManager | The network card (iwd or systemd-networkd on their own won't show up) |
 | BlueZ | The Bluetooth card (without `bluez` and its `bluetooth.service` running, the switch does nothing; `morgan setup` installs and enables them) |
 | power-profiles-daemon | The power card |
+| UPower | The battery level on laptops |
 | systemd-logind | Locking, suspend, power off |
 
 **Tools**:

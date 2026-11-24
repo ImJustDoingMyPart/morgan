@@ -42,7 +42,7 @@ lo que ves acá es lo que querés, bienvenido.
 - **Dock** con las apps más usadas y las abiertas, un punto por ventana y sus títulos al pasar
   el mouse. Puede ocultarse solo; nunca aparece sobre un juego.
 - **Centro de control**: red, Bluetooth, No molestar, caffeine, luz nocturna, energía,
-  cuotas de IA, volumen por aplicación, micrófono, brillo, el reproductor y las
+  cuotas de IA, volumen por aplicación, micrófono, brillo, la batería de la notebook, el reproductor y las
   notificaciones. [Más abajo](#el-centro-de-control).
 - **Notificaciones**: un servidor completo de la especificación freedesktop, con No molestar
   y un modo juego que hace silencio mientras se juega.
@@ -102,7 +102,9 @@ más allá del borde de la pantalla, y si no entra se desplaza por dentro.
 - **Niveles**: la salida (un clic en el nombre cambia de salida), **cada aplicación que
   suena con su propio volumen**, silencio y salida, el micrófono, y el brillo (la pantalla
   de la notebook o monitores externos por DDC/CI). Cambiar el volumen con el panel abierto
-  no muestra el OSD: el slider ya lo muestra.
+  no muestra el OSD: el slider ya lo muestra. Audio, brillo y batería van cada uno en su caja.
+- **Batería** (notebooks): el nivel, si está cargando y cuánto queda, según UPower. Se pone
+  roja cuando UPower la da por baja. En una PC de escritorio no aparece.
 - **El reproductor**: el título (que se desplaza si no entra), los controles, aleatorio y
   repetir si el reproductor los tiene, y un ecualizador dibujado detrás mientras suena.
 - **Notificaciones**: agrupadas por aplicación, las críticas primero, cada grupo apilado
@@ -141,6 +143,7 @@ la lista es además un buen punto de partida.
 | NetworkManager | La tarjeta de red (iwd o systemd-networkd solos no aparecen) |
 | BlueZ | La tarjeta de Bluetooth (sin `bluez` y su `bluetooth.service` activo el interruptor no hace nada; `morgan setup` los instala y los activa) |
 | power-profiles-daemon | La tarjeta de energía |
+| UPower | El nivel de batería en notebooks |
 | systemd-logind | Bloquear, suspender, apagar |
 
 **Herramientas**:

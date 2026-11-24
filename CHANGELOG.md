@@ -2,6 +2,18 @@
 
 **English** · [Español](CHANGELOG.es.md)
 
+## 0.3.4 · 2026-11-23
+
+### Battery level in the control center
+
+On a laptop, the control center shows the battery as one more level, in its own box: the level, whether it's charging or full, and the time left to empty or to full. Glyph and number turn red when UPower reports the battery as low or critical. It reads UPower's summary device, so on a desktop, or with only a mouse or UPS battery, nothing shows up. It needs `upower` running.
+
+The levels are now split into three boxes: audio (output, apps and microphone), brightness and battery. Each one appears only when it has something to show.
+
+### Bar
+
+The status icons (microphone, screen sharing, recording, TV) sit apart from the bell, after a `‹`, with 11 px between each one. In the recording counter, the time keeps the same distance from its glyph.
+
 ## 0.3.3 · 2026-11-23
 
 ### English reaches everything, and the Umbriel border gets the panels' shadow

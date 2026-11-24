@@ -2,6 +2,18 @@
 
 [English](CHANGELOG.md) · **Español**
 
+## 0.3.4 · 2026-11-23
+
+### El nivel de batería en el centro de control
+
+En una notebook, el centro de control muestra la batería como un nivel más, en su propia caja: el nivel, si está cargando o llena y lo que falta para vaciarse o para llenarse. El glifo y el número se ponen en rojo cuando UPower la da por baja o crítica. Lee el dispositivo de resumen de UPower, así que en una PC de escritorio, o con solo la batería de un mouse o de un UPS, no aparece nada. Necesita `upower` corriendo.
+
+Los niveles ahora van en tres cajas: audio (salida, aplicaciones y micrófono), brillo y batería. Cada una aparece solo si tiene algo que mostrar.
+
+### Barra
+
+Los íconos de estado (micrófono, pantalla compartida, grabación, TV) van aparte de la campana, después de un `‹`, a 11 px uno de otro. En el contador de la grabación, el tiempo queda siempre a la misma distancia de su glifo.
+
 ## 0.3.3 · 2026-11-23
 
 ### El inglés llega a todo, y el borde de Umbriel con la sombra de los paneles
