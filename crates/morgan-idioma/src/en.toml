@@ -1005,12 +1005,10 @@
 "mudo" = "muted"
 
 # bateria.rs
-"Batería llena\n{}, enchufada" = "Battery full\n{}, plugged in"
-"Batería: {}\nEnchufada, sin cargar" = "Battery: {}\nPlugged in, not charging"
-"Cargando: {}\nLlena en {}" = "Charging: {}\nFull in {}"
-"Cargando: {}" = "Charging: {}"
-"Batería: {}\nQuedan {}" = "Battery: {}\n{} left"
-"Batería: {}" = "Battery: {}"
+"Batería" = "Battery"
+"Cargando" = "Charging"
+"Llena" = "Full"
+"Enchufada" = "Plugged in"
 "{} min" = "{} min"
 "{} h" = "{} h"
 "{} h {} min" = "{} h {} min"

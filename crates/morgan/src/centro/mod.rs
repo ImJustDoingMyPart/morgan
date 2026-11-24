@@ -85,6 +85,7 @@ struct Inner {
     brillo: crate::brillo::Brillo,
     mezclador: Mezclador,
     escucha: Escucha,
+    bateria: crate::bateria::Bateria,
     red: Red,
     bluetooth: Bluetooth,
     energia: Energia,
@@ -191,6 +192,7 @@ impl Centro {
             brillo: s.brillo,
             mezclador: Mezclador::new(),
             escucha: Escucha::default(),
+            bateria: crate::bateria::Bateria::new(),
             red: Red::default(),
             bluetooth: Bluetooth::default(),
             energia: Energia::default(),
@@ -616,6 +618,24 @@ impl Centro {
         i.brillo.al_cambiar(move || yo.mostrar_niveles());
         let yo = self.clone();
         i.mezclador.al_cambiar(move || yo.mostrar_audio());
+        // `MORGAN_MUESTRA_BATERIA`: la fila pasa por cada estado cada 2 s, haya o no batería.
+        if std::env::var_os("MORGAN_MUESTRA_BATERIA").is_some() {
+            let muestras = crate::bateria::muestras();
+            let n = Cell::new(0);
+            let yo = self.clone();
+            let mostrar = move || {
+                let k = n.get();
+                n.set((k + 1) % muestras.len());
+                yo.mandar(Orden::Bateria(Some(fila_bateria(&muestras[k]))));
+                glib::ControlFlow::Continue
+            };
+            mostrar();
+            glib::timeout_add_seconds_local(2, mostrar);
+        } else {
+            let yo = self.clone();
+            i.bateria
+                .al_cambiar(move |e| yo.mandar(Orden::Bateria(e.map(fila_bateria))));
+        }
         let yo = self.clone();
         i.escucha.al_cambiar(move || {
             yo.inner
@@ -1456,5 +1476,20 @@ impl Centro {
             })
             .collect();
         self.mandar(Orden::Lista(ListaId::Energia, Contenido::Opciones(ops)));
+    }
+}
+
+/// La batería como una fila de las cuotas: glifo, «Batería» (o si carga), lo que falta y el
+/// porcentaje; en alerta cuando UPower la da por baja.
+fn fila_bateria(e: &crate::bateria::Estado) -> Cuota {
+    Cuota {
+        glifo: e.glifo().into(),
+        nombre: e.nombre().into(),
+        renueva: e.detalle(),
+        porcentaje: e.por_ciento(),
+        fraccion: e.porcentaje / 100.0,
+        apagada: false,
+        alerta: e.baja,
+        otras: Vec::new(),
     }
 }

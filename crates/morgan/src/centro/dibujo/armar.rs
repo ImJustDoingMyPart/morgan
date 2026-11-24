@@ -397,13 +397,18 @@ impl Ui {
 
     fn armar_niveles(&mut self, h: &mut Hoja, y0: f64, ahora: Instant) -> f64 {
         let niveles = self.datos.niveles.clone();
-        if niveles.is_empty() {
+        let bateria = self.datos.bateria.clone();
+        if niveles.is_empty() && bateria.is_none() {
             return y0 - ENTRE;
         }
         let inicio = h.trazos.len();
         let mut y = y0 + 4.0;
         for n in &niveles {
             y = self.armar_nivel(h, n, 8.0, ANCHO - 16.0, y, ahora);
+        }
+        // La batería, a la vista como un nivel, con la barra de las cuotas (no se arrastra).
+        if let Some(c) = &bateria {
+            y = self.armar_cuota(h, c, None, 8.0, ANCHO - 16.0, y, ahora);
         }
         y += 4.0;
         h.trazos.insert(

@@ -73,6 +73,8 @@ pub enum Orden {
     Tarjetas(Vec<Tarjeta>),
     Lista(ListaId, Contenido),
     Niveles(Vec<Nivel>),
+    /// La fila de la batería, al final de los niveles; `None` sin batería.
+    Bateria(Option<super::vista::Cuota>),
     Reproductor(Option<Reproductor>),
     Iconos(Iconos),
     Avisos(Vec<Grupo>),
@@ -214,6 +216,7 @@ impl Capa {
             | Orden::Tarjetas(_)
             | Orden::Lista(..)
             | Orden::Niveles(_)
+            | Orden::Bateria(_)
             | Orden::Reproductor(_)
             | Orden::Iconos(_)
             | Orden::Avisos(_)
@@ -524,6 +527,7 @@ impl Hilo {
                     self.ui.enfocar_campo(l, g);
                 }
             }
+            Orden::Bateria(b) => self.ui.datos.bateria = b,
             Orden::Niveles(n) => {
                 self.ui.datos.niveles = n;
                 self.vumetro();

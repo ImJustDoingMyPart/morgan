@@ -270,6 +270,7 @@ pub struct Datos {
     pub tarjetas: Vec<Tarjeta>,
     pub listas: HashMap<ListaId, Contenido>,
     pub niveles: Vec<Nivel>,
+    pub bateria: Option<super::vista::Cuota>,
     pub reproductor: Option<Reproductor>,
     pub iconos: Iconos,
     pub grupos: Vec<Grupo>,
