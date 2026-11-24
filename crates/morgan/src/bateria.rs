@@ -2,8 +2,7 @@
 //! (`DisplayDevice`), que junta todas las baterías de la máquina. En una PC de escritorio no
 //! está presente y la barra no muestra nada.
 //!
-//! Lo bajo y lo crítico los decide UPower (`WarningLevel`, con los umbrales de su
-//! `UPower.conf`), igual que lo que hace al quedar sin carga: acá solo se muestra.
+//! Lo que pasa al quedar sin carga lo decide UPower (su `UPower.conf`): acá solo se muestra.
 //!
 //! Sin sondeo: se relee con cada `PropertiesChanged` del dispositivo.
 
@@ -37,8 +36,6 @@ pub struct Estado {
     pub carga: Carga,
     /// Lo que falta para vaciarse (descargando) o llenarse (cargando); 0 si UPower no lo sabe.
     pub segundos: i64,
-    /// UPower la da por baja o crítica.
-    pub baja: bool,
 }
 
 /// Lo que dice UPower, tal cual, para pasarlo a `Estado` sin el bus.
@@ -50,7 +47,6 @@ pub struct Crudo {
     pub porcentaje: f64,
     pub vaciar: i64,
     pub llenar: i64,
-    pub aviso: u32,
 }
 
 impl Crudo {
@@ -75,8 +71,6 @@ impl Crudo {
             porcentaje: self.porcentaje.clamp(0.0, 100.0),
             carga,
             segundos: segundos.max(0),
-            // `WarningLevel`: 3 baja, 4 crítica, 5 a punto de actuar (2 es la de un UPS).
-            baja: carga == Carga::Descargando && self.aviso >= 3,
         })
     }
 }
@@ -95,7 +89,7 @@ impl Estado {
     }
 
     pub fn por_ciento(&self) -> String {
-        format!("{} %", self.porcentaje.round() as i64)
+        format!("{}%", self.porcentaje.round() as i64)
     }
 
     /// Para el globo: el primer renglón va en negrita.
@@ -126,23 +120,22 @@ pub fn tiempo(segundos: i64) -> String {
 
 /// Estados de mentira, uno de cada, para el muestrario de la barra.
 pub fn muestras() -> Vec<Estado> {
-    let e = |porcentaje, carga, segundos, baja| Estado {
+    let e = |porcentaje, carga, segundos| Estado {
         porcentaje,
         carga,
         segundos,
-        baja,
     };
     use Carga::*;
     vec![
-        e(100.0, Descargando, 6 * 3600 + 20 * 60, false),
-        e(73.0, Descargando, 2 * 3600 + 10 * 60, false),
-        e(45.0, Descargando, 3600 + 25 * 60, false),
-        e(18.0, Descargando, 32 * 60, true),
-        e(6.0, Descargando, 7 * 60, true),
-        e(35.0, Cargando, 3600 + 5 * 60, false),
-        e(88.0, Cargando, 14 * 60, false),
-        e(80.0, Enchufada, 0, false),
-        e(100.0, Llena, 0, false),
+        e(100.0, Descargando, 6 * 3600 + 20 * 60),
+        e(73.0, Descargando, 2 * 3600 + 10 * 60),
+        e(45.0, Descargando, 3600 + 25 * 60),
+        e(18.0, Descargando, 32 * 60),
+        e(6.0, Descargando, 7 * 60),
+        e(35.0, Cargando, 3600 + 5 * 60),
+        e(88.0, Cargando, 14 * 60),
+        e(80.0, Enchufada, 0),
+        e(100.0, Llena, 0),
     ]
 }
 
@@ -221,7 +214,6 @@ async fn leer_ruta(ruta: &str) -> zbus::Result<Crudo> {
         porcentaje: p.get_property("Percentage").await?,
         vaciar: p.get_property("TimeToEmpty").await?,
         llenar: p.get_property("TimeToFull").await?,
-        aviso: p.get_property("WarningLevel").await?,
     })
 }
 
@@ -233,7 +225,7 @@ async fn leer() -> zbus::Result<Crudo> {
 mod tests {
     use super::*;
 
-    fn crudo(estado: u32, porcentaje: f64, aviso: u32) -> Crudo {
+    fn crudo(estado: u32, porcentaje: f64) -> Crudo {
         Crudo {
             presente: true,
             tipo: TIPO_BATERIA,
@@ -241,7 +233,6 @@ mod tests {
             porcentaje,
             vaciar: 7800,
             llenar: 2400,
-            aviso,
         }
     }
 
@@ -252,32 +243,19 @@ mod tests {
         assert_eq!(pc.estado(), None);
         let ups = Crudo {
             tipo: 3,
-            ..crudo(2, 50.0, 1)
+            ..crudo(2, 50.0)
         };
         assert_eq!(ups.estado(), None);
     }
 
     #[test]
     fn el_tiempo_es_el_que_corresponde() {
-        let e = crudo(2, 73.0, 1).estado().unwrap();
-        assert_eq!(
-            (e.carga, e.segundos, e.baja),
-            (Carga::Descargando, 7800, false)
-        );
-        let e = crudo(1, 73.0, 1).estado().unwrap();
+        let e = crudo(2, 73.0).estado().unwrap();
+        assert_eq!((e.carga, e.segundos), (Carga::Descargando, 7800));
+        let e = crudo(1, 73.0).estado().unwrap();
         assert_eq!((e.carga, e.segundos), (Carga::Cargando, 2400));
-        let e = crudo(4, 100.0, 1).estado().unwrap();
+        let e = crudo(4, 100.0).estado().unwrap();
         assert_eq!((e.carga, e.segundos), (Carga::Llena, 0));
-    }
-
-    #[test]
-    fn baja_la_decide_upower_y_solo_descargando() {
-        assert!(crudo(2, 40.0, 3).estado().unwrap().baja, "UPower manda");
-        assert!(!crudo(2, 15.0, 1).estado().unwrap().baja);
-        assert!(
-            !crudo(1, 4.0, 4).estado().unwrap().baja,
-            "cargando no alarma"
-        );
     }
 
     #[test]
@@ -326,18 +304,18 @@ mod tests {
 
     #[test]
     fn globos() {
-        let e = crudo(2, 72.6, 1).estado().unwrap();
-        assert_eq!(e.tooltip(), "Batería: 73 %\nQuedan 2 h 10 min");
-        let e = crudo(1, 40.0, 1).estado().unwrap();
-        assert_eq!(e.tooltip(), "Cargando: 40 %\nLlena en 40 min");
+        let e = crudo(2, 72.6).estado().unwrap();
+        assert_eq!(e.tooltip(), "Batería: 73%\nQuedan 2 h 10 min");
+        let e = crudo(1, 40.0).estado().unwrap();
+        assert_eq!(e.tooltip(), "Cargando: 40%\nLlena en 40 min");
         let e = Crudo {
             vaciar: 0,
-            ..crudo(2, 50.0, 1)
+            ..crudo(2, 50.0)
         }
         .estado()
         .unwrap();
-        assert_eq!(e.tooltip(), "Batería: 50 %");
-        let e = crudo(4, 100.0, 1).estado().unwrap();
-        assert_eq!(e.tooltip(), "Batería llena\n100 %, enchufada");
+        assert_eq!(e.tooltip(), "Batería: 50%");
+        let e = crudo(4, 100.0).estado().unwrap();
+        assert_eq!(e.tooltip(), "Batería llena\n100%, enchufada");
     }
 }
