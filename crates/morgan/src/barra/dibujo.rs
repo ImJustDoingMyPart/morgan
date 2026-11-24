@@ -2,10 +2,13 @@
 //! (`.barra` en `estilo.css` hasta 0.1.1):
 //!
 //! - 28 px de alto; a la izquierda los workspaces (10 px del borde, cada uno con 3 px de relleno
-//!   a los lados y 2 arriba, y 1 de margen), al medio «fecha › hora» (rellenos de 5, 4 y 5, y
-//!   2 abajo) y a la derecha, desde 10 px del borde: la campana (4 y 3 de relleno, 2 de margen),
-//!   el cajón (la flecha con 4 por lado y la bandeja que se desliza, con 2 y 8 de relleno e
-//!   íconos de 14 cada 24), la privacidad (4 por lado) y la grabación (4 y 6);
+//!   a los lados y 2 arriba, y 1 y 2 de margen), al medio «fecha › hora» (rellenos de 5, 3 y 5,
+//!   y 2 abajo) y a la derecha, desde 10 px del borde: la campana (4 y 3 de relleno, 2 de
+//!   margen), el cajón (la flecha con 4 por lado y la bandeja que se desliza, con 2 y 8 de
+//!   relleno e íconos de 14 cada 24) y, si hay algo que avisar, el `‹`, la grabación y los
+//!   glifos de estado, a `ENTRE_AVISOS` de tinta a tinta;
+//! - entre workspaces, a los lados del `›` y entre avisos, 11 px de tinta a tinta (Roberto,
+//!   2026-11-23, elegido en vivo entre 10, 11 y 12; fuera de la grilla de 4 a propósito);
 //! - al pasar el puntero o con lo suyo abierto, un paso por el degradé del anillo en 150 ms;
 //!   apretado, al 92 % de su tamaño (suelto, vuelve en 150 ms);
 //! - el globo de ayuda es el del dock: el marco y las medidas de `forma::menu`.
@@ -35,6 +38,10 @@ const PX_SEPARADOR: f32 = 13.0;
 const PX_GLIFO: f32 = 15.5;
 const ICONO: f64 = 14.0;
 const ENTRE_ICONOS: f64 = 10.0;
+/// Entre la tinta de un aviso (grabación, cada glifo de estado, el `‹`) y la del siguiente. Cada
+/// glifo de estado va aparte: en un solo texto el espacio es más angosto que los glifos y se
+/// pisaban, y con lugares iguales el micrófono (angosto) quedaba con más aire que la pantalla.
+const ENTRE_AVISOS: f64 = 11.0;
 const APRETADO: f32 = 0.92;
 pub const TRANSICION: Duration = Duration::from_millis(150);
 /// El `Revealer` de la bandeja.
@@ -42,6 +49,8 @@ pub const REVELAR: Duration = Duration::from_millis(300);
 
 const CAMPANA: &str = "󰨝";
 const FLECHA: &str = "󰅁";
+/// Entre los avisos y la campana: el `›` del reloj, dado vuelta.
+const SEPARADOR_AVISOS: &str = "‹";
 
 /// Lo que ocupa la sombra alrededor del globo, de cada lado.
 pub const GLOBO_SOMBRA: f64 = SOMBRA;
@@ -63,7 +72,7 @@ pub struct Estado {
     pub avisos: usize,
     pub no_molestar: bool,
     pub centro: bool,
-    pub privacidad: String,
+    pub privacidad: Vec<&'static str>,
     pub tooltip_privacidad: String,
     pub grabacion: Option<String>,
     pub bandeja: Vec<Icono>,
@@ -114,8 +123,10 @@ pub struct Rotulos {
     hora: Layout<u8>,
     campana: Layout<u8>,
     flecha: Layout<u8>,
-    privacidad: Option<Layout<u8>>,
+    privacidad: Vec<Layout<u8>>,
     grabacion: Option<Layout<u8>>,
+    /// El `‹` entre los avisos y la campana.
+    aparte: Layout<u8>,
 }
 
 impl Rotulos {
@@ -140,16 +151,60 @@ impl Rotulos {
             hora: t.armar_con_peso(&[(&e.hora, ROL)], pt(10.0), 700.0, escala),
             campana: t.armar(&[(CAMPANA, ROL)], PX_GLIFO, escala),
             flecha: t.armar(&[(FLECHA, ROL)], PX, escala),
-            privacidad: opcional(t, &e.privacidad, PX_GLIFO),
+            privacidad: e
+                .privacidad
+                .iter()
+                .map(|g| t.armar(&[(g, ROL)], PX_GLIFO, escala))
+                .collect(),
             grabacion: e
                 .grabacion
                 .as_deref()
                 .and_then(|g| opcional(t, &format!("󰑋 {g}"), PX)),
+            aparte: t.armar(&[(SEPARADOR_AVISOS, ROL)], PX_SEPARADOR, escala),
         }
     }
 
     fn ancho(&self, l: &Layout<u8>) -> f64 {
         texto::caja(l).0 / f64::from(self.escala)
+    }
+
+    /// Dónde empieza y termina la tinta de `l`, desde su borde izquierdo, en píxeles lógicos:
+    /// los píxeles que toca, aunque sea en parte (el borde suavizado también se ve).
+    fn tinta_x(&self, l: &Layout<u8>) -> (f64, f64) {
+        let e = f64::from(self.escala);
+        texto::tinta(l).map_or((0.0, self.ancho(l)), |[x0, _, x1, _]| {
+            (x0.floor() / e, x1.ceil() / e)
+        })
+    }
+
+    /// La caja de `l` (como etiqueta, `alto` de alto) para que su tinta termine en `derecha`, y
+    /// dónde empieza esa tinta.
+    ///
+    /// La esquina se elige acá, en un píxel entero del buffer, y la caja se arma para que
+    /// `texto_en` caiga en esa misma: si cada uno redondeara por su lado, los espacios entre
+    /// tintas variarían en un píxel.
+    fn rotulo_hasta(&self, l: &Layout<u8>, derecha: f64, alto: f64) -> (Rect, f64) {
+        let e = f64::from(self.escala);
+        let (t0, t1) = self.tinta_x(l);
+        let esquina = (derecha * e - t1 * e).round();
+        // Un cuarto de píxel adentro, para que el `floor` de `texto::esquina` no caiga al anterior.
+        let x0 = (esquina + 0.25) / e;
+        (
+            Rect::new(x0, 0.0, x0 + self.ancho(l), alto),
+            esquina / e + t0,
+        )
+    }
+
+    /// Lo mismo para un glifo suelto (`texto_en` con `glifo`, que lo centra por su tinta): la
+    /// caja de su tinta, con la tinta terminando en `derecha`.
+    fn glifo_hasta(&self, l: &Layout<u8>, derecha: f64, alto: f64) -> (Rect, f64) {
+        let e = f64::from(self.escala);
+        let (t0, t1) = self.tinta_x(l);
+        let esquina = (derecha * e - t1 * e).round() / e;
+        (
+            Rect::new(esquina + t0, 0.0, esquina + t1, alto),
+            esquina + t0,
+        )
     }
 }
 
@@ -169,6 +224,10 @@ pub struct Lugar {
     /// Lo que se ve de la bandeja mientras se desliza.
     pub revelador: Rect,
     reloj: [Rect; 3],
+    /// El `‹` entre los avisos y la campana, si hay alguno.
+    aparte: Option<Rect>,
+    /// La tinta de cada glifo de estado.
+    estados: Vec<Rect>,
 }
 
 /// `revelado`: cuánto se ve de la bandeja, de 0 a 1, ya con su curva.
@@ -184,7 +243,8 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
             caja: Rect::new(x, 0.0, x + w, h),
             contenido: Rect::new(x + 3.0, 2.0, x + w - 3.0, h),
         });
-        x += w + 1.0;
+        // 1 + 2 de margen: 11 px de tinta a tinta con los romanos.
+        x += w + 2.0;
     }
 
     let (fw, sw, hw) = (
@@ -192,7 +252,7 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
         rot.ancho(&rot.separador),
         rot.ancho(&rot.hora),
     );
-    let rw = fw + sw + hw + 28.0;
+    let rw = fw + sw + hw + 26.0;
     // `GtkCenterBox` centra en píxeles enteros.
     let x0 = ((ancho - rw) / 2.0).floor();
     piezas.push(Pieza {
@@ -200,8 +260,9 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
         caja: Rect::new(x0, 0.0, x0 + rw, h),
         contenido: Rect::new(x0, 0.0, x0 + rw, h - 2.0),
     });
-    let xs = x0 + 10.0 + fw + 4.0;
-    let xh = xs + sw + 4.0 + 5.0;
+    // 11 px de tinta a cada lado del `›`, como entre los workspaces y entre los avisos.
+    let xs = x0 + 10.0 + fw + 3.0;
+    let xh = xs + sw + 3.0 + 5.0;
     let reloj = [
         Rect::new(x0 + 5.0, 0.0, x0 + 5.0 + fw, h - 2.0),
         Rect::new(xs, 0.0, xs + sw, h - 2.0),
@@ -256,21 +317,48 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
     let cajon = Rect::new(x - flw, 0.0, revelador.x1, h);
     x -= flw;
 
-    if let Some(l) = &rot.privacidad {
-        let w = 4.0 + rot.ancho(l) + 4.0;
-        piezas.push(Pieza {
-            que: Que::Privacidad,
-            caja: Rect::new(x - w, 0.0, x, h),
-            contenido: Rect::new(x - w + 4.0, 0.0, x - 4.0, h),
-        });
-        x -= w;
+    // De acá a la izquierda, lo que avisa: entre una tinta y la siguiente, siempre lo mismo
+    // (`ENTRE_AVISOS`), mida lo que mida cada glifo. Se parte del borde izquierdo de la tinta
+    // de la flecha del cajón o, sin cajón, de la campana.
+    let (vecino, l_vecino) = if iconos > 0 {
+        (Que::Flecha, &rot.flecha)
+    } else {
+        (Que::Campana, &rot.campana)
+    };
+    let mut borde = piezas.iter().find(|q| q.que == vecino).map_or(x, |q| {
+        let (t0, t1) = rot.tinta_x(l_vecino);
+        q.contenido.center().x - (t1 - t0) / 2.0
+    });
+    let medio = ENTRE_AVISOS / 2.0;
+    let mut aparte = None;
+    if !rot.privacidad.is_empty() || rot.grabacion.is_some() {
+        let (r, izq) = rot.rotulo_hasta(&rot.aparte, borde - ENTRE_AVISOS, h - 2.0);
+        aparte = Some(r);
+        borde = izq;
     }
     if let Some(l) = &rot.grabacion {
-        let w = 4.0 + rot.ancho(l) + 6.0;
+        let derecha = borde - ENTRE_AVISOS;
+        let (r, izq) = rot.rotulo_hasta(l, derecha, h);
         piezas.push(Pieza {
             que: Que::Grabacion,
-            caja: Rect::new(x - w, 0.0, x, h),
-            contenido: Rect::new(x - w + 4.0, 0.0, x - 6.0, h),
+            caja: Rect::new(izq - medio, 0.0, derecha + medio, h),
+            contenido: r,
+        });
+        borde = izq;
+    }
+    let mut estados = Vec::new();
+    if !rot.privacidad.is_empty() {
+        let derecha = borde - ENTRE_AVISOS;
+        for l in rot.privacidad.iter().rev() {
+            let (caja, izq) = rot.glifo_hasta(l, borde - ENTRE_AVISOS, h);
+            estados.push(caja);
+            borde = izq;
+        }
+        estados.reverse();
+        piezas.push(Pieza {
+            que: Que::Privacidad,
+            caja: Rect::new(borde - medio, 0.0, derecha + medio, h),
+            contenido: Rect::new(borde, 0.0, derecha, h),
         });
     }
     Lugar {
@@ -278,6 +366,8 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
         cajon,
         revelador,
         reloj,
+        aparte,
+        estados,
     }
 }
 
@@ -385,6 +475,18 @@ impl Pintura<'_> {
             None,
             &Rect::new(0.0, 0.0, f64::from(ancho), f64::from(alto)),
         );
+        if let Some(r) = self.lugar.aparte {
+            let c = opaco(&p.primary, 0.45);
+            texto_en(
+                s,
+                &self.rotulos.aparte,
+                r,
+                escala,
+                Affine::IDENTITY,
+                c,
+                false,
+            );
+        }
         for pieza in &self.lugar.piezas {
             let (hv, k) = self.animos.valores(pieza.que, self.ahora);
             // Apretado: todo lo de la pieza se achica hacia su centro.
@@ -503,8 +605,8 @@ impl Pintura<'_> {
                     s.pop_layer();
                 }
                 Que::Privacidad => {
-                    if let Some(l) = &self.rotulos.privacidad {
-                        texto_en(s, l, pieza.contenido, escala, t, p.error, false);
+                    for (l, r) in self.rotulos.privacidad.iter().zip(&self.lugar.estados) {
+                        texto_en(s, l, *r, escala, t, p.error, true);
                     }
                 }
                 Que::Grabacion => {

@@ -249,17 +249,17 @@ impl Inner {
 
     fn privacidad(&self) {
         let e = self.s.privacidad.estado();
-        let mut glifos = Vec::new();
-        if !e.microfono.is_empty() {
-            glifos.push("󰍬");
-        }
-        if e.pantalla {
-            glifos.push("󰹑");
-        }
+        // De izquierda a derecha: la campana queda a la derecha y lo más cerca de ella es el
+        // micrófono (después de la grabación, que va aparte).
         let tele = self.s.compositor.espacios().prendida(&self.s.tele);
-        if tele {
-            glifos.push("󰔂");
-        }
+        let glifos: Vec<_> = [
+            (tele, "󰔂"),
+            (e.pantalla, "󰹑"),
+            (!e.microfono.is_empty(), "󰍬"),
+        ]
+        .into_iter()
+        .filter_map(|(si, g)| si.then_some(g))
+        .collect();
         let mut tooltip = privacidad::tooltip(&e.microfono, e.pantalla);
         if tele {
             if !tooltip.is_empty() {
@@ -267,10 +267,7 @@ impl Inner {
             }
             tooltip.push_str(tr!("TV prendida"));
         }
-        let _ = self.hilo.send(Orden::Privacidad {
-            glifos: glifos.join(" "),
-            tooltip,
-        });
+        let _ = self.hilo.send(Orden::Privacidad { glifos, tooltip });
     }
 
     fn campana(&self) {

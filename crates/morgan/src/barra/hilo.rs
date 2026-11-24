@@ -84,7 +84,7 @@ pub enum Orden {
     },
     Centro(bool),
     Privacidad {
-        glifos: String,
+        glifos: Vec<&'static str>,
         tooltip: String,
     },
     /// El tiempo que lleva grabando, o `None` si no se graba.
