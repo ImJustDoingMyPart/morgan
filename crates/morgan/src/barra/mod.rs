@@ -8,6 +8,10 @@
 //! Cero sondeo: el contador de la grabación corre solo mientras se graba; el reloj se
 //! despierta al cambiar el minuto y al volver de una suspensión (el temporizador de glib no
 //! cuenta el tiempo dormido).
+//!
+//! Con `MORGAN_MUESTRA_BARRA` en el entorno, la barra es un muestrario: los glifos de estado, la
+//! grabación y los avisos prendidos, y la batería pasando por cada estado de `bateria::muestras`
+//! cada 2 s (hay o no batería de verdad). Para decidir lugares y detalles en la sesión misma.
 
 pub(crate) mod bandeja;
 mod dibujo;
@@ -25,6 +29,7 @@ use morgan_motor::color::Paleta;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::bandeja::Bandeja;
+use crate::bateria::{self, Bateria};
 use crate::calendario::Calendario;
 use crate::compositor::Compositor;
 use crate::notificaciones::Notificaciones;
@@ -79,6 +84,8 @@ struct Inner {
     grabacion: RefCell<Option<(std::time::Instant, glib::SourceId)>>,
     despertar: RefCell<Option<glib::JoinHandle<()>>>,
     escuchar: RefCell<Option<glib::JoinHandle<()>>>,
+    bateria: Bateria,
+    muestra: bool,
 }
 
 impl Barra {
@@ -102,6 +109,8 @@ impl Barra {
             grabacion: RefCell::default(),
             despertar: RefCell::default(),
             escuchar: RefCell::default(),
+            bateria: Bateria::new(),
+            muestra: std::env::var_os("MORGAN_MUESTRA_BARRA").is_some(),
         });
 
         let weak = Rc::downgrade(&inner);
@@ -130,6 +139,24 @@ impl Barra {
                 inner.campana();
             }
         });
+        if inner.muestra {
+            let muestras = bateria::muestras();
+            let i = std::cell::Cell::new(0);
+            let hilo = inner.hilo.clone();
+            let mostrar = move || {
+                let n = i.get();
+                i.set((n + 1) % muestras.len());
+                let _ = hilo.send(Orden::Bateria(Some(muestras[n].clone())));
+                glib::ControlFlow::Continue
+            };
+            mostrar();
+            glib::timeout_add_seconds_local(2, mostrar);
+        } else {
+            let hilo = inner.hilo.clone();
+            inner.bateria.al_cambiar(move |e| {
+                let _ = hilo.send(Orden::Bateria(e.cloned()));
+            });
+        }
         let _ = inner
             .hilo
             .send(Orden::Espacios(inner.s.compositor.espacios()));
@@ -217,6 +244,10 @@ impl Inner {
     }
 
     fn pintar_grabacion(&self) {
+        if self.muestra {
+            let _ = self.hilo.send(Orden::Grabacion(Some(modelo::duracion(42))));
+            return;
+        }
         let desde = self.grabacion.borrow().as_ref().map(|(t, _)| *t);
         let texto = desde.map(|t| modelo::duracion(t.elapsed().as_secs()));
         let _ = self.hilo.send(Orden::Grabacion(texto));
@@ -248,10 +279,15 @@ impl Inner {
     }
 
     fn privacidad(&self) {
-        let e = self.s.privacidad.estado();
+        let mut e = self.s.privacidad.estado();
+        let mut tele = self.s.compositor.espacios().prendida(&self.s.tele);
+        if self.muestra {
+            e.microfono = vec!["Discord".into()]; // no-tr
+            e.pantalla = true;
+            tele = true;
+        }
         // De izquierda a derecha: la campana queda a la derecha y lo más cerca de ella es el
         // micrófono (después de la grabación, que va aparte).
-        let tele = self.s.compositor.espacios().prendida(&self.s.tele);
         let glifos: Vec<_> = [
             (tele, "󰔂"),
             (e.pantalla, "󰹑"),
@@ -272,8 +308,9 @@ impl Inner {
 
     fn campana(&self) {
         let n = &self.s.notificaciones;
+        let avisos = if self.muestra { 3 } else { n.lista().len() };
         let _ = self.hilo.send(Orden::Campana {
-            avisos: n.lista().len(),
+            avisos,
             no_molestar: n.no_molestar(),
         });
     }

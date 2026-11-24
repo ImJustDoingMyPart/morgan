@@ -1003,3 +1003,14 @@
 # calendario/, osd
 "hoy" = "today"
 "mudo" = "muted"
+
+# bateria.rs
+"Batería llena\n{}, enchufada" = "Battery full\n{}, plugged in"
+"Batería: {}\nEnchufada, sin cargar" = "Battery: {}\nPlugged in, not charging"
+"Cargando: {}\nLlena en {}" = "Charging: {}\nFull in {}"
+"Cargando: {}" = "Charging: {}"
+"Batería: {}\nQuedan {}" = "Battery: {}\n{} left"
+"Batería: {}" = "Battery: {}"
+"{} min" = "{} min"
+"{} h" = "{} h"
+"{} h {} min" = "{} h {} min"

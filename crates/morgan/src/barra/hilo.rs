@@ -89,6 +89,7 @@ pub enum Orden {
     },
     /// El tiempo que lleva grabando, o `None` si no se graba.
     Grabacion(Option<String>),
+    Bateria(Option<crate::bateria::Estado>),
     Bandeja(Vec<Icono>),
     /// El ícono de la bandeja con su menú abierto.
     Menu(Option<String>),
@@ -331,6 +332,10 @@ impl Hilo {
             Orden::Centro(abierto) => e.centro = abierto,
             Orden::Privacidad { glifos, tooltip } => {
                 (e.privacidad, e.tooltip_privacidad) = (glifos, tooltip);
+                self.refrescar_globo();
+            }
+            Orden::Bateria(b) => {
+                e.bateria = b;
                 self.refrescar_globo();
             }
             Orden::Grabacion(g) => {
@@ -879,7 +884,7 @@ impl Hilo {
             }),
             // Izquierdo en el reloj: el calendario; derecho: el centro. En la campana, al revés
             // el derecho: No molestar.
-            (Que::Reloj, 3) | (Que::Campana, 1) => Evento::Pedir(Request::Centro {
+            (Que::Reloj, 3) | (Que::Campana | Que::Bateria, 1) => Evento::Pedir(Request::Centro {
                 accion: AccionSuperficie::Alternar,
             }),
             (Que::Campana, 3) => Evento::Pedir(Request::NoMolestar {

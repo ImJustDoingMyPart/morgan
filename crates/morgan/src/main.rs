@@ -13,6 +13,7 @@ mod audio;
 mod bajada;
 mod bandeja;
 mod barra;
+mod bateria;
 mod bluetooth;
 mod brillo;
 pub(crate) mod calculadora;

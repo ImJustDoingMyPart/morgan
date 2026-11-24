@@ -7,6 +7,8 @@
 //!   margen), el cajón (la flecha con 4 por lado y la bandeja que se desliza, con 2 y 8 de
 //!   relleno e íconos de 14 cada 24) y, si hay algo que avisar, el `‹`, la grabación y los
 //!   glifos de estado, a `ENTRE_AVISOS` de tinta a tinta;
+//! - en una notebook, la batería entre la campana y lo demás, a `ENTRE_AVISOS` de la campana; su
+//!   porcentaje, a `ENTRE_GLIFO_Y_NUMERO` del glifo, solo cuando UPower la da por baja;
 //! - entre workspaces, a los lados del `›` y entre avisos, 11 px de tinta a tinta (Roberto,
 //!   2026-11-23, elegido en vivo entre 10, 11 y 12; fuera de la grilla de 4 a propósito);
 //! - al pasar el puntero o con lo suyo abierto, un paso por el degradé del anillo en 150 ms;
@@ -29,6 +31,7 @@ use morgan_motor::vello::kurbo::{Affine, Point, Rect};
 use morgan_motor::vello::peniko::{Fill, ImageBrush, ImageData};
 
 use super::modelo::{self, Boton};
+use crate::bateria::{Carga, Estado as Bateria};
 use crate::compositor::Espacios;
 
 pub const ALTO: u32 = 28;
@@ -42,6 +45,8 @@ const ENTRE_ICONOS: f64 = 10.0;
 /// glifo de estado va aparte: en un solo texto el espacio es más angosto que los glifos y se
 /// pisaban, y con lugares iguales el micrófono (angosto) quedaba con más aire que la pantalla.
 const ENTRE_AVISOS: f64 = 11.0;
+/// Entre el glifo de la batería y su porcentaje.
+const ENTRE_GLIFO_Y_NUMERO: f64 = 4.0;
 const APRETADO: f32 = 0.92;
 pub const TRANSICION: Duration = Duration::from_millis(150);
 /// El `Revealer` de la bandeja.
@@ -78,6 +83,8 @@ pub struct Estado {
     pub bandeja: Vec<Icono>,
     /// La clave del ícono con su menú abierto.
     pub menu: Option<String>,
+    /// `None` sin batería (una PC de escritorio).
+    pub bateria: Option<Bateria>,
 }
 
 pub const TOOLTIP_GRABACION: &str = tr_const!("Grabando la pantalla\nClick: parar");
@@ -89,6 +96,7 @@ impl Estado {
             Que::Privacidad => self.tooltip_privacidad.clone(),
             Que::Grabacion => morgan_idioma::t(TOOLTIP_GRABACION).into(),
             Que::Icono(i) => self.bandeja.get(i)?.tooltip.clone(),
+            Que::Bateria => self.bateria.as_ref()?.tooltip(),
             _ => return None,
         };
         (!t.is_empty()).then_some(t)
@@ -103,6 +111,7 @@ pub enum Que {
     Privacidad,
     Flecha,
     Icono(usize),
+    Bateria,
     Campana,
 }
 
@@ -127,6 +136,8 @@ pub struct Rotulos {
     grabacion: Option<Layout<u8>>,
     /// El `‹` entre los avisos y la campana.
     aparte: Layout<u8>,
+    /// El glifo de la batería y, si está baja, su porcentaje.
+    bateria: Option<(Layout<u8>, Option<Layout<u8>>)>,
 }
 
 impl Rotulos {
@@ -161,6 +172,12 @@ impl Rotulos {
                 .as_deref()
                 .and_then(|g| opcional(t, &format!("󰑋 {g}"), PX)),
             aparte: t.armar(&[(SEPARADOR_AVISOS, ROL)], PX_SEPARADOR, escala),
+            bateria: e.bateria.as_ref().map(|b| {
+                let numero = b
+                    .baja
+                    .then(|| t.armar_con_peso(&[(&b.por_ciento(), ROL)], pt(10.0), 500.0, escala));
+                (t.armar(&[(b.glifo(), ROL)], PX_GLIFO, escala), numero)
+            }),
         }
     }
 
@@ -228,6 +245,8 @@ pub struct Lugar {
     aparte: Option<Rect>,
     /// La tinta de cada glifo de estado.
     estados: Vec<Rect>,
+    /// La tinta del glifo de la batería y la caja de su porcentaje.
+    bateria: Option<(Rect, Option<Rect>)>,
 }
 
 /// `revelado`: cuánto se ve de la bandeja, de 0 a 1, ya con su curva.
@@ -278,6 +297,32 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
     });
     x -= cw + 2.0;
 
+    // La batería, a `ENTRE_AVISOS` de la tinta de la campana; lo demás sigue a su izquierda.
+    let tinta_campana = {
+        let (t0, t1) = rot.tinta_x(&rot.campana);
+        piezas[piezas.len() - 1].contenido.center().x - (t1 - t0) / 2.0
+    };
+    let mut bateria = None;
+    if let Some((glifo, numero)) = &rot.bateria {
+        let derecha = tinta_campana - ENTRE_AVISOS;
+        let (num, borde) = match numero {
+            Some(l) => {
+                let (r, izq) = rot.rotulo_hasta(l, derecha, h - 2.0);
+                (Some(r), izq - ENTRE_GLIFO_Y_NUMERO)
+            }
+            None => (None, derecha),
+        };
+        let (g, izq) = rot.glifo_hasta(glifo, borde, h);
+        let medio = ENTRE_AVISOS / 2.0;
+        piezas.push(Pieza {
+            que: Que::Bateria,
+            caja: Rect::new(izq - medio, 0.0, derecha + medio, h),
+            contenido: Rect::new(izq, 0.0, derecha, h),
+        });
+        bateria = Some((g, num));
+        x = izq - medio;
+    }
+
     // La bandeja entra desde la derecha (`SlideLeft`): su borde derecho queda fijo y el
     // revelador la recorta a la izquierda. Sin íconos (los muestra el dock), no hay cajón: los
     // avisos quedan junto a la campana.
@@ -320,15 +365,16 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
     // De acá a la izquierda, lo que avisa: entre una tinta y la siguiente, siempre lo mismo
     // (`ENTRE_AVISOS`), mida lo que mida cada glifo. Se parte del borde izquierdo de la tinta
     // de la flecha del cajón o, sin cajón, de la campana.
-    let (vecino, l_vecino) = if iconos > 0 {
-        (Que::Flecha, &rot.flecha)
+    let mut borde = if iconos > 0 {
+        piezas.iter().find(|q| q.que == Que::Flecha).map_or(x, |q| {
+            let (t0, t1) = rot.tinta_x(&rot.flecha);
+            q.contenido.center().x - (t1 - t0) / 2.0
+        })
+    } else if let Some((g, _)) = bateria {
+        g.x0
     } else {
-        (Que::Campana, &rot.campana)
+        tinta_campana
     };
-    let mut borde = piezas.iter().find(|q| q.que == vecino).map_or(x, |q| {
-        let (t0, t1) = rot.tinta_x(l_vecino);
-        q.contenido.center().x - (t1 - t0) / 2.0
-    });
     let medio = ENTRE_AVISOS / 2.0;
     let mut aparte = None;
     if !rot.privacidad.is_empty() || rot.grabacion.is_some() {
@@ -368,6 +414,7 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
         reloj,
         aparte,
         estados,
+        bateria,
     }
 }
 
@@ -607,6 +654,34 @@ impl Pintura<'_> {
                 Que::Privacidad => {
                     for (l, r) in self.rotulos.privacidad.iter().zip(&self.lugar.estados) {
                         texto_en(s, l, *r, escala, t, p.error, true);
+                    }
+                }
+                Que::Bateria => {
+                    let (Some(b), Some((glifo, numero)), Some((rg, rn))) = (
+                        &self.estado.bateria,
+                        &self.rotulos.bateria,
+                        self.lugar.bateria,
+                    ) else {
+                        continue;
+                    };
+                    let base = if b.baja {
+                        p.error
+                    } else if matches!(b.carga, Carga::Cargando | Carga::Llena) {
+                        p.primary
+                    } else {
+                        opaco(&p.on_surface, 0.9)
+                    };
+                    let encima = if b.baja {
+                        p.error
+                    } else if b.carga == Carga::Descargando || b.carga == Carga::Enchufada {
+                        p.primary
+                    } else {
+                        p.tertiary
+                    };
+                    let c = mezclar(&base, &encima, hv);
+                    texto_en(s, glifo, rg, escala, t, c, true);
+                    if let (Some(l), Some(r)) = (numero, rn) {
+                        texto_en(s, l, r, escala, t, c, false);
                     }
                 }
                 Que::Grabacion => {
