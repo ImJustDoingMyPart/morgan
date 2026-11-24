@@ -83,13 +83,15 @@ impl Crudo {
 
 /// Las de Material Design Icons (en las Nerd Fonts), de 10 en 10.
 const DESCARGANDO: [&str; 11] = ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"];
-const CARGANDO: [&str; 11] = ["󰢟", "󰢜", "󰂆", "󰂇", "󰂈", "󰢝", "󰂉", "󰢞", "󰂊", "󰂋", "󰂅"];
+/// La única con el rayo adentro (`md-battery_charging`): las de nivel lo llevan al costado y
+/// quedan corridas. El nivel ya lo dicen la barra y el número de la fila.
+const CARGANDO: &str = "󰂄";
 
 impl Estado {
     pub fn glifo(&self) -> &'static str {
         let i = ((self.porcentaje / 10.0).round() as usize).min(10);
         match self.carga {
-            Carga::Cargando | Carga::Llena => CARGANDO[i],
+            Carga::Cargando | Carga::Llena => CARGANDO,
             Carga::Descargando | Carga::Enchufada => DESCARGANDO[i],
         }
     }
@@ -285,16 +287,13 @@ mod tests {
         assert_eq!(g(100.0, Carga::Descargando), "󰁹");
         assert_eq!(g(73.0, Carga::Descargando), "󰂀");
         assert_eq!(g(2.0, Carga::Descargando), "󰂎");
-        assert_eq!(g(35.0, Carga::Cargando), "󰂈", "35 redondea a 40");
-        assert_eq!(g(100.0, Carga::Llena), "󰂅");
+        assert_eq!(g(35.0, Carga::Cargando), CARGANDO);
+        assert_eq!(g(100.0, Carga::Llena), CARGANDO);
         assert_eq!(g(80.0, Carga::Enchufada), "󰂁");
-        // Los once de cada lado son distintos.
-        for t in [DESCARGANDO, CARGANDO] {
-            let mut v = t.to_vec();
-            v.sort();
-            v.dedup();
-            assert_eq!(v.len(), 11);
-        }
+        let mut v = DESCARGANDO.to_vec();
+        v.sort();
+        v.dedup();
+        assert_eq!(v.len(), 11, "los once son distintos");
     }
 
     /// Contra el UPower de la máquina: `MORGAN_UPOWER_RUTA=/org/freedesktop/UPower/devices/…
