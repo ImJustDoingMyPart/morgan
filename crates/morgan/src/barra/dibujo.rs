@@ -8,7 +8,10 @@
 //!   relleno e íconos de 14 cada 24) y, si hay algo que avisar, el `‹`, la grabación y los
 //!   glifos de estado, a `ENTRE_AVISOS` de tinta a tinta;
 //! - en una notebook, la batería es el primero de los avisos (junto al `‹`, así no se mueve
-//!   cuando los otros aparecen), con el formato de la grabación: glifo y porcentaje en un texto;
+//!   cuando los otros aparecen), con el formato de la grabación;
+//! - la grabación y la batería son un glifo y un texto a `ENTRE_GLIFO_Y_TEXTO` de tinta a tinta
+//!   (con un espacio, el glifo de carga, más ancho, quedaba más cerca), y el `%` va aparte, a
+//!   `ANTES_DEL_POR_CIENTO` del número (pegado, la fuente lo deja a 1 px);
 //! - entre workspaces, a los lados del `›` y entre avisos, 11 px de tinta a tinta (Roberto,
 //!   2026-11-23, elegido en vivo entre 10, 11 y 12; fuera de la grilla de 4 a propósito);
 //! - al pasar el puntero o con lo suyo abierto, un paso por el degradé del anillo en 150 ms;
@@ -45,6 +48,9 @@ const ENTRE_ICONOS: f64 = 10.0;
 /// glifo de estado va aparte: en un solo texto el espacio es más angosto que los glifos y se
 /// pisaban, y con lugares iguales el micrófono (angosto) quedaba con más aire que la pantalla.
 const ENTRE_AVISOS: f64 = 11.0;
+/// La distancia que el espacio de la fuente dejaba entre el glifo de la grabación y su tiempo.
+const ENTRE_GLIFO_Y_TEXTO: f64 = 9.0;
+const ANTES_DEL_POR_CIENTO: f64 = 3.0;
 const APRETADO: f32 = 0.92;
 pub const TRANSICION: Duration = Duration::from_millis(150);
 /// El `Revealer` de la bandeja.
@@ -131,11 +137,18 @@ pub struct Rotulos {
     campana: Layout<u8>,
     flecha: Layout<u8>,
     privacidad: Vec<Layout<u8>>,
-    grabacion: Option<Layout<u8>>,
+    grabacion: Option<Partes>,
     /// El `‹` entre los avisos y la campana.
     aparte: Layout<u8>,
     /// «󰂀 73%», como la grabación.
-    bateria: Option<Layout<u8>>,
+    bateria: Option<Partes>,
+}
+
+/// Un aviso hecho de pedazos de texto en la misma línea, cada uno a su distancia de tinta del
+/// anterior (`entre[i]`, antes del pedazo `i + 1`).
+struct Partes {
+    textos: Vec<Layout<u8>>,
+    entre: Vec<f64>,
 }
 
 impl Rotulos {
@@ -149,8 +162,10 @@ impl Rotulos {
                 (b, l)
             })
             .collect();
-        let opcional =
-            |t: &mut Textos, s: &str, px| (!s.is_empty()).then(|| t.armar(&[(s, ROL)], px, escala));
+        let partes = |t: &mut Textos, textos: &[&str], entre: &[f64]| Partes {
+            textos: textos.iter().map(|s| t.armar(&[(s, ROL)], PX, escala)).collect(),
+            entre: entre.to_vec(),
+        };
         Rotulos {
             version,
             escala,
@@ -168,12 +183,16 @@ impl Rotulos {
             grabacion: e
                 .grabacion
                 .as_deref()
-                .and_then(|g| opcional(t, &format!("󰑋 {g}"), PX)),
+                .map(|g| partes(t, &["󰑋", g], &[ENTRE_GLIFO_Y_TEXTO])),
             aparte: t.armar(&[(SEPARADOR_AVISOS, ROL)], PX_SEPARADOR, escala),
-            bateria: e
-                .bateria
-                .as_ref()
-                .and_then(|b| opcional(t, &format!("{} {}", b.glifo(), b.por_ciento()), PX)),
+            bateria: e.bateria.as_ref().map(|b| {
+                let n = b.porcentaje.round().to_string();
+                partes(
+                    t,
+                    &[b.glifo(), &n, "%"],
+                    &[ENTRE_GLIFO_Y_TEXTO, ANTES_DEL_POR_CIENTO],
+                )
+            }),
         }
     }
 
@@ -206,6 +225,22 @@ impl Rotulos {
             Rect::new(x0, 0.0, x0 + self.ancho(l), alto),
             esquina / e + t0,
         )
+    }
+
+    /// Los pedazos de `p`, el último con la tinta terminando en `derecha`: la caja de cada uno y
+    /// dónde empieza la tinta del primero.
+    fn partes_hasta(&self, p: &Partes, mut derecha: f64, alto: f64) -> (Vec<Rect>, f64) {
+        let mut cajas = Vec::new();
+        for (i, l) in p.textos.iter().enumerate().rev() {
+            let (r, izq) = self.rotulo_hasta(l, derecha, alto);
+            cajas.push(r);
+            derecha = izq;
+            if let Some(j) = i.checked_sub(1) {
+                derecha -= p.entre.get(j).copied().unwrap_or(0.0);
+            }
+        }
+        cajas.reverse();
+        (cajas, derecha)
     }
 
     /// Lo mismo para un glifo suelto (`texto_en` con `glifo`, que lo centra por su tinta): la
@@ -241,6 +276,9 @@ pub struct Lugar {
     aparte: Option<Rect>,
     /// La tinta de cada glifo de estado.
     estados: Vec<Rect>,
+    /// La caja de cada pedazo de la grabación y de la batería.
+    grabacion: Vec<Rect>,
+    bateria: Vec<Rect>,
 }
 
 /// `revelado`: cuánto se ve de la bandeja, de 0 a 1, ya con su curva.
@@ -349,24 +387,28 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
         aparte = Some(r);
         borde = izq;
     }
-    if let Some(l) = &rot.bateria {
+    let mut bateria = Vec::new();
+    if let Some(p) = &rot.bateria {
         let derecha = borde - ENTRE_AVISOS;
-        let (r, izq) = rot.rotulo_hasta(l, derecha, h);
+        let (cajas, izq) = rot.partes_hasta(p, derecha, h);
         piezas.push(Pieza {
             que: Que::Bateria,
             caja: Rect::new(izq - medio, 0.0, derecha + medio, h),
-            contenido: r,
+            contenido: Rect::new(izq, 0.0, derecha, h),
         });
+        bateria = cajas;
         borde = izq;
     }
-    if let Some(l) = &rot.grabacion {
+    let mut grabacion = Vec::new();
+    if let Some(p) = &rot.grabacion {
         let derecha = borde - ENTRE_AVISOS;
-        let (r, izq) = rot.rotulo_hasta(l, derecha, h);
+        let (cajas, izq) = rot.partes_hasta(p, derecha, h);
         piezas.push(Pieza {
             que: Que::Grabacion,
             caja: Rect::new(izq - medio, 0.0, derecha + medio, h),
-            contenido: r,
+            contenido: Rect::new(izq, 0.0, derecha, h),
         });
+        grabacion = cajas;
         borde = izq;
     }
     let mut estados = Vec::new();
@@ -391,6 +433,8 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
         reloj,
         aparte,
         estados,
+        grabacion,
+        bateria,
     }
 }
 
@@ -633,14 +677,18 @@ impl Pintura<'_> {
                     }
                 }
                 Que::Bateria => {
-                    if let Some(l) = &self.rotulos.bateria {
-                        texto_en(s, l, pieza.contenido, escala, t, p.error, false);
+                    if let Some(partes) = &self.rotulos.bateria {
+                        for (l, r) in partes.textos.iter().zip(&self.lugar.bateria) {
+                            texto_en(s, l, *r, escala, t, p.error, false);
+                        }
                     }
                 }
                 Que::Grabacion => {
-                    if let Some(l) = &self.rotulos.grabacion {
+                    if let Some(partes) = &self.rotulos.grabacion {
                         let c = opaco(&p.error, self.latido);
-                        texto_en(s, l, pieza.contenido, escala, t, c, false);
+                        for (l, r) in partes.textos.iter().zip(&self.lugar.grabacion) {
+                            texto_en(s, l, *r, escala, t, c, false);
+                        }
                     }
                 }
             }
