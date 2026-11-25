@@ -88,6 +88,7 @@ impl Motor {
             }),
         };
         m.armar_rotacion();
+        glib::MainContext::default().spawn_local(al_arrancar());
         m
     }
 
@@ -250,6 +251,26 @@ async fn arrancar_awww() {
             return;
         }
         glib::timeout_future(Duration::from_millis(100)).await;
+    }
+}
+
+/// Al iniciar la sesión nadie más levanta awww: sin esto la pantalla queda sin fondo hasta la
+/// próxima rotación. Antes se le da un margen a un awww que arranque por su cuenta (una unidad
+/// del usuario con `awww restore`), para no lanzar un segundo daemon. Si hubo que lanzarlo, se
+/// pinta el fondo anotado sin transición y sin tocar la anotación: la rotación sigue contando
+/// desde el último cambio, y el bloqueo y el tema ya corresponden a ese fondo.
+async fn al_arrancar() {
+    for _ in 0..30 {
+        if awww_listo().await {
+            return;
+        }
+        glib::timeout_future(Duration::from_millis(100)).await;
+    }
+    arrancar_awww().await;
+    let Some(img) = actual().filter(|p| p.is_file()) else { return };
+    let img = img.to_string_lossy();
+    if let Err(e) = comando::salida(&["awww", "img", &img, "--transition-type", "none"]).await {
+        eprintln!("morgan: fondos: {e}");
     }
 }
 
