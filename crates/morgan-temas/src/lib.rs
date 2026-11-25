@@ -34,6 +34,9 @@ use std::process::Command;
 
 pub const MATUGEN: &str = "matugen";
 
+/// La versión de morgan que renderiza: las plantillas del paquete cambian con ella.
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// La paleta del tema propio, embebida: morgan tiene colores aunque no haya nada renderizado.
 const PALETA_POR_DEFECTO: &str = include_str!("../../../dist/share/morgan/themes/morgan/palette.toml");
 
@@ -104,6 +107,11 @@ impl Rutas {
         self.estado.join("morgan/tema-activo")
     }
 
+    /// La versión de morgan que renderizó el tema activo.
+    fn archivo_version(&self) -> PathBuf {
+        self.estado.join("morgan/tema-version")
+    }
+
     fn expandir(&self, ruta: &str) -> PathBuf {
         match ruta.strip_prefix("~/") {
             Some(r) => self.home.join(r),
@@ -162,6 +170,7 @@ pub fn aplicar(r: &Rutas, tema: &str, imagen: Option<&Path>) -> Result<Informe, 
     }
     render::renderizar(r, &plantillas, &datos)?;
     escribir(&r.archivo_activo(), &format!("{tema}\n"))?;
+    escribir(&r.archivo_version(), &format!("{VERSION}\n"))?;
     let mut inf = integraciones::desplegar(r);
     integraciones::esquema(r, oscuro, &mut inf);
     Ok(inf)
@@ -172,6 +181,23 @@ pub fn recargar(r: &Rutas) -> Result<Informe, String> {
         "" => Err(tr!("no hay un tema activo").into()),
         t => aplicar(r, t, None),
     }
+}
+
+/// Al arrancar: vuelve a renderizar el tema activo si lo renderizó otra versión de morgan.
+/// Lo que cambia en una plantilla del paquete (un color nuevo para Umbriel, por ejemplo)
+/// llega así con la actualización, sin esperar a que el usuario cambie de fondo o de tema.
+pub fn al_dia(r: &Rutas) -> Result<Option<Informe>, String> {
+    let renderizada = std::fs::read_to_string(r.archivo_version()).unwrap_or_default();
+    if !hay_que_renderizar(&activo(r), renderizada.trim()) {
+        return Ok(None);
+    }
+    recargar(r).map(Some)
+}
+
+/// Sin tema activo no se renderiza nada: el primero lo elige el usuario. Sin versión
+/// anotada (lo renderizó una versión de antes de anotarla) se renderiza.
+fn hay_que_renderizar(activo: &str, renderizada: &str) -> bool {
+    !activo.is_empty() && renderizada != VERSION
 }
 
 pub fn wallpaper(r: &Rutas, imagen: Option<&Path>) -> Result<Option<Informe>, String> {
@@ -226,6 +252,14 @@ impl Lock {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn se_renderiza_de_nuevo_solo_con_otra_version() {
+        assert!(!hay_que_renderizar("", "0.0.1"), "sin tema activo no");
+        assert!(!hay_que_renderizar("matugen", VERSION), "misma versión no");
+        assert!(hay_que_renderizar("matugen", "0.0.1"), "otra versión sí");
+        assert!(hay_que_renderizar("morgan", ""), "sin versión anotada sí");
+    }
 
     #[test]
     fn los_colores_por_defecto_cubren_la_plantilla_de_morgan() {

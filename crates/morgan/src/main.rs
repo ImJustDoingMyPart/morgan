@@ -157,6 +157,21 @@ fn main() -> ExitCode {
                 }
             });
         }
+        // Un tema renderizado por otra versión se vuelve a renderizar, con las plantillas
+        // de la que corre. `Tema` vigila theme.css, así que toma el resultado solo.
+        glib::MainContext::default().spawn_local(async {
+            let rutas = morgan_temas::Rutas::del_entorno();
+            let r = gio::spawn_blocking(move || morgan_temas::al_dia(&rutas)).await;
+            match r {
+                Ok(Ok(informe)) => {
+                    for a in informe.map(|i| i.avisos).unwrap_or_default() {
+                        eprintln!("morgan: tema: {a}");
+                    }
+                }
+                Ok(Err(e)) => eprintln!("morgan: tema: {e}"),
+                Err(_) => eprintln!("morgan: tema: el hilo se cayó"),
+            }
+        });
         let tema = Tema::new(
             theme_path.clone(),
             &config.shell,
