@@ -2,6 +2,16 @@
 
 **English** · [Español](CHANGELOG.es.md)
 
+## 0.3.5 · 2026-11-25
+
+### Wallpaper from the start
+
+If no awww daemon is running when the session starts, morgan launches it and paints the last wallpaper, with no transition. Before, the screen stayed blank until the first change or the next rotation. If awww already starts on its own (from your own systemd unit, for instance), morgan doesn't launch a second one. Rotation keeps counting from the last wallpaper change.
+
+### Themes
+
+On startup, morgan renders the active theme again if another version rendered it, so a change in the package's templates arrives without switching wallpaper or theme. In Umbriel, the overview keys take the theme's `primary` color instead of Umbriel's own blue.
+
 ## 0.3.4 · 2026-11-23
 
 ### Battery level in the control center

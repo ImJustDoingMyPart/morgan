@@ -2,6 +2,16 @@
 
 [English](CHANGELOG.md) · **Español**
 
+## 0.3.5 · 2026-11-25
+
+### Fondo desde el primer momento
+
+Si al iniciar la sesión no hay ningún daemon de awww corriendo, morgan lo lanza y pinta el último fondo, sin transición. Antes la pantalla quedaba sin fondo hasta el primer cambio o la próxima rotación. Si awww ya arranca por su cuenta (con una unidad de systemd propia, por ejemplo), morgan no lanza otro. La rotación sigue contando desde el último cambio de fondo.
+
+### Temas
+
+Al arrancar, morgan vuelve a renderizar el tema activo si lo había renderizado otra versión, así un cambio en las plantillas del paquete llega sin tener que cambiar de fondo o de tema. En Umbriel, las teclas del overview toman el color `primary` del tema en vez del azul propio de Umbriel.
+
 ## 0.3.4 · 2026-11-23
 
 ### El nivel de batería en el centro de control
