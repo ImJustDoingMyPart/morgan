@@ -19,3 +19,9 @@ shadow = "#0000007F"
 focused = "#{{colors.primary.default.hex_stripped}}FF"
 unfocused = "#00000000"
 outer = "#00000000"
+
+# Las teclas de atajo del overview: la tecla va en primary y Umbriel mezcla el 9 % de este
+# color sobre background para el fondo del badge (keycapBackgroundColor en src/scene/color.h).
+# Sin esta clave queda su default azul, que no sale del tema.
+[colors.overview]
+badge = "#{{colors.primary.default.hex_stripped}}FF"
