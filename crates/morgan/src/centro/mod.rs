@@ -1467,16 +1467,16 @@ impl Centro {
         let a = &i.acciones;
         let p = Parte::Lista(ListaId::Energia);
         a.soltar(p);
-        // El puesto no va: ya está en el estado de la tarjeta.
+        // Todos los perfiles, con la casilla en el puesto (como las Wi-Fi y los dispositivos).
         let ops = e
             .perfiles
             .iter()
-            .filter(|x| e.activo.as_deref() != Some(x.as_str()))
             .map(|x| {
                 let (glifo, nombre) = crate::energia::etiqueta(x);
                 let en = i.energia.clone();
                 let perfil = x.clone();
-                Opcion::new(glifo, nombre, None, a.tocar(p, move || en.elegir(&perfil)))
+                let puesto = e.activo.as_deref() == Some(x.as_str());
+                Opcion::new(glifo, nombre, Some(puesto), a.tocar(p, move || en.elegir(&perfil)))
             })
             .collect();
         self.mandar(Orden::Lista(ListaId::Energia, Contenido::Opciones(ops)));
