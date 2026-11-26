@@ -25,3 +25,15 @@ outer = "#00000000"
 # Sin esta clave queda su default azul, que no sale del tema.
 [colors.overview]
 badge = "#{{colors.primary.default.hex_stripped}}FF"
+
+# La barra de pestañas de las columnas agrupadas: la pestaña activa va en primary, como el borde
+# con foco, y la barra en el mismo fondo que el resto. Sin esta tabla queda su default azul.
+[colors.tab_bar]
+background = "#{{colors.surface_container.default.hex_stripped}}FF"
+text = "#{{colors.on_surface_variant.default.hex_stripped}}FF"
+active = "#{{colors.primary.default.hex_stripped}}FF"
+active_text = "#{{colors.on_primary.default.hex_stripped}}FF"
+active_unfocused = "#{{colors.surface_container_highest.default.hex_stripped}}FF"
+active_unfocused_text = "#{{colors.on_surface.default.hex_stripped}}FF"
+urgent = "#{{colors.error.default.hex_stripped}}FF"
+urgent_text = "#{{colors.on_error.default.hex_stripped}}FF"
