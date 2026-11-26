@@ -39,8 +39,8 @@ impl Categoria {
     pub fn titulo(self) -> &'static str {
         match self {
             Categoria::Apariencia => tr!("Apariencia"),
-            Categoria::Shell => tr!("General"),
-            Categoria::Compositor => tr!("Escritorio"),
+            Categoria::Shell => tr!("Shell"),
+            Categoria::Compositor => tr!("Compositor"),
             Categoria::Atajos => tr!("Atajos"),
             Categoria::Aplicaciones => tr!("Aplicaciones"),
             Categoria::Sistema => tr!("Sistema"),
@@ -74,15 +74,16 @@ impl Categoria {
                 tr_const!("Íconos y cursor"),
                 tr_const!("Animaciones"),
                 tr_const!("Sombras"),
+                tr_const!("Desenfoque"),
             ],
             Categoria::Shell => &[
-                tr_const!("Preferencias"),
-                tr_const!("Fecha y hora"),
+                tr_const!("Superficies"),
+                tr_const!("Dock"),
+                tr_const!("Clima y calendario"),
                 tr_const!("Pantalla de bloqueo"),
             ],
             Categoria::Compositor => &[
                 tr_const!("Ventanas"),
-                tr_const!("Desenfoque"),
                 tr_const!("Distribución"),
                 tr_const!("Grupos"),
                 tr_const!("Foco y cursor"),
@@ -99,10 +100,17 @@ impl Categoria {
             // Snapshots, solo con snapper instalado.
             Categoria::Sistema if super::sistema::hay_snapper() => &[
                 tr_const!("Equipo"),
+                tr_const!("Idioma y región"),
+                tr_const!("Fecha y hora"),
                 tr_const!("Snapshots"),
                 tr_const!("Privacidad"),
             ],
-            Categoria::Sistema => &[tr_const!("Equipo"), tr_const!("Privacidad")],
+            Categoria::Sistema => &[
+                tr_const!("Equipo"),
+                tr_const!("Idioma y región"),
+                tr_const!("Fecha y hora"),
+                tr_const!("Privacidad"),
+            ],
             Categoria::Sonido => &[
                 tr_const!("Volumen"),
                 tr_const!("Salidas"),
@@ -143,6 +151,7 @@ pub enum Que {
     GrabarTecla(String),
     Monitor(String, super::monitores::Campo),
     Hora(super::hora::Cambio),
+    Region(super::region::Cambio),
     MantenerMonitores,
     VolverMonitores,
 }
@@ -623,7 +632,6 @@ pub fn pagina_fija(cat: Categoria, c: &Config, apps_historial: &[String]) -> Opt
                             .collect(),
                     ),
                 ),
-                idioma_(&c.shell.idioma),
                 ajuste(
                     tr!("Esquina activa"),
                     tr!("el mouse en la esquina superior izquierda abre la vista de ventanas"),
@@ -632,8 +640,10 @@ pub fn pagina_fija(cat: Categoria, c: &Config, apps_historial: &[String]) -> Opt
                         que: Que::Config(Cambio::Esquina(!c.shell.esquina)),
                     },
                 ),
+            ],
+            vec![
                 ajuste(
-                    tr!("Dock"),
+                    tr!("Mostrar el dock"),
                     tr!("las apps más usadas y las abiertas, abajo; nunca sobre un juego"),
                     Control::Casilla {
                         activa: c.dock.mostrar,
@@ -653,6 +663,8 @@ pub fn pagina_fija(cat: Categoria, c: &Config, apps_historial: &[String]) -> Opt
                     tr!("las apps se ordenan arrastrándolas; esto vuelve a las más usadas primero"),
                     Control::Confirmar(Que::RestaurarDock),
                 ),
+            ],
+            vec![
                 ajuste(
                     tr!("Clima"),
                     &if c.clima.latitud.is_some() && !c.clima.lugar.is_empty() {
@@ -674,8 +686,6 @@ pub fn pagina_fija(cat: Categoria, c: &Config, apps_historial: &[String]) -> Opt
                     Control::Boton(Que::Calendario),
                 ),
             ],
-            // La fecha y la hora las pone la lectura de timedated.
-            Vec::new(),
             bloqueo(&c.bloqueo),
         ],
         Categoria::Notificaciones => vec![
@@ -776,7 +786,8 @@ fn aplicar(args: &[&str]) -> Que {
     Que::Aplicar(args.iter().map(|a| (*a).to_owned()).collect())
 }
 
-pub fn apariencia(l: &Lecturas, c: &Config) -> Vec<Seccion> {
+/// El desenfoque lo lee el compositor (`lectura::desenfoque`).
+pub fn apariencia(l: &Lecturas, c: &Config, desenfoque: Vec<Fila>) -> Vec<Seccion> {
     let temas = l
         .temas
         .iter()
@@ -959,6 +970,7 @@ pub fn apariencia(l: &Lecturas, c: &Config) -> Vec<Seccion> {
                 },
             ],
             vec![galeria(sombras)],
+            desenfoque,
         ],
     )
 }
@@ -1174,34 +1186,6 @@ fn bloqueo(b: &Bloqueo) -> Vec<Fila> {
             Control::Boton(aplicar(&["loginctl", "lock-session"])),
         ),
     ]
-}
-
-/// Los idiomas van con su propio nombre: quien no entiende el actual igual encuentra el suyo.
-/// Vale desde que morgan vuelve a arrancar (`morgan-idioma` lo decide una vez).
-fn idioma_(puesto: &str) -> Fila {
-    let auto = !matches!(idioma::Idioma::de_config(puesto), Some(Some(_)));
-    let opciones = [
-        ("auto", tr!("Automático"), tr!("el del sistema")),
-        ("en", "English", ""), // no-tr
-        ("es", "Español", ""), // no-tr
-    ];
-    let nombre = opciones
-        .iter()
-        .find(|(v, _, _)| *v == puesto || (auto && *v == "auto"))
-        .map_or(puesto, |(_, n, _)| n);
-    ajuste(
-        tr!("Idioma"),
-        &trf!("{} · se aplica al volver a entrar a la sesión", nombre),
-        Control::Lista(
-            opciones
-                .iter()
-                .map(|&(v, n, sub)| {
-                    opcion(n, sub, Que::Config(Cambio::Idioma(v.into())))
-                        .activa(v == puesto || (auto && v == "auto"))
-                })
-                .collect(),
-        ),
-    )
 }
 
 const OPACIDADES: &[f64] = &[0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0];
@@ -1706,15 +1690,6 @@ mod tests {
                     p[0].filas = super::super::monitores::filas(&[], &Default::default(), true);
                     p
                 }
-                (Some(mut p), Categoria::Shell) => {
-                    let l = super::super::hora::Lectura {
-                        zona: "UTC".into(),
-                        zonas: vec!["UTC".into()],
-                        ..Default::default()
-                    };
-                    p[1].filas = super::super::hora::filas(&l, None, chrono::Utc::now());
-                    p
-                }
                 (Some(p), _) => p,
                 (None, Categoria::Compositor) => {
                     let mut p = super::super::compositor::pagina(
@@ -1734,15 +1709,27 @@ mod tests {
                 ),
                 (None, Categoria::Sonido) => sonido(&c, &[tema_prueba("ocean", &[])], "ocean", &[]),
                 (None, Categoria::Sistema) => {
-                    let mut filas =
-                        vec![super::super::sistema::equipo(&[("Kernel", "7.2".into())])];
+                    let l = super::super::hora::Lectura {
+                        zona: "UTC".into(),
+                        zonas: vec!["UTC".into()],
+                        ..Default::default()
+                    };
+                    let mut filas = vec![
+                        super::super::sistema::equipo(&[("Kernel", "7.2".into())]),
+                        super::super::region::filas(&Default::default()),
+                        super::super::hora::filas(&l, None, chrono::Utc::now()),
+                    ];
                     if super::super::sistema::hay_snapper() {
                         filas.push(super::super::sistema::snapshots(None));
                     }
                     filas.push(privacidad(0, 0));
                     armar(cat, filas)
                 }
-                (None, _) => apariencia(&Lecturas::default(), &c),
+                (None, _) => apariencia(
+                    &Lecturas::default(),
+                    &c,
+                    super::super::compositor::desenfoque(&Default::default(), &Default::default(), false),
+                ),
             };
             let titulos: Vec<_> = p.iter().map(|s| s.titulo).collect();
             assert_eq!(titulos, cat.secciones(), "{cat:?}");
@@ -1774,9 +1761,9 @@ mod tests {
     fn el_bloqueo_marca_lo_puesto_y_cambia_solo_lo_suyo() {
         let mut c = Config::default();
         let p = pagina_fija(Categoria::Shell, &c, &[]).unwrap();
-        assert_eq!(activas(lista(&p, 2, 0)), ["Onda"]);
-        assert_eq!(activas(lista(&p, 2, 2)), ["Los dos"]);
-        let puntos = lista(&p, 2, 0)
+        assert_eq!(activas(lista(&p, 3, 0)), ["Onda"]);
+        assert_eq!(activas(lista(&p, 3, 2)), ["Los dos"]);
+        let puntos = lista(&p, 3, 0)
             .iter()
             .find(|o| o.titulo == "Puntos")
             .unwrap();
@@ -1794,7 +1781,7 @@ mod tests {
                     que: Que::Config(cambio),
                 },
             ..
-        } = &p[2].filas[1]
+        } = &p[3].filas[1]
         else {
             panic!("la chispa no es una casilla")
         };
@@ -1966,13 +1953,13 @@ mod tests {
     #[test]
     fn paleta_de_matugen() {
         let mut c = Config::default();
-        let p = apariencia(&Lecturas::default(), &c);
+        let p = apariencia(&Lecturas::default(), &c, vec![solo_hyprland("")]);
         // Tema y colores: la galería y las tres de matugen.
         assert_eq!(p[0].filas.len(), 4);
         assert_eq!(activas(lista(&p, 0, 1)), ["Tonal · la de siempre"]);
         Cambio::MatugenModo("light".into()).aplicar(&mut c);
         Cambio::MatugenContraste(0.5).aplicar(&mut c);
-        let p = apariencia(&Lecturas::default(), &c);
+        let p = apariencia(&Lecturas::default(), &c, vec![solo_hyprland("")]);
         assert_eq!(activas(lista(&p, 0, 2)), ["clara"]);
         assert_eq!(activas(lista(&p, 0, 3)), ["alto"]);
     }
@@ -2012,7 +1999,7 @@ mod tests {
             icono: "Papirus".into(),
             ..Default::default()
         };
-        let p = apariencia(&l, &Config::default());
+        let p = apariencia(&l, &Config::default(), vec![solo_hyprland("")]);
         let galeria = |s: usize, f: usize| match &p[s].filas[f] {
             Fila::Galeria { opciones, .. } => opciones.clone(),
             otra => panic!("{otra:?}"),
@@ -2035,6 +2022,7 @@ mod tests {
                 ..Default::default()
             },
             &c,
+            vec![solo_hyprland("")],
         );
         let en = pagina_fija(Categoria::Pantalla, &c, &[]).unwrap();
         let paginas = [

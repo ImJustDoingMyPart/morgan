@@ -284,37 +284,6 @@ pub const SECCIONES: &[(&str, &[Opt])] = &[
         ],
     ),
     (
-        tr_const!("Desenfoque"),
-        &[
-            opt(
-                "decoration:blur:enabled",
-                tr_const!("Desenfoque detrás de las ventanas"),
-                tr_const!("lo que se ve a través de una ventana transparente"),
-                Tipo::Casilla,
-            ),
-            opt(
-                "decoration:blur:size",
-                tr_const!("Tamaño"),
-                "",
-                Tipo::Valores(
-                    enteros![2 => "2", 4 => "4", 6 => "6", 8 => "8", 10 => "10", 12 => "12"],
-                ),
-            ),
-            opt(
-                "decoration:blur:passes",
-                tr_const!("Pasadas"),
-                tr_const!("más pasadas, más suave y más costoso"),
-                Tipo::Valores(enteros![1 => "1", 2 => "2", 3 => "3", 4 => "4"]),
-            ),
-            opt(
-                "decoration:blur:popups",
-                tr_const!("También en los menús de las apps"),
-                tr_const!("menús contextuales y tooltips"),
-                Tipo::Casilla,
-            ),
-        ],
-    ),
-    (
         tr_const!("Distribución"),
         &[
             opt(
@@ -540,31 +509,6 @@ pub const SECCIONES_UMBRIEL: &[(&str, &[Opt])] = &[
         ],
     ),
     (
-        tr_const!("Desenfoque"),
-        &[
-            opt(
-                "appearance.blur.enabled",
-                tr_const!("Desenfoque detrás de las ventanas"),
-                tr_const!("lo que se ve a través de una ventana transparente"),
-                Tipo::Casilla,
-            ),
-            opt(
-                "appearance.blur.radius",
-                tr_const!("Tamaño"),
-                "",
-                Tipo::Valores(
-                    enteros![2 => "2", 4 => "4", 6 => "6", 8 => "8", 10 => "10", 12 => "12"],
-                ),
-            ),
-            opt(
-                "appearance.blur.passes",
-                tr_const!("Pasadas"),
-                tr_const!("más pasadas, más suave y más costoso"),
-                Tipo::Valores(enteros![1 => "1", 2 => "2", 3 => "3", 4 => "4"]),
-            ),
-        ],
-    ),
-    (
         tr_const!("Distribución"),
         &[opt(
             "layout.scrolling.center_focused",
@@ -712,15 +656,81 @@ pub const SECCIONES_UMBRIEL: &[(&str, &[Opt])] = &[
     ),
 ];
 
+/// El desenfoque se elige en Apariencia, junto a las sombras; se lee con lo demás.
+pub const DESENFOQUE: &[(&str, &[Opt])] = &[
+    (
+        tr_const!("Desenfoque"),
+        &[
+            opt(
+                "decoration:blur:enabled",
+                tr_const!("Desenfoque detrás de las ventanas"),
+                tr_const!("lo que se ve a través de una ventana transparente"),
+                Tipo::Casilla,
+            ),
+            opt(
+                "decoration:blur:size",
+                tr_const!("Tamaño"),
+                "",
+                Tipo::Valores(
+                    enteros![2 => "2", 4 => "4", 6 => "6", 8 => "8", 10 => "10", 12 => "12"],
+                ),
+            ),
+            opt(
+                "decoration:blur:passes",
+                tr_const!("Pasadas"),
+                tr_const!("más pasadas, más suave y más costoso"),
+                Tipo::Valores(enteros![1 => "1", 2 => "2", 3 => "3", 4 => "4"]),
+            ),
+            opt(
+                "decoration:blur:popups",
+                tr_const!("También en los menús de las apps"),
+                tr_const!("menús contextuales y tooltips"),
+                Tipo::Casilla,
+            ),
+        ],
+    ),
+];
+
+/// El de Umbriel, sin el de los menús de las apps (es por capa).
+pub const DESENFOQUE_UMBRIEL: &[(&str, &[Opt])] = &[
+    (
+        tr_const!("Desenfoque"),
+        &[
+            opt(
+                "appearance.blur.enabled",
+                tr_const!("Desenfoque detrás de las ventanas"),
+                tr_const!("lo que se ve a través de una ventana transparente"),
+                Tipo::Casilla,
+            ),
+            opt(
+                "appearance.blur.radius",
+                tr_const!("Tamaño"),
+                "",
+                Tipo::Valores(
+                    enteros![2 => "2", 4 => "4", 6 => "6", 8 => "8", 10 => "10", 12 => "12"],
+                ),
+            ),
+            opt(
+                "appearance.blur.passes",
+                tr_const!("Pasadas"),
+                tr_const!("más pasadas, más suave y más costoso"),
+                Tipo::Valores(enteros![1 => "1", 2 => "2", 3 => "3", 4 => "4"]),
+            ),
+        ],
+    ),
+];
+
 pub fn claves_umbriel() -> impl Iterator<Item = &'static str> {
     SECCIONES_UMBRIEL
         .iter()
+        .chain(DESENFOQUE_UMBRIEL)
         .flat_map(|(_, o)| o.iter().map(|o| o.clave))
 }
 
 pub fn claves() -> impl Iterator<Item = &'static str> {
     SECCIONES
         .iter()
+        .chain(DESENFOQUE)
         .flat_map(|(_, o)| o.iter().map(|o| o.clave))
 }
 
@@ -771,6 +781,16 @@ pub fn pagina_umbriel(
         distribuciones,
         tr!("Volver a lo de los archivos de Umbriel"),
     )
+}
+
+/// Las filas de Apariencia › Desenfoque, con las claves del compositor en uso.
+pub fn desenfoque(actuales: &BTreeMap<String, Valor>, cambios: &Cambios, umbriel: bool) -> Vec<Fila> {
+    let (secciones, volver) = if umbriel {
+        (DESENFOQUE_UMBRIEL, tr!("Volver a lo de los archivos de Umbriel"))
+    } else {
+        (DESENFOQUE, tr!("Volver a lo de los archivos de Hyprland"))
+    };
+    pagina_de(secciones, actuales, cambios, &[], volver).remove(0).filas
 }
 
 fn pagina_de(
@@ -1005,10 +1025,15 @@ mod tests {
         actuales.insert("decoration:blur:enabled".to_owned(), Valor::Bool(true));
         let mut cambios = Cambios::default();
         cambios.poner("decoration:rounding", Some(Valor::Int(4)));
-        let p = pagina(&actuales, &cambios, &[]);
+        let mut p = pagina(&actuales, &cambios, &[]);
+        p.push(Seccion {
+            titulo: "Desenfoque", // no-tr
+            filas: desenfoque(&actuales, &cambios, false),
+        });
         let buscar = |clave: &str| {
             let (s, f) = SECCIONES
                 .iter()
+                .chain(DESENFOQUE)
                 .enumerate()
                 .find_map(|(s, (_, o))| o.iter().position(|o| o.clave == clave).map(|f| (s, f)))
                 .unwrap();

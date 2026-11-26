@@ -11,6 +11,7 @@ pub mod atajos;
 pub mod compositor;
 pub(crate) mod cursores;
 mod hora;
+mod region;
 pub(crate) mod lectura;
 pub mod monitores;
 pub mod reglas;
@@ -233,7 +234,7 @@ impl Menu {
         let (cat, seccion) = match nivel {
             NivelMenu::Raiz => (Categoria::Apariencia, None),
             NivelMenu::Fondos => (Categoria::Apariencia, Some("Fondos")), // no-tr
-            NivelMenu::Clima => (Categoria::Shell, Some("Preferencias")), // no-tr
+            NivelMenu::Clima => (Categoria::Shell, Some("Clima y calendario")), // no-tr
         };
         let seccion = seccion.and_then(|n| cat.secciones().iter().position(|s| *s == n));
         if !ya_abierto {
@@ -493,13 +494,6 @@ impl Menu {
             Categoria::Shell | Categoria::Pantalla | Categoria::Notificaciones => {
                 let apps = self.inner.s.notificaciones.apps();
                 let mut p = arbol::pagina_fija(cat, &c, &apps).unwrap_or_default();
-                if cat == Categoria::Shell
-                    && let Some(f) = p.get_mut(1)
-                {
-                    let region = self.inner.region_horaria.borrow().clone();
-                    f.filas =
-                        hora::filas(&hora::leer().await, region.as_deref(), chrono::Utc::now());
-                }
                 let tipo = morgan_ipc::compositor::actual();
                 if cat == Categoria::Pantalla
                     && tipo == morgan_ipc::compositor::Tipo::Otro
@@ -538,14 +532,23 @@ impl Menu {
                 if let Some(n) = nuevas {
                     self.inner.listas.replace(Some(Rc::new(n)));
                 }
-                arbol::apariencia(&lecturas, &c)
+                let desenfoque = lectura::desenfoque(&self.ruta_cambios()).await;
+                arbol::apariencia(&lecturas, &c, desenfoque)
             }
             Categoria::Compositor => {
                 lectura::compositor(&self.ruta_cambios(), &c.reglas).await
             }
             Categoria::Atajos => lectura::atajos(&c.atajos).await,
             Categoria::Aplicaciones => lectura::aplicaciones(&c.capturas),
-            Categoria::Sistema => lectura::sistema().await,
+            Categoria::Sistema => {
+                let zona = self.inner.region_horaria.borrow().clone();
+                let (region, hora) = futures_lite::future::zip(region::leer(), hora::leer()).await;
+                lectura::sistema(
+                    region::filas(&region),
+                    hora::filas(&hora, zona.as_deref(), chrono::Utc::now()),
+                )
+                .await
+            }
             Categoria::Sonido => {
                 let salidas = self.inner.salidas.borrow().clone();
                 arbol::sonido(&c, &sonidos::temas(), &sonidos::tema_puesto(), &salidas)
@@ -960,6 +963,14 @@ impl Menu {
                 Ok(())
             }
             Que::Hora(c) => hora::aplicar(c).await,
+            // morgan sigue al idioma de la sesión.
+            Que::Region(c) => {
+                region::aplicar(c)?;
+                if self.inner.config.borrow().shell.idioma != "auto" {
+                    self.cambiar_config(&arbol::Cambio::Idioma("auto".into()))?;
+                }
+                Ok(())
+            }
             Que::MantenerMonitores => self.mantener_monitores().await,
             Que::VolverMonitores => self.volver_monitores().await,
             Que::Apariencia(c) => {

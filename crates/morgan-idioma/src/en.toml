@@ -53,8 +53,9 @@
 
 # menu/arbol.rs: categorías y secciones
 "Apariencia" = "Appearance"
-"Escritorio" = "Desktop"
-"Preferencias" = "Preferences"
+"Compositor" = "Compositor"
+"Superficies" = "Surfaces"
+"Clima y calendario" = "Weather and calendar"
 "Fecha y hora" = "Date and time"
 "Atajos" = "Shortcuts"
 "Aplicaciones" = "Applications"
@@ -69,7 +70,7 @@
 "Íconos y cursor" = "Icons and cursor"
 "Animaciones" = "Animations"
 "Sombras" = "Shadows"
-"General" = "General"
+"Shell" = "Shell"
 "Pantalla de bloqueo" = "Lock screen"
 "Ventanas" = "Windows"
 "Desenfoque" = "Blur"
@@ -105,8 +106,6 @@
 "las apps se ordenan arrastrándolas; esto vuelve a las más usadas primero" = "apps are sorted by dragging them; this goes back to the most used first"
 "el mouse en la esquina superior izquierda abre la vista de ventanas" = "moving the mouse to the top left corner opens the window overview"
 "{} · se aplica al volver a entrar a la sesión" = "{} · takes effect after logging in again"
-"Automático" = "Automatic"
-"el del sistema" = "the system's"
 "Clima" = "Weather"
 "el pronóstico del calendario · {}" = "the calendar's forecast · {}"
 "sin ubicación · el calendario no muestra el pronóstico" = "no location · the calendar shows no forecast"
@@ -1014,3 +1013,12 @@
 "{} min" = "{} min"
 "{} h" = "{} h"
 "{} h {} min" = "{} h {} min"
+
+# menu/region.rs
+"Idioma y región" = "Language and region"
+"Mostrar el dock" = "Show the dock"
+"El del sistema" = "The system's"
+"Los del idioma" = "The language's"
+"morgan y las apps · {}" = "morgan and the apps · {}"
+"Formatos" = "Formats"
+"fecha, hora, números y moneda · {}" = "date, time, numbers and currency · {}"

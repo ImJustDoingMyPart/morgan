@@ -1,6 +1,7 @@
 //! Los programas se lanzan todos juntos (`comando::salidas`): una página tarda lo que su
 //! lectura más lenta, no la suma.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use gio::prelude::*;
@@ -105,43 +106,59 @@ fn escala() -> u32 {
     crate::pixeles::escala().max(1) as u32
 }
 
-pub async fn compositor(cambios: &Path, reglas: &[crate::config::ReglaApp]) -> Vec<Seccion> {
-    match morgan_ipc::compositor::actual() {
-        morgan_ipc::compositor::Tipo::Umbriel => return compositor_umbriel(cambios, reglas).await,
-        morgan_ipc::compositor::Tipo::Otro => {
-            return super::arbol::pagina_solo_hyprland(super::arbol::Categoria::Compositor, "");
-        }
-        morgan_ipc::compositor::Tipo::Hyprland => {}
-    }
-    let actuales =
-        compositor::de_batch(&leer(&["hyprctl", "--batch", &compositor::pedido_batch()]).await);
+/// Lo puesto en el compositor en uso y lo cambiado desde el menú; `None` si no es Hyprland
+/// ni Umbriel. Umbriel no tiene `getoption`: lo puesto sale de sus archivos y los defaults de
+/// su schema.
+async fn valores_compositor(
+    cambios: &Path,
+) -> Option<(BTreeMap<String, compositor::Valor>, compositor::Cambios, bool)> {
+    let umbriel = match morgan_ipc::compositor::actual() {
+        morgan_ipc::compositor::Tipo::Umbriel => true,
+        morgan_ipc::compositor::Tipo::Hyprland => false,
+        morgan_ipc::compositor::Tipo::Otro => return None,
+    };
+    let actuales = if umbriel {
+        let config = crate::umbriel_valores::cargar(&crate::umbriel_valores::ruta_config());
+        let defaults = crate::umbriel_valores::defaults(
+            &leer(&["umbriel", "config", "schema", "--json"]).await, // no-tr
+        );
+        crate::umbriel_valores::vigentes(&config, &defaults, compositor::claves_umbriel())
+    } else {
+        compositor::de_batch(&leer(&["hyprctl", "--batch", &compositor::pedido_batch()]).await)
+    };
     let cambios = compositor::Cambios::leer(cambios).unwrap_or_else(|e| {
         eprintln!("morgan: menú: {e}");
         Default::default()
     });
+    Some((actuales, cambios, umbriel))
+}
+
+pub async fn compositor(cambios: &Path, reglas: &[crate::config::ReglaApp]) -> Vec<Seccion> {
+    let Some((actuales, cambios, umbriel)) = valores_compositor(cambios).await else {
+        return super::arbol::pagina_solo_hyprland(super::arbol::Categoria::Compositor, "");
+    };
     let evdev = std::fs::read_to_string("/usr/share/X11/xkb/rules/evdev.lst").unwrap_or_default();
-    let mut p = compositor::pagina(&actuales, &cambios, &compositor::distribuciones(&evdev));
-    p.push(super::reglas::seccion(reglas, &crate::aplicacion::todas()));
+    let distribuciones = compositor::distribuciones(&evdev);
+    let apps = crate::aplicacion::todas();
+    let mut p = if umbriel {
+        compositor::pagina_umbriel(&actuales, &cambios, &distribuciones)
+    } else {
+        compositor::pagina(&actuales, &cambios, &distribuciones)
+    };
+    p.push(if umbriel {
+        super::reglas::seccion_umbriel(reglas, &apps)
+    } else {
+        super::reglas::seccion(reglas, &apps)
+    });
     p
 }
 
-/// Lo puesto sale de los archivos de Umbriel (no tiene `getoption`) y los defaults de su
-/// schema.
-async fn compositor_umbriel(cambios: &Path, reglas: &[crate::config::ReglaApp]) -> Vec<Seccion> {
-    let config = crate::umbriel_valores::cargar(&crate::umbriel_valores::ruta_config());
-    let defaults =
-        crate::umbriel_valores::defaults(&leer(&["umbriel", "config", "schema", "--json"]).await); // no-tr
-    let actuales =
-        crate::umbriel_valores::vigentes(&config, &defaults, compositor::claves_umbriel());
-    let cambios = compositor::Cambios::leer(cambios).unwrap_or_else(|e| {
-        eprintln!("morgan: menú: {e}");
-        Default::default()
-    });
-    let evdev = std::fs::read_to_string("/usr/share/X11/xkb/rules/evdev.lst").unwrap_or_default();
-    let mut p =
-        compositor::pagina_umbriel(&actuales, &cambios, &compositor::distribuciones(&evdev));
-    p.push(super::reglas::seccion_umbriel(reglas, &crate::aplicacion::todas()));
-    p
+/// Las filas del desenfoque de Apariencia.
+pub async fn desenfoque(cambios: &Path) -> Vec<arbol::Fila> {
+    match valores_compositor(cambios).await {
+        Some((actuales, cambios, umbriel)) => compositor::desenfoque(&actuales, &cambios, umbriel),
+        None => vec![arbol::solo_hyprland("")],
+    }
 }
 
 pub async fn atajos(c: &crate::config::Atajos) -> Vec<Seccion> {
@@ -322,7 +339,8 @@ pub fn poner_autoarranque(archivo: &str, activar: bool) -> Result<(), String> {
     kf.save_to_file(&usuario).map_err(|e| e.to_string())
 }
 
-pub async fn sistema() -> Vec<Seccion> {
+/// Idioma y región, y Fecha y hora, las leen sus módulos.
+pub async fn sistema(region: Vec<arbol::Fila>, hora: Vec<arbol::Fila>) -> Vec<Seccion> {
     let archivo = |p: &str| std::fs::read_to_string(p).unwrap_or_default();
     let una = |p: &str| archivo(p).trim().to_owned();
     let equipo = [
@@ -399,7 +417,7 @@ pub async fn sistema() -> Vec<Seccion> {
     ]);
     let recientes = recientes();
     let privacidad = arbol::privacidad(clip.lines().filter(|l| !l.is_empty()).count(), recientes);
-    let mut secciones = vec![equipo];
+    let mut secciones = vec![equipo, region, hora];
     if sistema::hay_snapper() {
         secciones.push(snapshots);
     }
