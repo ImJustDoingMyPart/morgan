@@ -396,11 +396,7 @@ impl Ui {
                     self.expandir(&c, false, ahora);
                 }
             }
-            Objetivo::CerrarGrupo(k) => {
-                if let Some(c) = self.grupo_de(k).map(|g| g.clave.clone()) {
-                    pedidos.push(Pedido::Gtk(Evento::CerrarGrupo(c)));
-                }
-            }
+            Objetivo::CerrarGrupo(k) => self.cerrar_grupo(k, ahora),
             Objetivo::AccionAviso(id, i) => {
                 if let Some(c) = self
                     .aviso(id)
@@ -424,6 +420,34 @@ impl Ui {
         if !ids.is_empty() && self.limpiando.is_none() {
             self.limpiando = Some((Instant::now(), ids));
         }
+    }
+
+    /// El grupo sale como al limpiar; al terminar se cierran las que tenía al tocar.
+    fn cerrar_grupo(&mut self, k: u64, ahora: Instant) {
+        let Some(ids) = self
+            .grupo_de(k)
+            .map(|g| g.avisos.iter().map(|a| a.id).collect::<Vec<u32>>())
+        else {
+            return;
+        };
+        let ya = |id: &u32| {
+            self.cerrando.iter().any(|(_, v)| v.contains(id))
+                || self.limpiando.as_ref().is_some_and(|(_, v)| v.contains(id))
+        };
+        if !ids.is_empty() && !ids.iter().any(ya) {
+            self.cerrando.push((ahora, ids));
+        }
+    }
+
+    /// Lo que estaba saliendo cuando se cierra el centro: se cierra igual, sin esperar.
+    pub fn salidas_pendientes(&mut self) -> Vec<Pedido> {
+        self.limpiando
+            .take()
+            .map(|(_, ids)| ids)
+            .into_iter()
+            .chain(self.cerrando.drain(..).map(|(_, ids)| ids))
+            .map(|ids| Pedido::Gtk(Evento::Limpiar(ids)))
+            .collect()
     }
 
     // ── Sliders ──
@@ -612,6 +636,12 @@ impl Ui {
             pedidos.push(Pedido::Gtk(Evento::Limpiar(ids.clone())));
             self.limpiando = None;
         }
+        let fin = duracion_limpiar(1);
+        let (listos, siguen): (Vec<_>, Vec<_>) = std::mem::take(&mut self.cerrando)
+            .into_iter()
+            .partition(|(t0, _)| ahora.saturating_duration_since(*t0) >= fin);
+        self.cerrando = siguen;
+        pedidos.extend(listos.into_iter().map(|(_, ids)| Pedido::Gtk(Evento::Limpiar(ids))));
         pedidos
     }
 
@@ -881,5 +911,40 @@ mod tests {
             "todavía tiene que olvidar"
         );
         assert!(ui.deslices.contains_key(&otra));
+    }
+
+    #[test]
+    fn cerrar_un_grupo_lo_hace_salir_como_limpiar() {
+        use crate::centro::vista::{Aviso, Grupo};
+        use crate::notificaciones::modelo::Urgencia;
+        let aviso = |id| Aviso {
+            id,
+            titulo: String::new(),
+            cuerpo: String::new(),
+            urgencia: Urgencia::Normal,
+            llegada: 0,
+            imagen: None,
+            icono: false,
+            chico: None,
+            previa: None,
+            progreso: None,
+            acciones: Vec::new(),
+        };
+        let grupo = |clave: &str, avisos| Grupo {
+            clave: clave.into(),
+            nombre: clave.into(),
+            avisos,
+        };
+        let mut ui = Ui::new(Paleta::desde_css(""), 1.0, Borde::Sombra);
+        ui.datos.grupos = vec![grupo("a", vec![aviso(1), aviso(2)]), grupo("b", vec![aviso(3)])];
+        let t0 = Instant::now();
+        ui.cerrar_grupo(clave("a"), t0);
+        ui.cerrar_grupo(clave("a"), t0);
+        assert_eq!(ui.cerrando.len(), 1, "un segundo toque no lo repite");
+        assert!(ui.anda(t0));
+        assert!(ui.al_cuadro(t0).is_empty(), "todavía sale");
+        let p = ui.al_cuadro(t0 + duracion_limpiar(1));
+        assert!(matches!(p.as_slice(), [Pedido::Gtk(Evento::Limpiar(ids))] if ids == &[1, 2]));
+        assert!(ui.cerrando.is_empty());
     }
 }

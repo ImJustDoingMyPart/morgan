@@ -1070,6 +1070,10 @@ impl Hilo {
         if self.panel.take().is_none() {
             return;
         }
+        let pendientes = self.ui.salidas_pendientes();
+        if !pendientes.is_empty() {
+            self.pedidos(pendientes);
+        }
         self.ui.cerrar();
         self.enfocar_al_armar = None;
         self.cava = None;

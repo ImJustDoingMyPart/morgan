@@ -156,7 +156,14 @@ impl Ui {
                 Some((t0, ids)) if g.avisos.iter().any(|a| ids.contains(&a.id)) => {
                     saliendo(*t0, i, n, ahora)
                 }
-                _ => (0.0, 1.0),
+                _ => match self
+                    .cerrando
+                    .iter()
+                    .find(|(_, ids)| g.avisos.iter().any(|a| ids.contains(&a.id)))
+                {
+                    Some((t0, _)) => saliendo(*t0, 0, 1, ahora),
+                    None => (0.0, 1.0),
+                },
             };
             let mut sub = Hoja::default();
             let alto = self.armar_grupo(&mut sub, g, i == 0, arriba, abajo, ahora);

@@ -323,6 +323,8 @@ pub struct Ui {
     pub marquesina: Instant,
     /// Al limpiar, cada notificación sale a su turno; las de antes de tocar.
     pub limpiando: Option<(Instant, Vec<u32>)>,
+    /// Los grupos cerrados con su botón: salen como al limpiar, cada uno desde su toque.
+    pub cerrando: Vec<(Instant, Vec<u32>)>,
     pub scroll: f64,
     /// El tamaño de cada perilla (crece con el foco, se achica apretada).
     pub perillas: HashMap<crate::centro::vista::NivelId, Transicion>,
@@ -366,6 +368,7 @@ impl Ui {
             vumetro: None,
             marquesina: Instant::now(),
             limpiando: None,
+            cerrando: Vec::new(),
             scroll: 0.0,
             perillas: HashMap::new(),
             sobra_titulo: 0.0,
@@ -446,6 +449,7 @@ impl Ui {
             || self.deslices.values().any(|d| d.anda(ahora))
             || self.ecualizador.0.anda(ahora)
             || self.limpiando.is_some()
+            || !self.cerrando.is_empty()
             || self.campo_anda
             || self.marquesina_anda()
     }
@@ -480,6 +484,7 @@ impl Ui {
         self.arrastre = None;
         self.deslices.clear();
         self.limpiando = None;
+        self.cerrando.clear();
         self.scroll = 0.0;
         self.campos.clear();
         self.latidos.clear();
