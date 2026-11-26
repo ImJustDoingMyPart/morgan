@@ -204,6 +204,87 @@ pub fn armar(
     v
 }
 
+/// El orden que eligió el usuario arrastrando: cada tramo (las apps, la bandeja) por separado,
+/// primero lo que está en `orden` y en ese orden, y después lo nuevo, en el de siempre.
+pub fn ordenar(piezas: &mut [Pieza], orden: &[String]) {
+    let lugar = |p: &Pieza| {
+        orden
+            .iter()
+            .position(|c| *c == p.clave)
+            .unwrap_or(usize::MAX)
+    };
+    piezas.sort_by_key(|p| (p.seccion == Seccion::Bandeja, lugar(p)));
+}
+
+/// El orden guardado después de soltar: `nuevo` es lo que se ve, ya movido. Las que se ven se
+/// reparten los lugares que ocupaban en lo guardado, así las que no están (cerradas, las que
+/// no entran) conservan el suyo; `piezas` (en el orden de antes) suma lo que no estaba.
+pub fn reordenar(orden: &[String], piezas: &[String], nuevo: &[String]) -> Vec<String> {
+    let mut v: Vec<String> = orden.to_vec();
+    for c in piezas.iter().chain(nuevo) {
+        if !v.contains(c) {
+            v.push(c.clone());
+        }
+    }
+    let mut siguiente = nuevo.iter();
+    for c in &mut v {
+        if nuevo.contains(c)
+            && let Some(n) = siguiente.next()
+        {
+            c.clone_from(n);
+        }
+    }
+    v
+}
+
+/// El tramo de la celda `i`: las de su misma sección, apps o bandeja, que van seguidas.
+pub fn tramo(bandeja: &[bool], i: usize) -> std::ops::RangeInclusive<usize> {
+    let Some(&b) = bandeja.get(i) else {
+        return i..=i;
+    };
+    let desde = bandeja[..i]
+        .iter()
+        .rposition(|&x| x != b)
+        .map_or(0, |j| j + 1);
+    let hasta = bandeja[i..]
+        .iter()
+        .position(|&x| x != b)
+        .map_or(bandeja.len(), |j| i + j)
+        - 1;
+    desde..=hasta
+}
+
+/// Dónde cae la celda `de` arrastrada `dx`: la celda del tramo más cerca de su centro.
+pub fn destino(
+    celdas: &[Rect],
+    tramo: &std::ops::RangeInclusive<usize>,
+    de: usize,
+    dx: f64,
+) -> usize {
+    let Some(c) = celdas.get(de) else { return de };
+    let x = c.center().x + dx;
+    tramo
+        .clone()
+        .filter(|&j| j < celdas.len())
+        .min_by(|&a, &b| {
+            (celdas[a].center().x - x)
+                .abs()
+                .total_cmp(&(celdas[b].center().x - x).abs())
+        })
+        .unwrap_or(de)
+}
+
+/// La celda en que se ve la que estaba en `j` mientras `de` se arrastra hasta `a`.
+pub fn corrida(j: usize, de: usize, a: usize) -> usize {
+    if de < a && j > de && j <= a {
+        j - 1
+    } else if a < de && j >= a && j < de {
+        j + 1
+    } else {
+        j
+    }
+}
+
 /// Cuántas celdas entran en una salida de `ancho`.
 pub fn tope(ancho: f64) -> usize {
     let libre = ancho - 2.0 * (MARGEN + RELLENO_X) - (2.0 * ENTRE_RAYA + 1.0);
@@ -823,5 +904,91 @@ mod tests {
             v.iter().map(|c| c.clave.as_str()).collect::<Vec<_>>(),
             ["c.desktop", "d.desktop"]
         );
+    }
+
+    fn pieza_de(clave: &str, seccion: Seccion) -> Pieza {
+        Pieza {
+            clave: clave.into(),
+            nombre: clave.into(),
+            filas: Vec::new(),
+            marcas: Vec::new(),
+            foco: false,
+            seccion,
+            bandeja: None,
+        }
+    }
+
+    fn claves(v: &[Pieza]) -> Vec<&str> {
+        v.iter().map(|p| p.clave.as_str()).collect()
+    }
+
+    fn texto(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn el_orden_propio_manda_en_cada_tramo_y_lo_nuevo_va_al_final() {
+        let mut v = vec![
+            pieza_de("a", Seccion::Usada),
+            pieza_de("b", Seccion::Usada),
+            pieza_de("c", Seccion::Abierta),
+            pieza_de("d", Seccion::Abierta),
+            pieza_de("x", Seccion::Bandeja),
+            pieza_de("y", Seccion::Bandeja),
+        ];
+        // «y» guardada antes que «c» no salta de tramo; «d» no está guardada.
+        ordenar(&mut v, &texto(&["c", "y", "b", "x", "a"]));
+        assert_eq!(claves(&v), ["c", "b", "a", "d", "y", "x"]);
+        ordenar(&mut v, &[]);
+        assert_eq!(
+            claves(&v),
+            ["c", "b", "a", "d", "y", "x"],
+            "sin orden no se mueve nada"
+        );
+    }
+
+    #[test]
+    fn al_soltar_las_que_no_se_ven_conservan_su_lugar() {
+        // «z» está cerrada: no se ve, pero estaba entre «a» y «b».
+        let orden = texto(&["a", "z", "b", "c"]);
+        let nuevo = reordenar(
+            &orden,
+            &texto(&["a", "b", "c", "n"]),
+            &texto(&["c", "a", "b", "n"]),
+        );
+        assert_eq!(nuevo, texto(&["c", "z", "a", "b", "n"]));
+        // Lo guardado, ordenado, da lo que se soltó.
+        let mut v: Vec<Pieza> = ["a", "b", "c", "n"]
+            .iter()
+            .map(|c| pieza_de(c, Seccion::Abierta))
+            .collect();
+        ordenar(&mut v, &nuevo);
+        assert_eq!(claves(&v), ["c", "a", "b", "n"]);
+        // La primera vez no hay nada guardado.
+        assert_eq!(
+            reordenar(&[], &texto(&["a", "b"]), &texto(&["b", "a"])),
+            texto(&["b", "a"])
+        );
+    }
+
+    #[test]
+    fn el_arrastre_no_cruza_la_raya() {
+        let b = [false, false, false, true, true];
+        assert_eq!(tramo(&b, 1), 0..=2);
+        assert_eq!(tramo(&b, 4), 3..=4);
+        let d = disponer(1920.0, &b);
+        // La primera app arrastrada hasta el fondo se queda en la última app.
+        assert_eq!(destino(&d.celdas, &tramo(&b, 0), 0, 2000.0), 2);
+        assert_eq!(destino(&d.celdas, &tramo(&b, 4), 4, -2000.0), 3);
+        assert_eq!(destino(&d.celdas, &tramo(&b, 0), 0, 70.0), 1);
+        assert_eq!(destino(&d.celdas, &tramo(&b, 0), 0, 20.0), 0);
+    }
+
+    #[test]
+    fn las_otras_se_corren_un_lugar_hacia_el_hueco() {
+        // La 1 va a la 3: la 2 y la 3 se corren a la izquierda.
+        assert_eq!([0, 2, 3, 4].map(|j| corrida(j, 1, 3)), [0, 1, 2, 4]);
+        // La 3 va a la 1: la 1 y la 2 se corren a la derecha.
+        assert_eq!([0, 1, 2, 4].map(|j| corrida(j, 3, 1)), [0, 2, 3, 4]);
     }
 }

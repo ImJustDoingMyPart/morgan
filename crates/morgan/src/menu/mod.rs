@@ -983,6 +983,10 @@ impl Menu {
                 Ok(())
             }
             Que::BorrarRecientes => lectura::borrar_recientes(),
+            Que::RestaurarDock => {
+                self.inner.s.dock.restaurar_orden();
+                Ok(())
+            }
             Que::Autoarranque(archivo, activar) => lectura::poner_autoarranque(&archivo, activar)
                 .map_err(|e| trf!("autoarranque de {}: {}", archivo, e)),
             Que::Fondos

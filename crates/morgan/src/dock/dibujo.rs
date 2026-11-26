@@ -27,13 +27,16 @@ pub const GLOBO_MARGEN: f64 = SOMBRA;
 /// Más ventanas de una app no entran en un globo.
 pub const TOPE_FILAS: usize = 10;
 
-/// `arriba`: cuánto de la isla ya subió, de 0 (afuera, abajo) a 1.
+/// `corridas`: cuánto se corre cada celda en x; `alzada`, la que se arrastra, que va encima de
+/// las otras. `arriba`: cuánto de la isla ya subió, de 0 (afuera, abajo) a 1.
 #[allow(clippy::too_many_arguments)]
 pub fn pintar_dock(
     s: &mut Scene,
     d: &Disposicion,
     piezas: &[(&Pieza, &ImageData)],
     encima: &[f32],
+    corridas: &[f64],
+    alzada: Option<usize>,
     arriba: f64,
     p: &Paleta,
     opacidad: f32,
@@ -68,7 +71,15 @@ pub fn pintar_dock(
             &Rect::new(x, y0, x + 1.0, y1),
         );
     }
-    for (i, (celda, (pieza, icono))) in d.celdas.iter().zip(piezas).enumerate() {
+    let orden = (0..d.celdas.len().min(piezas.len()))
+        .filter(|&i| Some(i) != alzada)
+        .chain(alzada);
+    for i in orden {
+        let (Some(celda), Some((pieza, icono))) = (d.celdas.get(i), piezas.get(i)) else {
+            continue;
+        };
+        let dx = corridas.get(i).copied().unwrap_or(0.0);
+        let celda = &Rect::new(celda.x0 + dx, celda.y0, celda.x1 + dx, celda.y1);
         let tinte = if pieza.foco {
             Some(con_alfa(&p.primary, 0.14))
         } else {

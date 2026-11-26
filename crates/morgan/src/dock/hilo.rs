@@ -37,7 +37,10 @@ use wayland_client::protocol::{wl_output, wl_pointer, wl_seat, wl_surface};
 use wayland_client::{Connection, QueueHandle};
 
 use super::dibujo::{self, GLOBO_MARGEN, Rotulos};
-use super::modelo::{ALTO_CAPA, Disposicion, Pieza, Seccion, ZONA, disponer, entran, tope};
+use super::modelo::{
+    ALTO_CAPA, Disposicion, Pieza, Seccion, ZONA, corrida, destino, disponer, entran, tope, tramo,
+};
+use crate::deslizable::ARRANQUE;
 use crate::lamina::Lamina;
 
 const BTN_IZQUIERDO: u32 = 0x110;
@@ -92,6 +95,8 @@ pub enum Evento {
     Cerrar(String),
     /// Se abrió o se cerró el globo: mientras está, los títulos importan.
     Globo(bool),
+    /// Se soltó una app arrastrada: las claves que se ven, en su orden nuevo.
+    Ordenar(Vec<String>),
 }
 
 pub struct Arranque {
@@ -132,6 +137,21 @@ struct Ventana {
     /// El puntero está sobre la capa (sin importar si hay una celda debajo).
     adentro: bool,
     subida: Revelado,
+    /// Cuánto se corre cada celda: mientras se arrastra una, y al acomodarse después de soltar.
+    corridas: Vec<Transicion>,
+    arrastre: Option<Arrastre>,
+    /// Las apps de `visibles`, para saber si cambiaron aunque cambien los índices.
+    claves: Vec<String>,
+}
+
+/// Una app apretada con el botón izquierdo; pasado `ARRANQUE` se mueve con el puntero.
+#[derive(Clone, Copy)]
+struct Arrastre {
+    de: usize,
+    x0: f64,
+    dx: f64,
+    anda: bool,
+    a: usize,
 }
 
 struct Globo {
@@ -357,6 +377,9 @@ impl Hilo {
             encima: None,
             adentro: false,
             subida: Revelado::new(!self.ocultar),
+            corridas: Vec::new(),
+            arrastre: None,
+            claves: Vec::new(),
         });
     }
 
@@ -396,6 +419,17 @@ impl Hilo {
         let v = &mut self.ventanas[i];
         let ancho = f64::from(v.lamina.tam.0);
         v.visibles = entran(piezas, tope(ancho));
+        let claves: Vec<String> = v
+            .visibles
+            .iter()
+            .map(|&p| piezas[p].clave.clone())
+            .collect();
+        // Otras apps u otro orden que el que se soltó: lo corrido ya no vale.
+        if claves != v.claves {
+            v.corridas.clear();
+            v.arrastre = None;
+            v.claves = claves;
+        }
         let bandeja: Vec<bool> = v
             .visibles
             .iter()
@@ -403,6 +437,7 @@ impl Hilo {
             .collect();
         v.disposicion = disponer(ancho, &bandeja);
         v.tintes.resize(v.visibles.len(), Transicion::new(0.0));
+        v.corridas.resize(v.visibles.len(), Transicion::new(0.0));
         v.encima = v.encima.filter(|&e| e < v.visibles.len());
         v.lamina.sucio = true;
         Self::poner_region(&self.compositor, v);
@@ -563,11 +598,24 @@ impl Hilo {
             ..
         } = self;
         for v in ventanas.iter_mut() {
-            let anda = v.subida.anda(ahora) || v.tintes.iter().any(|t| t.anda(ahora));
+            let anda = v.subida.anda(ahora)
+                || v.tintes.iter().any(|t| t.anda(ahora))
+                || v.corridas.iter().any(|t| t.anda(ahora));
             if !(v.lamina.sucio || anda) || !v.lamina.lista() {
                 continue;
             }
             let tintes: Vec<f32> = v.tintes.iter().map(|t| t.valor(ahora)).collect();
+            let mut corridas: Vec<f64> = v
+                .corridas
+                .iter()
+                .map(|t| f64::from(t.valor(ahora)))
+                .collect();
+            let arriba = v.arrastre.filter(|a| a.anda).map(|a| {
+                if let Some(c) = corridas.get_mut(a.de) {
+                    *c = a.dx;
+                }
+                a.de
+            });
             let piezas: Vec<(&Pieza, &ImageData)> = v
                 .visibles
                 .iter()
@@ -578,6 +626,8 @@ impl Hilo {
                 &v.disposicion,
                 &piezas,
                 &tintes,
+                &corridas,
+                arriba,
                 v.subida.valor(ahora),
                 paleta,
                 *opacidad,
@@ -587,7 +637,9 @@ impl Hilo {
             );
             v.lamina.presentar(gpu, escena, v.capa.wl_surface(), qh);
             // Lo que sigue andando pide el próximo cuadro.
-            v.lamina.sucio = v.subida.anda(ahora) || v.tintes.iter().any(|t| t.anda(ahora));
+            v.lamina.sucio = v.subida.anda(ahora)
+                || v.tintes.iter().any(|t| t.anda(ahora))
+                || v.corridas.iter().any(|t| t.anda(ahora));
         }
         if let Some(g) = globo
             && g.lamina.sucio
@@ -652,16 +704,34 @@ impl Hilo {
                     Self::poner_region(&self.compositor, v);
                     let _ = self.conn.flush();
                 }
+                if self.ventanas[i].arrastre.is_some() {
+                    self.arrastrar(i, x);
+                    return;
+                }
                 let celda = self.ventanas[i].disposicion.celda_en(x, y);
                 self.poner_encima(i, celda);
             }
             PointerEventKind::Leave { .. } => {
+                // Con el botón apretado el puntero sigue acá; si igual se va, la app vuelve.
+                self.soltar(i, false);
                 self.ventanas[i].adentro = false;
                 self.poner_encima(i, None);
                 self.programar_ocultar();
             }
             // El menú sale al apretar, como el de cualquier app: esperar a soltar se nota.
             PointerEventKind::Press { button, .. } if button == BTN_DERECHO => self.menu(i),
+            PointerEventKind::Press { button, .. } if button == BTN_IZQUIERDO => {
+                let v = &mut self.ventanas[i];
+                v.arrastre = v.encima.map(|de| Arrastre {
+                    de,
+                    x0: x,
+                    dx: 0.0,
+                    anda: false,
+                    a: de,
+                });
+            }
+            PointerEventKind::Release { button, .. }
+                if button == BTN_IZQUIERDO && self.soltar(i, true) => {}
             PointerEventKind::Release { button, .. } => {
                 let v = &self.ventanas[i];
                 let Some(celda) = v.encima else { return };
@@ -693,6 +763,124 @@ impl Hilo {
             }
             _ => {}
         }
+    }
+
+    /// La app apretada sigue al puntero, sin salir de su tramo; las otras le hacen lugar.
+    fn arrastrar(&mut self, i: usize, x: f64) {
+        let ahora = Instant::now();
+        let v = &mut self.ventanas[i];
+        let Some(mut a) = v.arrastre else { return };
+        if !a.anda && (x - a.x0).abs() < ARRANQUE {
+            return;
+        }
+        let bandeja: Vec<bool> = v
+            .visibles
+            .iter()
+            .map(|&p| {
+                self.datos
+                    .piezas
+                    .get(p)
+                    .is_some_and(|p| p.seccion == Seccion::Bandeja)
+            })
+            .collect();
+        let t = tramo(&bandeja, a.de);
+        let celdas = &v.disposicion.celdas;
+        let (Some(primera), Some(ultima), Some(propia)) = (
+            celdas.get(*t.start()),
+            celdas.get(*t.end()),
+            celdas.get(a.de),
+        ) else {
+            return;
+        };
+        let empezo = !a.anda;
+        a.anda = true;
+        a.dx = (x - a.x0).clamp(primera.x0 - propia.x0, ultima.x0 - propia.x0);
+        let nuevo = destino(celdas, &t, a.de, a.dx);
+        if empezo || nuevo != a.a {
+            a.a = nuevo;
+            for j in t.clone() {
+                if j == a.de {
+                    continue;
+                }
+                let k = corrida(j, a.de, a.a);
+                let dx = celdas
+                    .get(k)
+                    .zip(celdas.get(j))
+                    .map_or(0.0, |(k, j)| k.x0 - j.x0);
+                if let Some(c) = v.corridas.get_mut(j) {
+                    c.ir(dx as f32, DESLIZAR, ahora);
+                }
+            }
+        }
+        v.arrastre = Some(a);
+        v.lamina.sucio = true;
+        if empezo {
+            self.sin_temporizador();
+            self.cerrar_globo();
+        }
+    }
+
+    /// Suelta lo apretado. Si se estaba arrastrando, cada app se acomoda en su celda nueva
+    /// desde donde se veía y, con `vale`, el orden nuevo va a guardarse. Devuelve si había un
+    /// arrastre en marcha (entonces no es un click).
+    fn soltar(&mut self, i: usize, vale: bool) -> bool {
+        let ahora = Instant::now();
+        let v = &mut self.ventanas[i];
+        let Some(a) = v.arrastre.take() else {
+            return false;
+        };
+        if !a.anda {
+            return false;
+        }
+        v.lamina.sucio = true;
+        if !vale || a.a == a.de {
+            if let Some(c) = v.corridas.get_mut(a.de) {
+                *c = Transicion::new(a.dx as f32);
+            }
+            for c in &mut v.corridas {
+                c.ir(0.0, DESLIZAR, ahora);
+            }
+            return true;
+        }
+        // Cada una arranca de donde se veía, ya en su celda nueva.
+        let celdas = &v.disposicion.celdas;
+        let x = |j: usize| {
+            let corrida = if j == a.de {
+                a.dx
+            } else {
+                v.corridas.get(j).map_or(0.0, |c| f64::from(c.valor(ahora)))
+            };
+            celdas.get(j).map_or(0.0, |c| c.x0) + corrida
+        };
+        let mut orden: Vec<usize> = (0..v.visibles.len()).collect();
+        let movida = orden.remove(a.de);
+        orden.insert(a.a, movida);
+        let corridas: Vec<Transicion> = orden
+            .iter()
+            .enumerate()
+            .map(|(k, &j)| {
+                let desde = x(j) - celdas.get(k).map_or(0.0, |c| c.x0);
+                let mut t = Transicion::new(desde as f32);
+                t.ir(0.0, DESLIZAR, ahora);
+                t
+            })
+            .collect();
+        v.corridas = corridas;
+        v.visibles = orden.iter().map(|&j| v.visibles[j]).collect();
+        if a.de < v.tintes.len() && a.a < v.tintes.len() {
+            let tinte = v.tintes.remove(a.de);
+            v.tintes.insert(a.a, tinte);
+        }
+        v.encima = v.encima.map(|_| a.a);
+        v.claves = v
+            .visibles
+            .iter()
+            .filter_map(|&p| Some(self.datos.piezas.get(p)?.clave.clone()))
+            .collect();
+        let _ = self
+            .eventos
+            .send_blocking(Evento::Ordenar(v.claves.clone()));
+        true
     }
 
     fn menu(&mut self, i: usize) {

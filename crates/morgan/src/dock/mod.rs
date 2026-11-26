@@ -63,6 +63,8 @@ struct Inner {
     usos: RefCell<Historial>,
     archivo: Option<PathBuf>,
     contador: RefCell<Contador>,
+    /// El orden que eligió el usuario arrastrando (`dock-orden`); vacío, el de siempre.
+    orden: RefCell<Vec<String>>,
     piezas: RefCell<Vec<Pieza>>,
     /// De clase a app: buscar el `.desktop` de una clase recorre todos.
     apps: RefCell<HashMap<String, Conocida>>,
@@ -87,6 +89,17 @@ impl Drop for Inner {
 
 fn archivo_usos() -> PathBuf {
     glib::user_state_dir().join("morgan").join("dock-usos")
+}
+
+fn archivo_orden() -> PathBuf {
+    glib::user_state_dir().join("morgan").join("dock-orden")
+}
+
+/// Una clave por línea.
+fn leer_orden() -> Vec<String> {
+    std::fs::read_to_string(archivo_orden())
+        .map(|t| t.lines().filter(|l| !l.is_empty()).map(str::to_owned).collect())
+        .unwrap_or_default()
 }
 
 /// El uso guardado o, la primera vez, lo que contó el launcher.
@@ -139,6 +152,7 @@ impl Dock {
                 usos: RefCell::new(usos),
                 archivo: Some(archivo),
                 contador: RefCell::default(),
+                orden: RefCell::new(leer_orden()),
                 piezas: RefCell::default(),
                 apps: RefCell::default(),
                 iconos: RefCell::default(),
@@ -228,13 +242,31 @@ impl Dock {
             .map(|(_, id)| *id)
             .collect();
         let bandeja = self.de_bandeja(&con_app).await;
-        let piezas = modelo::armar(&i.frecuentes, &con_app, &activos, &bandeja);
+        let mut piezas = modelo::armar(&i.frecuentes, &con_app, &activos, &bandeja);
+        modelo::ordenar(&mut piezas, &i.orden.borrow());
         if *i.piezas.borrow() == piezas {
             return;
         }
         let iconos = piezas.iter().map(|p| self.icono(p)).collect();
         i.piezas.replace(piezas.clone());
         let _ = i.hilo.send(Orden::Apps(Datos { piezas, iconos }));
+    }
+
+    /// Vuelve al orden de siempre: las más usadas primero.
+    pub fn restaurar_orden(&self) {
+        self.inner.orden.borrow_mut().clear();
+        let _ = std::fs::remove_file(archivo_orden());
+        self.programar();
+    }
+
+    /// Guarda el orden que quedó al soltar una app (`nuevo`: las que se ven).
+    fn ordenar(&self, nuevo: &[String]) {
+        let i = &self.inner;
+        let piezas: Vec<String> = i.piezas.borrow().iter().map(|p| p.clave.clone()).collect();
+        let orden = modelo::reordenar(&i.orden.borrow(), &piezas, nuevo);
+        crate::launcher::guardar(&archivo_orden(), &(orden.join("\n") + "\n"));
+        i.orden.replace(orden);
+        self.programar();
     }
 
     fn contar(&self, abiertas: &[Abierta]) {
@@ -394,6 +426,7 @@ impl Dock {
                 let c = self.inner.compositor.clone();
                 glib::MainContext::default().spawn_local(async move { c.cerrar(&d).await });
             }
+            Evento::Ordenar(nuevo) => self.ordenar(&nuevo),
             // Abre con los títulos de la última lectura: se ponen al día enseguida.
             Evento::Globo(abierto) => {
                 self.inner.globo_abierto.set(abierto);

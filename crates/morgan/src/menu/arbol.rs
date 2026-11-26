@@ -136,6 +136,8 @@ pub enum Que {
     Predeterminada(String, Vec<String>),
     Autoarranque(String, bool),
     BorrarRecientes,
+    /// El dock vuelve al orden de siempre.
+    RestaurarDock,
     ElegirTemaSonido(String, String),
     Sonar(String),
     GrabarTecla(String),
@@ -645,6 +647,11 @@ pub fn pagina_fija(cat: Categoria, c: &Config, apps_historial: &[String]) -> Opt
                         activa: c.dock.ocultar,
                         que: Que::Config(Cambio::DockOcultar(!c.dock.ocultar)),
                     },
+                ),
+                ajuste(
+                    tr!("Restaurar el orden del dock"),
+                    tr!("las apps se ordenan arrastrándolas; esto vuelve a las más usadas primero"),
+                    Control::Confirmar(Que::RestaurarDock),
                 ),
                 ajuste(
                     tr!("Clima"),
