@@ -11,17 +11,19 @@ use morgan_motor::vello::kurbo::Rect;
 use crate::barra::modelo::etiqueta;
 use crate::compositor::{CambioVentanas, Cliente};
 
-pub const CELDA_ANCHO: f64 = 60.0;
-pub const CELDA_ALTO: f64 = 56.0;
-pub const ICONO: f64 = 44.0;
-const ENTRE_CELDAS: f64 = 6.0;
+pub const CELDA_ANCHO: f64 = 51.0;
+pub const CELDA_ALTO: f64 = 48.0;
+pub const ICONO: f64 = 38.0;
+const ENTRE_CELDAS: f64 = 5.0;
 /// Antes y después de la raya que aparta la sección de la bandeja.
-const ENTRE_RAYA: f64 = 6.0;
-const RELLENO_X: f64 = 10.0;
-const RELLENO_ARRIBA: f64 = 8.0;
-const RELLENO_ABAJO: f64 = 6.0;
-const ENTRE_CELDA_Y_MARCAS: f64 = 4.0;
-pub const ALTO_MARCAS: f64 = 12.0;
+const ENTRE_RAYA: f64 = 5.0;
+const RELLENO_X: f64 = 8.0;
+const RELLENO_ARRIBA: f64 = 7.0;
+const RELLENO_ABAJO: f64 = 5.0;
+pub const ENTRE_CELDA_Y_MARCAS: f64 = 3.0;
+pub const ALTO_MARCAS: f64 = 10.0;
+/// El alto de las marcas: el diámetro del punto y el grueso de la raya.
+pub const ALTO_PUNTO: f64 = 4.0;
 /// El lugar del brillo del anillo; también lo que queda libre hasta el borde de la pantalla.
 const MARGEN: f64 = 10.0;
 
@@ -378,9 +380,9 @@ impl Disposicion {
 
 /// La marca sobre la que dibujar, centrada en `cx`: (x, ancho) de cada una.
 pub fn marcas_en(cx: f64, marcas: &[Marca]) -> Vec<(f64, f64)> {
-    const PUNTO: f64 = 5.0;
-    const RAYA: f64 = 16.0;
-    const ENTRE: f64 = 4.0;
+    const PUNTO: f64 = ALTO_PUNTO;
+    const RAYA: f64 = 14.0;
+    const ENTRE: f64 = 3.0;
     let ancho = |m: &Marca| if *m == Marca::Foco { RAYA } else { PUNTO };
     let total: f64 =
         marcas.iter().map(ancho).sum::<f64>() + ENTRE * marcas.len().saturating_sub(1) as f64;
@@ -708,8 +710,8 @@ mod tests {
         let m = marcas_en(100.0, &[Marca::Foco, Marca::Aca]);
         let total = m[1].0 + m[1].1 - m[0].0;
         assert_eq!(m[0].0 - (100.0 - total / 2.0), 0.0);
-        assert_eq!(m[0].1, 16.0);
-        assert_eq!(m[1].1, 5.0);
+        assert_eq!(m[0].1, 14.0);
+        assert_eq!(m[1].1, ALTO_PUNTO);
         assert!(marcas_en(100.0, &[]).is_empty());
     }
 

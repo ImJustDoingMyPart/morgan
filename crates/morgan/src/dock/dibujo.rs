@@ -13,12 +13,13 @@ use morgan_motor::vello::Scene;
 use morgan_motor::vello::kurbo::{Affine, BezPath, Circle, Rect, RoundedRect, Shape};
 use morgan_motor::vello::peniko::{Fill, ImageData};
 
-use super::modelo::{ALTO_MARCAS, Disposicion, ICONO, Marca, Pieza, marcas_en};
+use super::modelo::{
+    ALTO_MARCAS, ALTO_PUNTO, Disposicion, ENTRE_CELDA_Y_MARCAS, ICONO, Marca, Pieza, marcas_en,
+};
 
-const RADIO_CELDA: f64 = 6.0;
+const RADIO_CELDA: f64 = 5.0;
 /// El de `forma::tarjeta`.
 const RADIO_TARJETA: f64 = 4.0;
-const ALTO_PUNTO: f64 = 5.0;
 /// La línea del punto hueco de lo que corre de fondo.
 const LINEA_HUECO: f64 = 1.0;
 const ROL: u8 = 0;
@@ -104,7 +105,14 @@ pub fn pintar_dock(
             Rect::new(c.x - m, c.y - m, c.x + m, c.y + m),
             1.0,
         );
-        marcas(s, tr, c.x, celda.y1 + 4.0, &pieza.marcas, p);
+        marcas(
+            s,
+            tr,
+            c.x,
+            celda.y1 + ENTRE_CELDA_Y_MARCAS,
+            &pieza.marcas,
+            p,
+        );
     }
 }
 
