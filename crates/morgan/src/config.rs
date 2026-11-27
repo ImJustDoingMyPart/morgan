@@ -748,7 +748,7 @@ impl Default for Dock {
         Dock {
             mostrar: true,
             ocultar: false,
-            usadas: 9,
+            usadas: 12,
             iconos_bandeja: BTreeMap::new(),
         }
     }
