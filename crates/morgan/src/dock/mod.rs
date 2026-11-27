@@ -59,7 +59,9 @@ pub struct Dock {
 struct Inner {
     hilo: Sender<Orden>,
     compositor: Compositor,
-    frecuentes: Vec<Conocida>,
+    /// Las usadas: se eligen al arrancar, y un lugar libre lo ocupa la próxima app que se abra.
+    frecuentes: RefCell<Vec<Conocida>>,
+    usadas: usize,
     usos: RefCell<Historial>,
     archivo: Option<PathBuf>,
     contador: RefCell<Contador>,
@@ -149,7 +151,8 @@ impl Dock {
             inner: Rc::new(Inner {
                 hilo,
                 compositor: compositor.clone(),
-                frecuentes,
+                frecuentes: RefCell::new(frecuentes),
+                usadas: c.usadas,
                 usos: RefCell::new(usos),
                 archivo: Some(archivo),
                 contador: RefCell::default(),
@@ -243,7 +246,7 @@ impl Dock {
             .map(|(_, id)| *id)
             .collect();
         let bandeja = self.de_bandeja(&con_app).await;
-        let mut piezas = modelo::armar(&i.frecuentes, &con_app, &activos, &bandeja);
+        let mut piezas = modelo::armar(&i.frecuentes.borrow(), &con_app, &activos, &bandeja);
         modelo::ordenar(&mut piezas, &i.orden.borrow());
         if *i.piezas.borrow() == piezas {
             return;
@@ -291,6 +294,10 @@ impl Dock {
             if clave.ends_with(".desktop") {
                 i.usos.borrow_mut().sumar(&clave);
                 sumo = true;
+                if let Some(nombre) = nombre_de(&clave) {
+                    let app = Conocida { clave, nombre };
+                    modelo::ocupar_libre(&mut i.frecuentes.borrow_mut(), app, i.usadas);
+                }
             }
         }
         if sumo && let Some(a) = &i.archivo {

@@ -467,6 +467,15 @@ pub fn mas_usadas(
         .collect()
 }
 
+/// Si sobra lugar entre las `n` usadas, lo ocupa `app`, que se acaba de abrir: va al final y lo
+/// que ya estaba no se mueve. Sin esto, con poco historial, lo que se cierra desaparece del dock
+/// hasta el próximo arranque.
+pub fn ocupar_libre(usadas: &mut Vec<Conocida>, app: Conocida, n: usize) {
+    if usadas.len() < n && !usadas.iter().any(|u| u.clave == app.clave) {
+        usadas.push(app);
+    }
+}
+
 /// La unidad de systemd de un proceso (la última línea de `/proc/PID/cgroup`) dice con qué app
 /// se lanzó: `app-steam@autostart.service`, `app-vesktop-104722.scope` (el número es del que lo
 /// lanzó), `app-gnome-foo-12.scope` (con el lanzador adelante). Devuelve los `.desktop` posibles
@@ -954,6 +963,17 @@ mod tests {
         assert!(!por_otra(4), "brave con un atajo");
         let sin_pid = abierta("0x9", "x", 1, 0);
         assert!(!abierta_por_otra(&sin_pid, &ventanas, padre));
+    }
+
+    #[test]
+    fn un_lugar_libre_lo_ocupa_la_que_se_abre() {
+        let mut v = vec![app("a")];
+        ocupar_libre(&mut v, app("b"), 2);
+        assert_eq!(v, [app("a"), app("b")], "al final");
+        ocupar_libre(&mut v, app("a"), 3);
+        assert_eq!(v.len(), 2, "ya estaba");
+        ocupar_libre(&mut v, app("c"), 2);
+        assert_eq!(v, [app("a"), app("b")], "sin lugar");
     }
 
     #[test]
