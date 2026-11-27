@@ -189,6 +189,7 @@ pub enum Cambio {
     Esquina(bool),
     DockMostrar(bool),
     DockOcultar(bool),
+    DockUsadas(usize),
     Bloqueo(CambioBloqueo),
     Retencion(u32),
     ModoApp(String, ModoApp),
@@ -342,6 +343,7 @@ impl Cambio {
             Cambio::Esquina(v) => c.shell.esquina = *v,
             Cambio::DockMostrar(v) => c.dock.mostrar = *v,
             Cambio::DockOcultar(v) => c.dock.ocultar = *v,
+            Cambio::DockUsadas(v) => c.dock.usadas = *v,
             Cambio::Bloqueo(b) => b.aplicar(&mut c.bloqueo),
             Cambio::Retencion(d) => c.notificaciones.retencion_dias = *d,
             Cambio::Resumen(v) => c.juego.resumen = *v,
@@ -649,6 +651,22 @@ pub fn pagina_fija(cat: Categoria, c: &Config, apps_historial: &[String]) -> Opt
                         activa: c.dock.mostrar,
                         que: Que::Config(Cambio::DockMostrar(!c.dock.mostrar)),
                     },
+                ),
+                ajuste(
+                    tr!("Apps fijas del dock"),
+                    &trf!(
+                        "las más usadas, abiertas o no; las otras abiertas van después · {}",
+                        c.dock.usadas
+                    ),
+                    Control::Lista(
+                        USADAS_DOCK
+                            .iter()
+                            .map(|&n| {
+                                opcion(&n.to_string(), "", Que::Config(Cambio::DockUsadas(n)))
+                                    .activa(n == c.dock.usadas)
+                            })
+                            .collect(),
+                    ),
                 ),
                 ajuste(
                     tr!("Ocultar el dock"),
@@ -1189,6 +1207,8 @@ fn bloqueo(b: &Bloqueo) -> Vec<Fila> {
 }
 
 const OPACIDADES: &[f64] = &[0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0];
+/// De a tres: la mitad de una fila de 12 para arriba y para abajo.
+const USADAS_DOCK: &[usize] = &[6, 9, 12, 15, 18];
 const RETENCIONES: &[u32] = &[1, 3, 7, 14, 30, 90, 365];
 const MINUTOS_IDLE: &[u32] = &[0, 5, 10, 15, 20, 30, 45, 60];
 

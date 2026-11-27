@@ -61,7 +61,7 @@ struct Inner {
     compositor: Compositor,
     /// Las usadas: se eligen al arrancar, y un lugar libre lo ocupa la próxima app que se abra.
     frecuentes: RefCell<Vec<Conocida>>,
-    usadas: usize,
+    usadas: Cell<usize>,
     usos: RefCell<Historial>,
     archivo: Option<PathBuf>,
     contador: RefCell<Contador>,
@@ -152,7 +152,7 @@ impl Dock {
                 hilo,
                 compositor: compositor.clone(),
                 frecuentes: RefCell::new(frecuentes),
-                usadas: c.usadas,
+                usadas: Cell::new(c.usadas),
                 usos: RefCell::new(usos),
                 archivo: Some(archivo),
                 contador: RefCell::default(),
@@ -202,7 +202,14 @@ impl Dock {
     }
 
     pub fn aplicar_config(&self, c: &config::Dock) {
-        self.inner.bandeja.poner_en_dock(c.mostrar);
+        let i = &self.inner;
+        i.bandeja.poner_en_dock(c.mostrar);
+        // Otra cantidad se elige de nuevo por uso, como al arrancar.
+        if i.usadas.replace(c.usadas) != c.usadas {
+            let nuevas = modelo::mas_usadas(&i.usos.borrow().ordenados(), nombre_de, c.usadas);
+            i.frecuentes.replace(nuevas);
+            self.programar();
+        }
         if *self.inner.iconos_bandeja.borrow() != c.iconos_bandeja {
             self.inner.iconos_bandeja.replace(c.iconos_bandeja.clone());
             self.inner.iconos.borrow_mut().clear();
@@ -296,7 +303,7 @@ impl Dock {
                 sumo = true;
                 if let Some(nombre) = nombre_de(&clave) {
                     let app = Conocida { clave, nombre };
-                    modelo::ocupar_libre(&mut i.frecuentes.borrow_mut(), app, i.usadas);
+                    modelo::ocupar_libre(&mut i.frecuentes.borrow_mut(), app, i.usadas.get());
                 }
             }
         }

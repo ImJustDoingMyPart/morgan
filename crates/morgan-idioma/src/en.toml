@@ -100,6 +100,8 @@
 "Esquina activa" = "Hot corner"
 "Dock" = "Dock"
 "las apps más usadas y las abiertas, abajo; nunca sobre un juego" = "your most used and open apps, at the bottom; never over a game"
+"Apps fijas del dock" = "Pinned dock apps"
+"las más usadas, abiertas o no; las otras abiertas van después · {}" = "your most used, open or not; other open apps go after them · {}"
 "Ocultar el dock" = "Hide the dock"
 "aparece al llevar el mouse al borde de abajo y no les quita lugar a las ventanas" = "shows up when the mouse reaches the bottom edge and doesn't take space from windows"
 "Restaurar el orden del dock" = "Reset the dock order"
