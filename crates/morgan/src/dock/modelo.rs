@@ -509,6 +509,25 @@ pub fn desciende(pid: u32, ancestro: u32, padre: impl Fn(u32) -> Option<u32>) ->
     false
 }
 
+/// La abrió otra app: entre los ancestros de su proceso hay una ventana de otra clase (imv o
+/// mpv que abre yazi, lo que se lanza desde una terminal). Lo que se abre con el lanzador, el
+/// dock o un atajo cuelga de systemd o del compositor, que no tienen ventanas. Una app que abre
+/// otra ventana suya (Steam y sus `steamwebhelper`) no cuenta como otra.
+pub fn abierta_por_otra(
+    nueva: &Abierta,
+    ventanas: &[Abierta],
+    padre: impl Fn(u32) -> Option<u32>,
+) -> bool {
+    let Some(arriba) = nueva.pid.and_then(&padre) else {
+        return false;
+    };
+    ventanas
+        .iter()
+        .filter(|v| v.clase != nueva.clase)
+        .filter_map(|v| v.pid)
+        .any(|v| desciende(arriba, v, &padre))
+}
+
 /// La app de un ícono de bandeja por sus ventanas: la que es del mismo proceso, o de uno que
 /// lanzó (Steam y su `steamwebhelper`). No al revés: lo que se abrió desde una terminal no es
 /// de la terminal. Los juegos no cuentan, aunque Steam los lance.
@@ -887,6 +906,38 @@ mod tests {
             None,
             "los juegos no cuentan"
         );
+    }
+
+    #[test]
+    fn lo_que_abre_otra_app_no_es_abrirla_como_tal() {
+        // 20 es kitty con yazi adentro (21), que abrió imv (23) por un sh (22); 30 es Steam y
+        // 31 un `steamwebhelper` suyo con otra ventana; 40 se abrió con un atajo.
+        let padre = |p: u32| match p {
+            21 => Some(20),
+            22 => Some(21),
+            23 => Some(22),
+            31 => Some(30),
+            _ => Some(1),
+        };
+        let con_pid = |clase: &str, pid: u32| {
+            let mut a = abierta(&format!("0x{pid}"), clase, 1, 0);
+            a.pid = Some(pid);
+            a
+        };
+        let ventanas = [
+            con_pid("yazi", 20),
+            con_pid("imv", 23),
+            con_pid("steam", 30),
+            con_pid("steam", 31),
+            con_pid("brave", 40),
+        ];
+        let por_otra = |i: usize| abierta_por_otra(&ventanas[i], &ventanas, padre);
+        assert!(por_otra(1), "imv desde yazi");
+        assert!(!por_otra(0), "yazi con un atajo");
+        assert!(!por_otra(3), "otra ventana de Steam");
+        assert!(!por_otra(4), "brave con un atajo");
+        let sin_pid = abierta("0x9", "x", 1, 0);
+        assert!(!abierta_por_otra(&sin_pid, &ventanas, padre));
     }
 
     #[test]

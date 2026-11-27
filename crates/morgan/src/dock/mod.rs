@@ -272,11 +272,14 @@ impl Dock {
 
     fn contar(&self, abiertas: &[Abierta]) {
         let i = &self.inner;
+        let padre = |p: u32| crate::compositor::leer_proc(p).map(|(padre, _)| padre);
         let nuevas: Vec<String> = i
             .contador
             .borrow_mut()
             .nuevas(abiertas)
             .into_iter()
+            // Cuenta lo que se abre como tal: lo que abre otra app no es elegirla.
+            .filter(|a| !modelo::abierta_por_otra(a, abiertas, padre))
             .map(|a| a.clase.clone())
             .collect();
         let mut sumo = false;
