@@ -42,6 +42,13 @@ pub fn de_clase(clase: &str) -> Option<gio_unix::DesktopAppInfo> {
     })
 }
 
+/// Un programa auxiliar, no una app: su `.desktop` está escondido de los menús y no tiene
+/// categorías (el selector de archivos del portal, el pedido de contraseña de gcr, kwalletd,
+/// zenity). Uno escondido con categorías (imv, que no se abre sin un archivo) sigue siendo una app.
+pub fn es_auxiliar(d: &gio_unix::DesktopAppInfo) -> bool {
+    d.is_nodisplay() && d.categories().is_none_or(|c| c.split(';').all(str::is_empty))
+}
+
 pub fn buscar(id: &str) -> Option<App> {
     let d = gio_unix::DesktopAppInfo::new(id)?;
     let ruta = d.filename()?.to_string_lossy().into_owned();
@@ -91,6 +98,21 @@ pub fn patron(clases: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn desktop(extra: &str) -> gio_unix::DesktopAppInfo {
+        let k = glib::KeyFile::new();
+        let texto = format!("[Desktop Entry]\nType=Application\nName=X\nExec=sh\n{extra}");
+        k.load_from_data(&texto, glib::KeyFileFlags::NONE).unwrap();
+        gio_unix::DesktopAppInfo::from_keyfile(&k).unwrap()
+    }
+
+    #[test]
+    fn un_auxiliar_es_escondido_y_sin_categorias() {
+        assert!(es_auxiliar(&desktop("NoDisplay=true\n")));
+        assert!(es_auxiliar(&desktop("NoDisplay=true\nCategories=;\n")));
+        assert!(!es_auxiliar(&desktop("NoDisplay=true\nCategories=Graphics;Viewer;\n")));
+        assert!(!es_auxiliar(&desktop("")));
+    }
 
     #[test]
     fn clases_de_una_app() {

@@ -105,14 +105,7 @@ pub fn pintar_dock(
             Rect::new(c.x - m, c.y - m, c.x + m, c.y + m),
             1.0,
         );
-        marcas(
-            s,
-            tr,
-            c.x,
-            celda.y1 + ENTRE_CELDA_Y_MARCAS,
-            &pieza.marcas,
-            p,
-        );
+        marcas(s, tr, c.x, celda.y1 + ENTRE_CELDA_Y_MARCAS, &pieza.marcas, p);
     }
 }
 

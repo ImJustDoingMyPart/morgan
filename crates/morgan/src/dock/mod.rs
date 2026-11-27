@@ -67,7 +67,8 @@ struct Inner {
     orden: RefCell<Vec<String>>,
     piezas: RefCell<Vec<Pieza>>,
     /// De clase a app: buscar el `.desktop` de una clase recorre todos.
-    apps: RefCell<HashMap<String, Conocida>>,
+    /// `None`: un programa auxiliar (`aplicacion::es_auxiliar`), que el dock no muestra.
+    apps: RefCell<HashMap<String, Option<Conocida>>>,
     iconos: RefCell<HashMap<String, ImageData>>,
     programado: Cell<bool>,
     globo_abierto: Cell<bool>,
@@ -232,7 +233,7 @@ impl Dock {
         self.contar(&abiertas);
         let con_app: Vec<(Conocida, Abierta)> = abiertas
             .into_iter()
-            .map(|a| (self.app_de(&a.clase), a))
+            .filter_map(|a| Some((self.app_de(&a.clase)?, a)))
             .collect();
         let activos: BTreeSet<i64> = i
             .compositor
@@ -280,7 +281,9 @@ impl Dock {
             .collect();
         let mut sumo = false;
         for clase in nuevas {
-            let clave = self.app_de(&clase).clave;
+            let Some(clave) = self.app_de(&clase).map(|a| a.clave) else {
+                continue;
+            };
             // Sin `.desktop` no se la podría volver a abrir: no compite por un lugar.
             if clave.ends_with(".desktop") {
                 i.usos.borrow_mut().sumar(&clave);
@@ -292,22 +295,18 @@ impl Dock {
         }
     }
 
-    fn app_de(&self, clase: &str) -> Conocida {
+    fn app_de(&self, clase: &str) -> Option<Conocida> {
         let i = &self.inner;
         if let Some(a) = i.apps.borrow().get(clase) {
             return a.clone();
         }
-        let app = crate::aplicacion::de_clase(clase)
-            .and_then(|d| {
-                Some(Conocida {
-                    clave: d.id()?.to_string(),
-                    nombre: d.display_name().to_string(),
-                })
-            })
-            .unwrap_or_else(|| Conocida {
+        let app = match crate::aplicacion::de_clase(clase) {
+            Some(d) if crate::aplicacion::es_auxiliar(&d) => None,
+            d => Some(d.as_ref().and_then(conocida).unwrap_or_else(|| Conocida {
                 clave: clase.to_owned(),
                 nombre: clase.to_owned(),
-            });
+            })),
+        };
         i.apps.borrow_mut().insert(clase.to_owned(), app.clone());
         app
     }
