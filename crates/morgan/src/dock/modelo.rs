@@ -296,14 +296,18 @@ pub fn tope(ancho: f64) -> usize {
 }
 
 /// Las que se muestran si no entran todas (índices de `piezas`): primero se van las usadas que
-/// no están abiertas ni de fondo, las últimas primero, y recién después las otras.
+/// no están abiertas ni de fondo, las últimas primero, y recién después las otras. La sección
+/// de la bandeja va entera siempre, sean cuantos sean sus íconos.
 pub fn entran(piezas: &[Pieza], tope: usize) -> Vec<usize> {
     let mut v: Vec<usize> = (0..piezas.len()).collect();
+    let de_app = |i: usize| piezas[i].seccion != Seccion::Bandeja;
     while v.len() > tope {
-        let i = v
+        let cerrada = v
             .iter()
-            .rposition(|&i| piezas[i].filas.is_empty() && piezas[i].bandeja.is_none())
-            .unwrap_or(v.len() - 1);
+            .rposition(|&i| de_app(i) && piezas[i].filas.is_empty() && piezas[i].bandeja.is_none());
+        let Some(i) = cerrada.or_else(|| v.iter().rposition(|&i| de_app(i))) else {
+            break;
+        };
         v.remove(i);
     }
     v
@@ -831,6 +835,18 @@ mod tests {
         let bandeja = [de_bandeja(":1.5/a", "a")];
         let v = armar(&frecuentes, &[], &activos(&[1]), &bandeja);
         assert_eq!(entran(&v, 1), [0], "se va b, cerrada; a corre de fondo");
+    }
+
+    #[test]
+    fn la_bandeja_entra_entera_aunque_no_haya_lugar() {
+        let frecuentes = [app("a"), app("b")];
+        let abiertas = [par("b", abierta("0x1", "b", 1, 0))];
+        let bandeja = [de_bandeja(":1.5/x", "x"), de_bandeja(":1.6/y", "y")];
+        let v = armar(&frecuentes, &abiertas, &activos(&[1]), &bandeja);
+        assert_eq!(v[2].seccion, Seccion::Bandeja);
+        assert_eq!(entran(&v, 3), [1, 2, 3], "se va a, cerrada");
+        assert_eq!(entran(&v, 2), [2, 3], "después b, aunque esté abierta");
+        assert_eq!(entran(&v, 1), [2, 3], "la bandeja no se recorta");
     }
 
     #[test]
