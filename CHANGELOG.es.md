@@ -2,6 +2,34 @@
 
 [English](CHANGELOG.md) · **Español**
 
+## 0.3.6 · 2026-11-28
+
+### El dock, integrado a la barra
+
+El menú del dock ofrece tres modos: independiente (el dock de abajo), integrado a la barra o sin dock. Integrado, cada barra muestra a la izquierda las apps con ventanas en su monitor, en el orden en que se abrieron, y la enfocada lleva una raya chica debajo. Con «Agrupar por workspace», cada app va junto al número de su workspace. Lo que no entra antes del reloj se junta en un «+N». Los clicks son los del dock. El izquierdo va a la siguiente ventana, el medio la cierra y el derecho abre el menú de la app. A la derecha, junto a la campana, van los íconos de estado y la bandeja con íconos en color, fija o detrás de una flecha que la abre al pasar el mouse.
+
+En todos los modos, los íconos de estado se apartan de la campana con una raya en lugar del `‹`, y la flecha queda solo para la bandeja.
+
+### Dock
+
+- Las apps se ordenan arrastrándolas, cada tramo por su lado (las apps y la bandeja). El orden se guarda, y «Restaurar el orden del dock» (menú, Shell) vuelve al de siempre.
+- Un 85 % del tamaño anterior: íconos de 38 px y una isla de 73 px de alto.
+- Muestra las 12 apps más usadas (antes 6), y la cantidad se elige en el menú, en Shell, «Apps fijas del dock» (de 6 a 18). Si falta historial, un lugar libre lo ocupa la app que se abre.
+- El uso cuenta lo que se abre con el lanzador, el dock o un atajo, no lo que abre otra app (una imagen desde el gestor de archivos, algo lanzado desde la terminal).
+- Los programas auxiliares, como el selector de archivos del portal o los pedidos de contraseña, no aparecen ni cuentan uso.
+- La bandeja se muestra entera aunque no haya lugar.
+
+### Capturas sin hyprshot
+
+`morgan-capturar` (grim, slurp y wayfreeze) reemplaza a hyprshot en Hyprland y en Umbriel, y la región se elige sobre la pantalla congelada. Ctrl+Print captura el monitor activo también en Hyprland. Si falta grim, slurp, jq o wl-clipboard, la tecla avisa qué instalar. `morgan setup` instala wayfreeze y ofrece desinstalar hyprshot y hyprpicker.
+
+### Menú, centro y tema
+
+- Vuelven las secciones Shell y Compositor; el desenfoque pasa a Apariencia, y Sistema suma Idioma y región (para morgan y las apps) y Fecha y hora.
+- En Energía, todos los perfiles van en una lista con la casilla en el elegido, como las redes Wi-Fi.
+- En el centro, cerrar un grupo de notificaciones lo hace salir como «limpiar», y lo que sale al cerrar el centro se cierra igual.
+- En Umbriel, la barra de pestañas toma los colores del tema.
+
 ## 0.3.5 · 2026-11-25
 
 ### Fondo desde el primer momento

@@ -78,7 +78,7 @@ opcionales=(
     "uwsm|uwsm|lanzar apps como unidades de systemd (sin uwsm, en un scope propio)"
     "gsr-ui-cli|gpu-screen-recorder-ui|indicador y control de grabación"
     "papirus-folders|papirus-folders|color de las carpetas del tema de íconos"
-    "jq|jq|morgan-cuota (cuotas de Claude Code y Antigravity) y umbriel-ciclar (atajos que ciclan apps en Umbriel)"
+    "jq|jq|capturas, morgan-cuota (cuotas de Claude Code y Antigravity) y umbriel-ciclar (atajos que ciclan apps en Umbriel)"
 )
 
 revisar_dependencias() {

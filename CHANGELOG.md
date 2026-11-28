@@ -2,6 +2,34 @@
 
 **English** · [Español](CHANGELOG.es.md)
 
+## 0.3.6 · 2026-11-28
+
+### The dock, built into the bar
+
+The dock menu offers three modes: standalone (the dock at the bottom), built into the bar, or no dock. Built in, each bar shows on its left the apps with windows on its monitor, in the order they were opened, with a small line under the focused one. With «Group by workspace», each app sits next to its workspace number. Whatever doesn't fit before the clock is gathered into a «+N». Clicks work as in the dock. Left goes to the next window, middle closes it and right opens the app's menu. On the right, next to the bell, come the status icons and the tray with color icons, either fixed or behind an arrow that opens it on hover.
+
+In every mode, the status icons are set apart from the bell by a line instead of the `‹`, and the arrow is only the tray's.
+
+### Dock
+
+- Apps are reordered by dragging them, each section on its own (the apps and the tray). The order is saved, and «Reset the dock order» (menu, Shell) brings back the usual one.
+- 85 % of the previous size: 38 px icons and a 73 px tall island.
+- Shows the 12 most used apps (6 before), and the number is set in the menu, under Shell, «Pinned dock apps» (6 to 18). Without enough history, a free slot goes to the app being opened.
+- Usage counts what you open from the launcher, the dock or a shortcut, not what another app opens (an image from the file manager, something launched from a terminal).
+- Helper programs, such as the portal's file chooser or password prompts, are neither shown nor counted.
+- The tray is shown whole even when space is short.
+
+### Screenshots without hyprshot
+
+`morgan-capturar` (grim, slurp and wayfreeze) replaces hyprshot in Hyprland and Umbriel, and the region is picked over a frozen screen. Ctrl+Print captures the active monitor in Hyprland too. If grim, slurp, jq or wl-clipboard is missing, the key says what to install. `morgan setup` installs wayfreeze and offers to uninstall hyprshot and hyprpicker.
+
+### Menu, notification center and theme
+
+- The Shell and Compositor sections are back; blur moves to Appearance, and System adds Language and region (for morgan and the apps) and Date and time.
+- In Power, all profiles are listed with the checkbox on the chosen one, like Wi-Fi networks.
+- In the center, closing a group of notifications makes it leave like «clear», and whatever leaves when the center closes is closed too.
+- In Umbriel, the tab bar takes the theme's colors.
+
 ## 0.3.5 · 2026-11-25
 
 ### Wallpaper from the start
