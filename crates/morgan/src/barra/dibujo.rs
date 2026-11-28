@@ -5,7 +5,7 @@
 //!   a los lados y 2 arriba, y 1 y 2 de margen), al medio «fecha › hora» (rellenos de 5, 3 y 5,
 //!   y 2 abajo) y a la derecha, desde 10 px del borde: la campana (4 y 3 de relleno, 2 de
 //!   margen), el cajón (la flecha con 4 por lado y la bandeja que se desliza, con 2 y 8 de
-//!   relleno e íconos de 14 cada 24) y, si hay algo que avisar, el `‹`, la grabación y los
+//!   relleno e íconos de 14 cada 24) y, si hay algo que avisar, la raya, la grabación y los
 //!   glifos de estado, a `ENTRE_AVISOS` de tinta a tinta;
 //! - la grabación es un glifo y un texto a `ENTRE_GLIFO_Y_TEXTO` de tinta a tinta, sin depender
 //!   del ancho del glifo;
@@ -52,7 +52,7 @@ const ANTES_DEL_RELOJ: f64 = 16.0;
 const RAYA_FOCO: (f64, f64) = (8.0, 2.0);
 /// Las rayas que apartan (la tira de los workspaces, la bandeja de los avisos): 1 px y 12 de alto.
 const RAYA_ALTO: f64 = 12.0;
-/// Entre la tinta de un aviso (grabación, cada glifo de estado, el `‹`) y la del siguiente. Cada
+/// Entre la tinta de un aviso (grabación, cada glifo de estado, la raya) y la del siguiente. Cada
 /// glifo de estado va aparte: en un solo texto el espacio es más angosto que los glifos y se
 /// pisaban, y con lugares iguales el micrófono (angosto) quedaba con más aire que la pantalla.
 const ENTRE_AVISOS: f64 = 11.0;
@@ -65,9 +65,6 @@ pub const REVELAR: Duration = Duration::from_millis(300);
 
 const CAMPANA: &str = "󰨝";
 const FLECHA: &str = "󰅁";
-/// Entre los avisos y la campana: el `›` del reloj, dado vuelta.
-const SEPARADOR_AVISOS: &str = "‹";
-
 /// Lo que ocupa la sombra alrededor del globo, de cada lado.
 pub const GLOBO_SOMBRA: f64 = SOMBRA;
 /// La imagen va a 14 px lógicos, sea del tamaño que sea (se arma para la escala más alta).
@@ -183,8 +180,6 @@ pub struct Rotulos {
     flecha: Layout<u8>,
     privacidad: Vec<Layout<u8>>,
     grabacion: Option<Partes>,
-    /// El `‹` entre los avisos y la campana.
-    aparte: Layout<u8>,
     /// Las apps de esta salida, en orden; junto a su workspace, agrupadas por él.
     pub apps: Vec<Entrada>,
     por_espacio: bool,
@@ -277,7 +272,6 @@ impl Rotulos {
                 .grabacion
                 .as_deref()
                 .map(|g| partes(t, &["󰑋", g], &[ENTRE_GLIFO_Y_TEXTO])),
-            aparte: t.armar(&[(SEPARADOR_AVISOS, ROL)], PX_SEPARADOR, escala),
             apps,
             por_espacio: e.por_espacio,
             bandeja_fija: e.bandeja_fija,
@@ -362,8 +356,6 @@ pub struct Lugar {
     /// Lo que se ve de la bandeja mientras se desliza.
     pub revelador: Rect,
     reloj: [Rect; 3],
-    /// El `‹` entre los avisos y la campana, si hay alguno.
-    aparte: Option<Rect>,
     /// La tinta de cada glifo de estado.
     estados: Vec<Rect>,
     /// La caja de cada pedazo de la grabación.
@@ -476,7 +468,6 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
         cajon: Rect::ZERO,
         revelador: Rect::ZERO,
         reloj: [Rect::ZERO; 3],
-        aparte: None,
         estados: Vec::new(),
         grabacion: Vec::new(),
         raya_apps: None,
@@ -537,7 +528,7 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
         // derecha a izquierda, todo a `ENTRE_AVISOS` de tinta. Desplegable, la flecha va a la
         // izquierda de la bandeja y la bandeja se abre hacia ella.
         let borde = tinta_de(&piezas, Que::Campana, &rot.campana).unwrap_or(x);
-        let mut lugar = avisos(rot, borde, &mut piezas, true);
+        let mut lugar = avisos(rot, borde, &mut piezas);
         if iconos > 0 {
             // La raya de la bandeja es un elemento más de ella: fija, siempre; desplegable, entra
             // con los íconos, y cerrada la flecha queda junto a los avisos (o a la campana).
@@ -603,7 +594,7 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
             tinta_de(&piezas, Que::Campana, &rot.campana)
         }
         .unwrap_or(x);
-        let mut lugar = avisos(rot, borde, &mut piezas, false);
+        let mut lugar = avisos(rot, borde, &mut piezas);
         (lugar.revelador, lugar.cajon) = (revelador, cajon);
         lugar
     };
@@ -612,7 +603,6 @@ pub fn ubicar(ancho: f64, rot: &Rotulos, iconos: usize, revelado: f64) -> Lugar 
         cajon: lugar.cajon,
         revelador: lugar.revelador,
         reloj,
-        aparte: lugar.aparte,
         raya_avisos: lugar.raya_avisos,
         estados: lugar.estados,
         grabacion: lugar.grabacion,
@@ -627,8 +617,7 @@ struct Derecha {
     borde: f64,
     cajon: Rect,
     revelador: Rect,
-    aparte: Option<Rect>,
-    /// La raya entre los avisos y la campana, con el dock en la barra (en lugar del `‹`).
+    /// La raya entre los avisos y lo que sigue (la campana, la bandeja o su flecha).
     raya_avisos: Option<Rect>,
     estados: Vec<Rect>,
     grabacion: Vec<Rect>,
@@ -651,26 +640,17 @@ fn poner_iconos(piezas: &mut Vec<Pieza>, origen: f64, iconos: usize, revelador: 
     }
 }
 
-/// Lo que avisa, de `borde` (una tinta) a la izquierda: el `‹`, la grabación y los glifos de
+/// Lo que avisa, de `borde` (una tinta) a la izquierda: la raya, la grabación y los glifos de
 /// estado. Entre una tinta y la siguiente, siempre lo mismo (`ENTRE_AVISOS`), mida lo que mida
-/// cada glifo.
-/// `raya`: los aparta de la campana una raya y no el `‹`, que con el dock en la barra se leía
-/// como la flecha de la bandeja.
-fn avisos(rot: &Rotulos, mut borde: f64, piezas: &mut Vec<Pieza>, raya_y_no_flecha: bool) -> Derecha {
+/// cada glifo. La raya y no un `‹` (Roberto, 2026-11-27): la flecha es solo la de la bandeja.
+fn avisos(rot: &Rotulos, mut borde: f64, piezas: &mut Vec<Pieza>) -> Derecha {
     let h = f64::from(ALTO);
     let medio = ENTRE_AVISOS / 2.0;
     let mut d = Derecha::default();
     if !rot.privacidad.is_empty() || rot.grabacion.is_some() {
-        if raya_y_no_flecha {
-            let r = raya((borde - ENTRE_AVISOS).round() - 1.0, h);
-            d.raya_avisos = Some(r);
-            borde = r.x0;
-        } else {
-            // Centrado por su tinta, como los glifos que tiene al lado.
-            let (r, izq) = rot.glifo_hasta(&rot.aparte, borde - ENTRE_AVISOS, h);
-            d.aparte = Some(r);
-            borde = izq;
-        }
+        let r = raya((borde - ENTRE_AVISOS).round() - 1.0, h);
+        d.raya_avisos = Some(r);
+        borde = r.x0;
     }
     if let Some(p) = &rot.grabacion {
         let derecha = borde - ENTRE_AVISOS;
@@ -822,18 +802,6 @@ impl Pintura<'_> {
                 &degrade_horizontal(r, p.primary, p.tertiary),
                 None,
                 &RoundedRect::from_rect(r, r.height() / 2.0),
-            );
-        }
-        if let Some(r) = self.lugar.aparte {
-            let c = opaco(&p.primary, 0.45);
-            texto_en(
-                s,
-                &self.rotulos.aparte,
-                r,
-                escala,
-                Affine::IDENTITY,
-                c,
-                true,
             );
         }
         for pieza in &self.lugar.piezas {
@@ -1183,7 +1151,6 @@ mod tests {
             }
         }
         v.extend(l.estados.iter().map(|r| (r.x0, r.x1)));
-        v.extend(l.aparte.iter().map(|r| (r.x0, r.x1)));
         let rayas = [l.raya_apps, l.raya_bandeja, l.raya_avisos];
         v.extend(rayas.iter().flatten().map(|r| (r.x0, r.x1)));
         v.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -1253,6 +1220,20 @@ mod tests {
         let c = l.pieza(Que::Campana).unwrap().contenido.center().x - (t1 - t0) / 2.0;
         assert!((c - f.x1 - ENTRE_AVISOS).abs() <= 1.0);
         assert!(l.raya_avisos.is_none());
+    }
+
+    #[test]
+    fn sin_el_dock_en_la_barra_los_avisos_tambien_van_tras_una_raya() {
+        // Dock abajo: la bandeja es del dock y no hay flecha; dock apagado: la bandeja vuelve a
+        // la barra con su flecha. En los dos, entre los avisos y lo demás va la raya, no un `‹`.
+        let mut rot = rotulos(Vec::new(), false, false);
+        rot.dock_en_barra = false;
+        for iconos in [0, 3] {
+            let l = ubicar(1252.0, &rot, iconos, 0.0);
+            let r = l.raya_avisos.expect("la raya de los avisos");
+            assert!((r.x0 - l.estados.last().unwrap().x1 - ENTRE_AVISOS).abs() <= 1.0);
+            assert_eq!(l.pieza(Que::Flecha).is_some(), iconos > 0);
+        }
     }
 
     #[test]
