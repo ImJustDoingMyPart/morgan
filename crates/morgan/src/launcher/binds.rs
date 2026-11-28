@@ -146,9 +146,9 @@ pub(crate) fn multimedia() -> [(&'static str, &'static str, &'static str, bool);
 }
 
 pub(crate) const CAPTURAS: [(&str, &str, &str); 3] = [
-    ("Print", tr_const!("Captura región"), "-m region"), // no-tr
-    ("CTRL + Print", tr_const!("Captura pantalla"), "-m output"), // no-tr
-    ("ALT + Print", tr_const!("Captura ventana activa"), "-m window -m active"), // no-tr
+    ("Print", tr_const!("Captura región"), "region"), // no-tr
+    ("CTRL + Print", tr_const!("Captura pantalla"), "output"), // no-tr
+    ("ALT + Print", tr_const!("Captura ventana activa"), "window"), // no-tr
 ];
 
 /// Lo de morgan va por el socket de eventos (`ipc::de_evento`): el compositor no lanza un
@@ -187,20 +187,30 @@ pub(crate) fn carpeta_capturas() -> String {
         .into_owned()
 }
 
-fn comando_captura(c: &Capturas, modo: &str) -> String {
-    let destino = if c.portapapeles {
-        // Sin archivo hyprshot no corre el comando de `--`: que avise él.
-        "--clipboard-only".to_owned()
+/// Los atajos de captura van si está `morgan-capturar`, que corre igual en Hyprland y en
+/// Umbriel. Lo que use y falte (grim, slurp, jq, wl-clipboard) lo avisa él al apretar la tecla,
+/// en vez de que la tecla no haga nada. wayfreeze es opcional: sin él, la región no se congela.
+pub(crate) fn hay_capturas() -> bool {
+    glib::find_program_in_path("morgan-capturar").is_some() // no-tr
+}
+
+/// `modo`: region, output o window, el tercer campo de `CAPTURAS`.
+pub(crate) fn comando_captura(c: &Capturas, modo: &str) -> String {
+    let mut cmd = String::from("morgan-capturar"); // no-tr
+    if c.congelar && modo == "region" {
+        cmd.push_str(" -z"); // no-tr
+    }
+    if c.portapapeles {
+        cmd.push_str(" -p"); // no-tr
     } else {
-        let carpeta = entre_comillas(&if c.carpeta.is_empty() {
+        let carpeta = if c.carpeta.is_empty() {
             carpeta_capturas()
         } else {
             c.carpeta.clone()
-        });
-        format!("-o {carpeta} -s -- morgan-captura") // no-tr
-    };
-    let congelar = if c.congelar && modo == "-m region" { "-z " } else { "" };
-    format!("hyprshot {congelar}{modo} {destino}") // no-tr
+        };
+        cmd.push_str(&format!(" -d {}", entre_comillas(&carpeta))); // no-tr
+    }
+    format!("{cmd} {modo}") // no-tr
 }
 
 /// Sin un modificador que soltar no hay submap: la tecla solo pide el lienzo.
@@ -222,7 +232,7 @@ fn lua_ventanas(tecla: &str, capturas: Option<&Capturas>) -> String {
             format!(
                 "\n    hl.bind({}, hl.dsp.exec_cmd({}))", // no-tr
                 cadena(&format!("{base} + Print")), // no-tr
-                cadena(&comando_captura(c, "-m output"))
+                cadena(&comando_captura(c, "output"))
             )
         })
         .unwrap_or_default();
@@ -236,8 +246,8 @@ fn lua_ventanas(tecla: &str, capturas: Option<&Capturas>) -> String {
         .replace("{desc}", desc)
 }
 
-pub fn lua(a: &Atajos, c: &Capturas, hyprshot: bool) -> String {
-    lua_con(a, c, hyprshot, &crate::aplicacion::buscar)
+pub fn lua(a: &Atajos, c: &Capturas, capturas: bool) -> String {
+    lua_con(a, c, capturas, &crate::aplicacion::buscar)
 }
 
 
@@ -340,7 +350,7 @@ fn lua_propios(propios: &[AtajoPropio], modos: &[Modo], buscar: &dyn Fn(&str) ->
 pub fn lua_con(
     a: &Atajos,
     c: &Capturas,
-    hyprshot: bool,
+    capturas: bool,
     buscar: &dyn Fn(&str) -> Option<App>,
 ) -> String {
     let mut out = String::from(concat!(
@@ -378,7 +388,7 @@ pub fn lua_con(
         }
     }
     if !a.ventanas.is_empty() {
-        out.push_str(&lua_ventanas(&a.ventanas, hyprshot.then_some(c)));
+        out.push_str(&lua_ventanas(&a.ventanas, capturas.then_some(c)));
     }
     if a.multimedia {
         out.push_str("\n-- ─── Multimedia y brillo (morgan) ───\n"); // no-tr
@@ -398,8 +408,8 @@ pub fn lua_con(
             "atajo(\"Caps_Lock\", hl.dsp.event(\"morgan capslock\"), { release = true, non_consuming = true, ignore_mods = true })\n", // no-tr
         );
     }
-    if hyprshot {
-        out.push_str("\n-- ─── Capturas de pantalla (hyprshot) ───\n"); // no-tr
+    if capturas {
+        out.push_str("\n-- ─── Capturas de pantalla (morgan-capturar) ───\n"); // no-tr
         for (tecla, desc, modo) in CAPTURAS {
             out.push_str(&format!(
                 "atajo({}, hl.dsp.exec_cmd({}), {{ desc = {} }})\n", // no-tr
@@ -459,7 +469,7 @@ mod tests {
         assert!(lua.contains(r#"hl.is_key_down("Super_L") or hl.is_key_down("Super_R")"#));
         assert!(lua.contains("keycode == 133 or keycode == 134"));
         assert!(lua.contains(r#"hl.bind("SUPER + ALT + Escape", soltar_ventanas)"#));
-        assert!(lua.contains(r#"hl.bind("SUPER + Print", hl.dsp.exec_cmd("hyprshot -m output -o "#));
+        assert!(lua.contains(r#"hl.bind("SUPER + Print", hl.dsp.exec_cmd("morgan-capturar -d "#));
         let alt = lua_ventanas("ALT + Tab", None);
         assert!(alt.contains("keycode == 64 or keycode == 108"));
         assert!(alt.contains(r#"hl.bind("ALT + CTRL + Escape", soltar_ventanas)"#));
@@ -479,17 +489,17 @@ mod tests {
         };
         let lua = lua(&Atajos::default(), &c, true);
         assert!(lua.contains(
-            r#"atajo("Print", hl.dsp.exec_cmd("hyprshot -m region -o '/home/r/Mis capturas' -s -- morgan-captura"), { desc = "Captura región" })"#
+            r#"atajo("Print", hl.dsp.exec_cmd("morgan-capturar -d '/home/r/Mis capturas' region"), { desc = "Captura región" })"#
         ));
         let c = Capturas {
             portapapeles: true,
             ..Default::default()
         };
         let lua = super::lua(&Atajos::default(), &c, true);
-        assert!(lua.contains("hyprshot -z -m region --clipboard-only"));
-        assert!(lua.contains("hyprshot -m window -m active --clipboard-only"));
+        assert!(lua.contains("morgan-capturar -z -p region"));
+        assert!(lua.contains("morgan-capturar -p window"));
         let lua = super::lua(&Atajos::default(), &c, false);
-        assert!(!lua.contains("hyprshot"), "sin hyprshot, sin capturas");
+        assert!(!lua.contains("morgan-capturar"), "sin grim y slurp, sin capturas");
     }
 
     #[test]

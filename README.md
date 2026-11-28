@@ -150,7 +150,8 @@ list is also a good set of tools to start from.
 | `libvips` | Thumbnails in the wallpaper picker |
 | `hyprsunset` | Night light |
 | `ddcutil` | Brightness of external monitors (DDC/CI) |
-| `hyprshot` | Screenshots (`Print`), configured from the system menu |
+| `grim` and `slurp` (with `jq`) | Screenshots (`Print`), configured from the system menu; the same on Hyprland and Umbriel |
+| `wayfreeze` (AUR) | Freezes the screen while picking a screenshot region |
 | GPU Screen Recorder (`gpu-screen-recorder-ui`) | Screen recording: the bar shows the time and stops it with a click. Other recorders don't get that counter |
 | `cliphist` (with `wl-clipboard`) | Clipboard history in the launcher |
 | `libqalculate` | The calculator |

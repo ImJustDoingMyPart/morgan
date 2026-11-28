@@ -155,7 +155,8 @@ la lista es además un buen punto de partida.
 | `libvips` | Las miniaturas del selector de fondos |
 | `hyprsunset` | La luz nocturna |
 | `ddcutil` | El brillo de monitores externos (DDC/CI) |
-| `hyprshot` | Las capturas (`Print`), configuradas desde el menú de sistema |
+| `grim` y `slurp` (con `jq`) | Las capturas (`Print`), configuradas desde el menú de sistema; iguales en Hyprland y en Umbriel |
+| `wayfreeze` (AUR) | Congela la pantalla mientras se elige la región de una captura |
 | GPU Screen Recorder (`gpu-screen-recorder-ui`) | La grabación de pantalla: la barra muestra el tiempo y la corta con un clic. Otros grabadores no tienen ese contador |
 | `cliphist` (con `wl-clipboard`) | El historial del portapapeles en el launcher |
 | `libqalculate` | La calculadora |

@@ -12,7 +12,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::animaciones;
-use crate::config::{AtajoPropio, Capturas, Config};
+use crate::config::{AtajoPropio, Config};
 use crate::menu::compositor::Cambios;
 use crate::menu::monitores::{Campo, Reglas};
 use crate::launcher::binds;
@@ -72,35 +72,6 @@ pub fn tecla(hypr: &str) -> Option<String> {
 /// secuencias de escape de JSON valen en TOML.
 fn cadena(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_default()
-}
-
-fn entre_comillas(ruta: &str) -> String {
-    format!("'{}'", ruta.replace('\'', "'\\''"))
-}
-
-/// Sin hyprshot (habla con Hyprland): grim y slurp. Como hyprshot, guarda y copia, o solo
-/// copia; morgan avisa con la vista previa (`morgan-captura`).
-fn comando_captura(c: &Capturas, que: &str) -> String {
-    let fuente = match que {
-        "region" => "-g \"$(slurp)\"".to_owned(), // no-tr
-        "output" => {
-            "-o \"$(umbriel outputs --json | jq -r '.[] | select(.focused) | .name')\"".to_owned()
-        } // no-tr
-        _ => "-g \"$(umbriel focused-window --json | jq -r '\"\\(.x),\\(.y) \\(.w)x\\(.h)\"')\""
-            .to_owned(), // no-tr
-    };
-    if c.portapapeles {
-        return format!("grim {fuente} - | wl-copy --type image/png"); // no-tr
-    }
-    let carpeta = if c.carpeta.is_empty() {
-        binds::carpeta_capturas()
-    } else {
-        c.carpeta.clone()
-    };
-    format!(
-        "mkdir -p {d} && f={d}/\"$(date +%Y-%m-%d-%H%M%S)_morgan.png\" && grim {fuente} \"$f\" && wl-copy --type image/png < \"$f\" && morgan-captura \"$f\"", // no-tr
-        d = entre_comillas(&carpeta)
-    )
 }
 
 fn bind(tecla_hypr: &str, accion: &str, extra: &[&str]) -> Option<String> {
@@ -331,16 +302,11 @@ pub fn toml_con(c: &Config, con_grim: bool, tema: &Path, menu: &Menu) -> String 
         }
     }
     if con_grim {
-        out.push_str("# Capturas de pantalla (grim y slurp)\n");
-        for (t, que) in [
-            ("Print", "region"), // no-tr
-            ("CTRL + Print", "output"), // no-tr
-            ("ALT + Print", "window"), // no-tr
-        ] {
-            // no-tr
+        out.push_str("# Capturas de pantalla (morgan-capturar)\n");
+        for (t, _, que) in binds::CAPTURAS {
             if let Some(b) = bind(
                 t,
-                &format!("spawn {}", comando_captura(&c.capturas, que)), // no-tr
+                &format!("spawn {}", binds::comando_captura(&c.capturas, que)), // no-tr
                 &["repeat = false"], // no-tr
             ) {
                 // no-tr
@@ -418,9 +384,7 @@ pub async fn aplicar_con(
     prueba: &[(String, Campo)],
 ) -> Result<(), String> {
     let destino = ruta();
-    let con_grim = ["grim", "slurp", "wl-copy", "jq"] // no-tr
-        .iter()
-        .all(|p| glib::find_program_in_path(p).is_some());
+    let con_grim = binds::hay_capturas();
     let mut menu = Menu::leer(ruta_config)?;
     for (salida, campo) in prueba {
         menu.monitores.poner(salida, campo);
@@ -494,7 +458,10 @@ mod tests {
             binds["XF86AudioRaiseVolume"]["allow_when_locked"].as_bool(),
             Some(true)
         );
-        assert!(binds["Print"]["action"].as_str().unwrap().contains("slurp"));
+        // freeze viene prendido: la región se elige sobre la pantalla congelada.
+        assert!(binds["Print"]["action"].as_str().unwrap().starts_with("spawn morgan-capturar -z -d "));
+        assert!(binds["Print"]["action"].as_str().unwrap().ends_with(" region"));
+        assert!(!binds["Ctrl+Print"]["action"].as_str().unwrap().contains("-z"));
         assert_eq!(v["layer_rule"].as_array().unwrap().len(), 2);
         // Sin grim, sin capturas.
         let t = toml_con(&Config::default(), false, Path::new("/t"), &Menu::default());

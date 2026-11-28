@@ -119,10 +119,10 @@ pub fn lua(
     cambios: &Cambios,
     monitores: &Reglas,
     tema: &Path,
-    hyprshot: bool,
+    capturas: bool,
 ) -> String {
     let (_, nombre, _, lua_sombra) = sombra(&c.apariencia.sombra);
-    let binds = crate::launcher::binds::lua(&c.atajos, &c.capturas, hyprshot);
+    let binds = crate::launcher::binds::lua(&c.atajos, &c.capturas, capturas);
     let reglas = crate::menu::reglas::lua(&c.reglas, &crate::aplicacion::buscar);
     format!(
         "-- Lo genera morgan: no se edita a mano, se reescribe entero. Lo guardado está en\n\
@@ -147,8 +147,8 @@ pub async fn aplicar(c: &Config, ruta_config: &Path) -> Result<(), String> {
     let cambios = Cambios::leer(&ruta_cambios(ruta_config))?;
     let monitores = Reglas::leer(&ruta_monitores(ruta_config))?;
     let destino = ruta();
-    let hyprshot = glib::find_program_in_path("hyprshot").is_some();
-    let nuevo = lua(c, &cambios, &monitores, &colores_tema(), hyprshot);
+    let capturas = crate::launcher::binds::hay_capturas();
+    let nuevo = lua(c, &cambios, &monitores, &colores_tema(), capturas);
     let antes = std::fs::read_to_string(&destino).ok();
     if antes.as_deref() == Some(nuevo.as_str()) {
         return Ok(());
@@ -216,8 +216,8 @@ mod tests {
         assert!(lua.contains("-- Animación: Precisa (Crece y se desliza), velocidad Media"));
         assert!(lua.contains("-- Sombra: Sombra negra"));
         assert!(
-            !lua.contains("hyprshot"),
-            "sin hyprshot, sin binds de captura"
+            !lua.contains("morgan-capturar"),
+            "sin grim y slurp, sin binds de captura"
         );
     }
 

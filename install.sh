@@ -67,7 +67,9 @@ opcionales=(
     "vipsthumbnail|libvips|miniaturas de la banda de fondos"
     "hyprsunset|hyprsunset|luz nocturna"
     "ddcutil|ddcutil|brillo de monitores externos (DDC/CI)"
-    "hyprshot|hyprshot|capturas de pantalla (Print)"
+    "grim|grim|capturas de pantalla (Print, con slurp)"
+    "slurp|slurp|capturas de pantalla: elegir la región"
+    "wayfreeze|wayfreeze (AUR)|capturas: congelar la pantalla al elegir la región"
     "cliphist|cliphist|launcher: portapapeles"
     "wtype|wtype|launcher: escribir símbolos"
     "qalc|libqalculate|calculadora"
@@ -127,6 +129,7 @@ instalar() {
         install -Dm755 "$raiz/target/release/$b" "$bin/$b"
     done
     install -Dm755 "$raiz/dist/morgan-captura" "$bin/morgan-captura"
+    install -Dm755 "$raiz/dist/morgan-capturar" "$bin/morgan-capturar"
     install -Dm755 "$raiz/dist/morgan-cuota" "$bin/morgan-cuota"
     install -Dm755 "$raiz/dist/umbriel-ciclar" "$bin/umbriel-ciclar"
     case ":$PATH:" in

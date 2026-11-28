@@ -1,7 +1,6 @@
 #!/bin/sh
-# Lo corre hyprshot después de guardar una captura (`hyprshot -s ... -- morgan-captura`), con
-# la ruta como único argumento: hyprshot no acepta un comando con argumentos propios.
+# Lo corre morgan-capturar después de guardar una captura, con la ruta como único argumento.
 # morgan la avisa con la vista previa y las acciones; si morgan no contesta, va el aviso
 # de siempre por D-Bus, para que la captura nunca pase en silencio.
 morganctl screenshot "$1" 2>/dev/null ||
-    notify-send -a Hyprshot -i "$1" "Captura guardada" "$1"
+    notify-send -a morgan -i "$1" "Captura guardada" "$1"

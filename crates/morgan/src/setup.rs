@@ -8,7 +8,7 @@ use std::process::{Command, ExitCode};
 
 use crate::{setup_atajos, setup_paquetes, setup_parar};
 
-use morgan_idioma::{tr, trf};
+use morgan_idioma::{t, tr, trf};
 
 pub const LINEA: &str = "pcall(require, \"morgan\")"; // no-tr
 
@@ -90,6 +90,7 @@ pub fn correr() -> ExitCode {
     }
     paso_competidores(&hypr_dir, interactivo, seco);
     paso_recomendados(interactivo, seco);
+    paso_retirados(interactivo, seco);
     if seco {
         println!("{}", tr!("Nada cambió (--seco)."));
         return ExitCode::SUCCESS;
@@ -180,6 +181,32 @@ fn paso_competidores(hypr_dir: &Path, interactivo: bool, seco: bool) {
     let elegidos: Vec<&setup_parar::Hallazgo> = elegidos.into_iter().map(|i| &hallazgos[i]).collect();
     if !elegidos.is_empty() {
         setup_parar::parar(&elegidos, hypr_dir, seco);
+    }
+}
+
+/// Lo que morgan dejó de usar y sigue instalado: se ofrece quitarlo, nunca se quita solo.
+fn paso_retirados(interactivo: bool, seco: bool) {
+    let retirados = setup_paquetes::retirados();
+    if retirados.is_empty() {
+        return;
+    }
+    println!();
+    println!("{}", tr!("morgan ya no usa estos programas, y siguen instalados:"));
+    let lineas: Vec<String> = retirados.iter().map(|r| format!("{} ({})", r.paquete, t(r.para))).collect(); // no-tr
+    if !(interactivo || seco) {
+        for l in &lineas {
+            println!("  - {l}");
+        }
+        println!("{}", tr!("Para desinstalarlos, corré morgan setup en una terminal."));
+        return;
+    }
+    let elegidos = elegir(&lineas, tr!("¿Los desinstalo? (pide la clave de administrador)"), seco);
+    let paquetes: Vec<&str> = elegidos.into_iter().map(|i| retirados[i].paquete).collect();
+    if paquetes.is_empty() {
+        return;
+    }
+    for paso in setup_paquetes::desinstalar(&paquetes, seco) {
+        println!("  - {paso}"); // no-tr
     }
 }
 

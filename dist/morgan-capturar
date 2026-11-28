@@ -1,0 +1,121 @@
+#!/bin/sh
+# Las capturas de pantalla de morgan, iguales en Hyprland y en Umbriel: las corren los atajos
+# que morgan genera para cada uno (Print, Ctrl+Print, Alt+Print). grim captura, slurp elige
+# la región y wayfreeze congela la pantalla mientras tanto; los tres hablan protocolos de
+# wlroots, no el IPC de un compositor. Lo único que se le pregunta al compositor es cuál es
+# el monitor o la ventana activa.
+#
+# Uso: morgan-capturar [-z] [-p] [-d carpeta] region|output|window
+#   -z  congela la pantalla mientras se elige la región (con wayfreeze; sin él, no congela)
+#   -p  solo al portapapeles, sin archivo
+#   -d  la carpeta de las capturas (por defecto, Screenshots dentro de la de imágenes)
+# Con archivo, también la copia al portapapeles y avisa con morgan-captura.
+set -u
+
+congelar=0
+portapapeles=0
+carpeta=""
+while getopts zpd: o; do
+    case $o in
+    z) congelar=1 ;;
+    p) portapapeles=1 ;;
+    d) carpeta=$OPTARG ;;
+    *) exit 2 ;;
+    esac
+done
+shift $((OPTIND - 1))
+modo=${1:-region}
+
+if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    compositor=hyprland
+elif command -v umbriel >/dev/null && umbriel outputs --json >/dev/null 2>&1; then
+    compositor=umbriel
+else
+    compositor=otro
+fi
+
+# morgan genera los atajos aunque falte algo: si falta, la tecla avisa qué instalar en vez de
+# no hacer nada.
+necesita="grim:grim wl-copy:wl-clipboard" # programa:paquete
+case $modo:$compositor in
+region:* | *:otro) necesita="$necesita slurp:slurp" ;;
+*) necesita="$necesita jq:jq" ;;
+esac
+faltan=""
+for par in $necesita; do
+    command -v "${par%%:*}" >/dev/null || faltan="$faltan ${par#*:}"
+done
+if [ -n "$faltan" ]; then
+    notify-send -a morgan -i accessories-screenshot "No se pudo capturar" \
+        "Falta:$faltan. En Arch: sudo pacman -S$faltan"
+    exit 1
+fi
+
+# Otro compositor: el monitor y la ventana se eligen con slurp.
+monitor() {
+    case $compositor in
+    hyprland) hyprctl monitors -j | jq -r '.[] | select(.focused) | .name' ;;
+    umbriel) umbriel outputs --json | jq -r '.[] | select(.focused) | .name' ;;
+    *) slurp -o -f %o ;;
+    esac
+}
+
+ventana() {
+    case $compositor in
+    hyprland) hyprctl activewindow -j | jq -r '"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"' ;;
+    umbriel) umbriel focused-window --json | jq -r '"\(.x),\(.y) \(.w)x\(.h)"' ;;
+    *) slurp ;;
+    esac
+}
+
+# wayfreeze cubre cada monitor con una capa que muestra lo que había, y slurp se dibuja
+# encima. --after-freeze-cmd corre recién con la imagen puesta en todos los monitores: avisa
+# con USR1, y slurp no se abre antes (2 s como mucho, por si wayfreeze falla).
+congelada=""
+listo=0
+trap 'listo=1' USR1
+soltar() {
+    [ -n "$congelada" ] && kill "$congelada" 2>/dev/null
+    congelada=""
+}
+trap soltar EXIT
+if [ "$modo" = region ] && [ "$congelar" = 1 ] && command -v wayfreeze >/dev/null; then
+    wayfreeze --hide-cursor --after-freeze-cmd "kill -USR1 $$" &
+    congelada=$!
+    i=0
+    while [ "$listo" = 0 ] && [ "$i" -lt 40 ]; do
+        sleep 0.05
+        i=$((i + 1))
+    done
+fi
+
+case $modo in
+region) fuente=$(slurp) || exit 1 ;; # Escape en slurp: no hay captura
+output) salida=$(monitor) || exit 1 ;;
+window) fuente=$(ventana) || exit 1 ;;
+*) echo "morgan-capturar: no conozco el modo «$modo»" >&2; exit 2 ;;
+esac
+
+capturar() {
+    if [ "$modo" = output ]; then
+        grim -o "$salida" "$1"
+    else
+        grim -g "$fuente" "$1"
+    fi
+}
+
+if [ "$portapapeles" = 1 ]; then
+    capturar - | wl-copy --type image/png
+    exit
+fi
+
+if [ -z "$carpeta" ]; then
+    carpeta=$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME")/Screenshots
+fi
+mkdir -p "$carpeta" || exit 1
+f=$carpeta/$(date +%Y-%m-%d-%H%M%S)_morgan.png
+capturar "$f" || exit 1
+# La vista previa de morgan-captura quedaría debajo de la capa congelada.
+soltar
+wl-copy --type image/png <"$f"
+exec morgan-captura "$f"

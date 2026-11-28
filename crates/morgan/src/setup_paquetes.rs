@@ -25,7 +25,10 @@ pub const RECOMENDADOS: &[Recomendado] = &[
     r("libvips", tr_const!("miniaturas del selector de fondos")), // no-tr
     r("hyprsunset", tr_const!("luz nocturna")), // no-tr
     r("ddcutil", tr_const!("brillo de monitores externos")), // no-tr
-    r("hyprshot", tr_const!("capturas de pantalla")), // no-tr
+    r("jq", tr_const!("capturas de pantalla: el monitor y la ventana activa")), // no-tr
+    r("grim", tr_const!("capturas de pantalla")), // no-tr
+    r("slurp", tr_const!("elegir la región de una captura")), // no-tr
+    r("wayfreeze", tr_const!("congelar la pantalla al elegir la región")), // no-tr
     r("cliphist", tr_const!("historial del portapapeles")), // no-tr
     r("wtype", tr_const!("escribir símbolos y emoji desde el launcher")), // no-tr
     r("libqalculate", tr_const!("calculadora")), // no-tr
@@ -40,7 +43,7 @@ pub const RECOMENDADOS: &[Recomendado] = &[
 ];
 
 /// Los que no están en los repos oficiales de Arch: van por el ayudante de AUR.
-const DEL_AUR: &[&str] = &["papirus-folders"]; // no-tr
+const DEL_AUR: &[&str] = &["papirus-folders", "wayfreeze"]; // no-tr
 
 /// Algo para instalar: el texto de la lista, los paquetes y el servicio del sistema a prender.
 pub struct Item {
@@ -76,6 +79,54 @@ pub fn armar() -> Plan {
         plan.items.clear();
     }
     plan
+}
+
+/// Lo que morgan usó y ya no usa. Las capturas pasaron de hyprshot a `morgan-capturar` (grim,
+/// slurp y wayfreeze); hyprpicker era lo que hyprshot usaba para congelar la pantalla.
+pub const RETIRADOS: &[Recomendado] = &[
+    r("hyprshot", tr_const!("las capturas de antes; ahora van con grim, slurp y wayfreeze")), // no-tr
+    r("hyprpicker", tr_const!("congelaba la pantalla para hyprshot; también es un selector de colores, por si lo usás aparte")), // no-tr
+];
+
+/// De los retirados, los instalados que ningún otro paquete necesita (`pacman -Qqt`): los que
+/// sí, pacman no los deja quitar.
+pub fn retirados() -> Vec<&'static Recomendado> {
+    let Ok(o) = Command::new("pacman").arg("-Qqt").args(RETIRADOS.iter().map(|r| r.paquete)).output() else {
+        return Vec::new();
+    };
+    let salida = String::from_utf8_lossy(&o.stdout);
+    RETIRADOS.iter().filter(|r| salida.lines().any(|l| l.trim() == r.paquete)).collect()
+}
+
+/// Lo que usa `morgan-capturar`. Instalado como dependencia de hyprshot, `pacman -Rns hyprshot`
+/// se lo llevaría: pacman no sabe que morgan lo usa.
+const DE_CAPTURAS: &[&str] = &["grim", "slurp", "jq", "wl-clipboard"]; // no-tr
+
+/// Desinstala los elegidos, con lo que solo ellos habían traído (`pacman -Rns`). Antes marca
+/// como instalado a propósito lo que usa morgan-capturar, para que no se vaya con ellos.
+pub fn desinstalar(paquetes: &[&str], seco: bool) -> Vec<String> {
+    let correr = |cmd: &[&str]| {
+        println!("  {}: {}", if seco { tr!("haría") } else { tr!("corriendo") }, cmd.join(" "));
+        seco || Command::new(cmd[0]).args(&cmd[1..]).status().is_ok_and(|s| s.success())
+    };
+    let presentes: Vec<&str> = DE_CAPTURAS.iter().copied().filter(|p| !faltantes([*p].into_iter()).contains(p)).collect();
+    if !presentes.is_empty() {
+        let mut cmd = vec!["sudo", "pacman", "-D", "--asexplicit"]; // no-tr
+        cmd.extend(&presentes);
+        if !correr(&cmd) {
+            return vec![trf!(
+                "pacman no terminó, y no desinstalé nada: sin este paso se llevaría lo que usan las capturas. Probá con: sudo pacman -D --asexplicit {} && sudo pacman -Rns {}",
+                presentes.join(" "),
+                paquetes.join(" ")
+            )];
+        }
+    }
+    let mut cmd = vec!["sudo", "pacman", "-Rns"]; // no-tr
+    cmd.extend(paquetes);
+    if correr(&cmd) {
+        return Vec::new();
+    }
+    vec![trf!("pacman no terminó. Probá de nuevo con: sudo pacman -Rns {}", paquetes.join(" "))]
 }
 
 /// Instala lo elegido: los paquetes oficiales en una sola llamada a pacman, los del AUR con el

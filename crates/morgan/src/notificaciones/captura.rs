@@ -16,7 +16,7 @@ pub fn es_captura(n: &Notificacion) -> bool {
     n.categoria.as_deref() == Some(CATEGORIA)
 }
 
-/// hyprshot ya la copió al portapapeles.
+/// morgan-capturar ya la copió al portapapeles.
 pub fn notificacion(ruta: &Path, llegada: i64) -> Notificacion {
     let nombre = ruta
         .file_name()
