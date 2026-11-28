@@ -226,6 +226,10 @@ impl MenuUi {
                 let x1 = (w - f64::from(derecha)).min(w - MARGEN).max(ancho + MARGEN);
                 Rect::new(x1 - ancho, MARGEN, x1, MARGEN + alto)
             }
+            LugarMenu::BarraIzq { izquierda } => {
+                let x0 = f64::from(izquierda).max(MARGEN).min(w - MARGEN - ancho);
+                Rect::new(x0, MARGEN, x0 + ancho, MARGEN + alto)
+            }
             LugarMenu::Dock { centro, abajo } => {
                 let x0 = (f64::from(centro) - ancho / 2.0)
                     .floor()

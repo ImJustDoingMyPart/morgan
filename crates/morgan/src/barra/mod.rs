@@ -10,7 +10,7 @@
 //! cuenta el tiempo dormido).
 
 pub(crate) mod bandeja;
-mod dibujo;
+pub(crate) mod dibujo;
 pub mod hilo;
 pub(crate) mod modelo;
 
@@ -43,6 +43,8 @@ pub struct Servicios {
     pub tema: Tema,
     pub calendario: Calendario,
     pub centro: crate::centro::Centro,
+    /// Con el dock en la barra, sus apps: lo que hace cada click lo decide él.
+    pub dock: crate::dock::Dock,
     pub pedir: Rc<dyn Fn(Request)>,
     /// El puntero llegó a la esquina de esta salida.
     pub esquina: Rc<dyn Fn(String)>,
@@ -191,13 +193,23 @@ impl Inner {
                 derecha,
             } => self.cajon.click(&clave, boton, &salida, derecha),
             Evento::Desplazar { clave, delta } => self.s.bandeja.desplazar(&clave, delta),
+            Evento::App {
+                clave,
+                ws,
+                boton,
+                salida,
+                izquierda,
+            } => self
+                .s
+                .dock
+                .click_barra(&clave, ws, boton, salida, izquierda),
             Evento::CalendarioCerrado => self.s.calendario.cerrado(),
             Evento::Esquina(salida) => (self.s.esquina)(salida),
         }
     }
 
     fn grabacion(self: &Rc<Self>) {
-        let grabando = self.s.privacidad.estado().grabando;
+        let grabando = self.s.privacidad.estado().grabando || muestra();
         let corriendo = self.grabacion.borrow().is_some();
         if grabando && !corriendo {
             let weak = Rc::downgrade(self);
@@ -251,11 +263,11 @@ impl Inner {
         let e = self.s.privacidad.estado();
         // De izquierda a derecha: la campana queda a la derecha y lo más cerca de ella es el
         // micrófono (después de la grabación, que va aparte).
-        let tele = self.s.compositor.espacios().prendida(&self.s.tele);
+        let tele = self.s.compositor.espacios().prendida(&self.s.tele) || muestra();
         let glifos: Vec<_> = [
             (tele, "󰔂"),
-            (e.pantalla, "󰹑"),
-            (!e.microfono.is_empty(), "󰍬"),
+            (e.pantalla || muestra(), "󰹑"),
+            (!e.microfono.is_empty() || muestra(), "󰍬"),
         ]
         .into_iter()
         .filter_map(|(si, g)| si.then_some(g))
@@ -277,6 +289,13 @@ impl Inner {
             no_molestar: n.no_molestar(),
         });
     }
+}
+
+/// `MORGAN_BARRA_MUESTRA`: todos los avisos prendidos (grabación, micrófono, pantalla y TV) sin
+/// que nada grabe ni capture, para ver la barra en el peor caso.
+fn muestra() -> bool {
+    static SI: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *SI.get_or_init(|| std::env::var_os("MORGAN_BARRA_MUESTRA").is_some())
 }
 
 fn dormir() -> zbus::MatchRule<'static> {

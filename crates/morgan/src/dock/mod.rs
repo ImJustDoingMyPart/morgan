@@ -27,6 +27,7 @@ use morgan_motor::vello::peniko::ImageData;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::bandeja::{Bandeja, Item};
+use crate::barra::hilo::Orden as OrdenBarra;
 use crate::centro::Centro;
 use crate::centro::vista::{LugarMenu, Menu as VistaMenu, NodoMenu};
 use crate::compositor::Compositor;
@@ -39,6 +40,8 @@ use modelo::{Abierta, Conocida, Contador, DeBandeja, Pieza};
 /// Se agrupan: una ráfaga de eventos es una sola lectura.
 const AGRUPAR: Duration = Duration::from_millis(80);
 const LADO_ICONO: u32 = modelo::ICONO as u32;
+/// En la barra: el ícono de la tira (el de junto a un workspace, 14, sale de este).
+const LADO_BARRA: u32 = 16;
 /// La clave de lo que no es de ninguna app: le sigue el `Id` del ítem.
 const SIN_APP: &str = "bandeja:";
 
@@ -58,6 +61,15 @@ pub struct Dock {
 
 struct Inner {
     hilo: Sender<Orden>,
+    /// Con el dock en la barra, las apps van a ella.
+    barra: Sender<OrdenBarra>,
+    en_barra: Cell<bool>,
+    /// Las ventanas en el orden en que se abrieron: el de la tira de la barra.
+    abiertas: RefCell<Vec<String>>,
+    /// La app de la barra con su menú abierto.
+    menu_barra: RefCell<Option<String>>,
+    /// Lo último que se le mandó a la barra como bandeja: cada ítem, su globo y su imagen.
+    bandeja_barra: RefCell<Option<Vec<(String, String, u64)>>>,
     compositor: Compositor,
     /// Las usadas: se eligen al arrancar, y un lugar libre lo ocupa la próxima app que se abra.
     frecuentes: RefCell<Vec<Conocida>>,
@@ -128,6 +140,7 @@ impl Dock {
         c: &config::Dock,
         bandeja: Bandeja,
         centro: &Centro,
+        barra: Sender<OrdenBarra>,
     ) -> Self {
         bandeja.poner_en_dock(c.mostrar);
         let (css, opacidad, borde) = tema.actual();
@@ -135,7 +148,7 @@ impl Dock {
             paleta: Paleta::desde_css(&css),
             opacidad: opacidad as f32,
             borde,
-            mostrar: c.mostrar,
+            mostrar: c.abajo(),
             ocultar: c.ocultar,
         });
         {
@@ -150,6 +163,11 @@ impl Dock {
         let dock = Dock {
             inner: Rc::new(Inner {
                 hilo,
+                barra,
+                en_barra: Cell::new(c.arriba()),
+                abiertas: RefCell::default(),
+                menu_barra: RefCell::default(),
+                bandeja_barra: RefCell::default(),
                 compositor: compositor.clone(),
                 frecuentes: RefCell::new(frecuentes),
                 usadas: Cell::new(c.usadas),
@@ -197,13 +215,30 @@ impl Dock {
             }
         });
         dock.inner.escuchar.replace(Some(escuchar));
+        dock.disposicion_barra(c);
         dock.programar();
         dock
+    }
+
+    /// Cómo van las apps y la bandeja con el dock en la barra.
+    fn disposicion_barra(&self, c: &config::Dock) {
+        let _ = self.inner.barra.send(OrdenBarra::DockEnBarra {
+            activo: c.arriba(),
+            por_espacio: c.por_espacio,
+            bandeja_fija: c.arriba() && !c.cajon,
+        });
     }
 
     pub fn aplicar_config(&self, c: &config::Dock) {
         let i = &self.inner;
         i.bandeja.poner_en_dock(c.mostrar);
+        self.disposicion_barra(c);
+        if i.en_barra.replace(c.arriba()) != c.arriba() {
+            self.a_la_barra(&i.piezas.borrow());
+            // La bandeja de la barra cambia de íconos (o se vacía): se vuelve a mandar.
+            i.bandeja_barra.replace(None);
+            self.programar();
+        }
         // Otra cantidad se elige de nuevo por uso, como al arrancar.
         if i.usadas.replace(c.usadas) != c.usadas {
             let nuevas = modelo::mas_usadas(&i.usos.borrow().ordenados(), nombre_de, c.usadas);
@@ -217,7 +252,7 @@ impl Dock {
             self.programar();
         }
         let _ = self.inner.hilo.send(Orden::Config {
-            mostrar: c.mostrar,
+            mostrar: c.abajo(),
             ocultar: c.ocultar,
         });
     }
@@ -241,6 +276,8 @@ impl Dock {
         };
         let abiertas = modelo::de_clientes(&clientes);
         self.contar(&abiertas);
+        i.abiertas
+            .replace(abiertas.iter().map(|a| a.direccion.clone()).collect());
         let con_app: Vec<(Conocida, Abierta)> = abiertas
             .into_iter()
             .filter_map(|a| Some((self.app_de(&a.clase)?, a)))
@@ -253,14 +290,153 @@ impl Dock {
             .map(|(_, id)| *id)
             .collect();
         let bandeja = self.de_bandeja(&con_app).await;
+        self.bandeja_a_la_barra(&bandeja);
         let mut piezas = modelo::armar(&i.frecuentes.borrow(), &con_app, &activos, &bandeja);
         modelo::ordenar(&mut piezas, &i.orden.borrow());
         if *i.piezas.borrow() == piezas {
             return;
         }
-        let iconos = piezas.iter().map(|p| self.icono(p)).collect();
+        let iconos = piezas.iter().map(|p| self.icono(p, LADO_ICONO)).collect();
         i.piezas.replace(piezas.clone());
+        self.a_la_barra(&piezas);
         let _ = i.hilo.send(Orden::Apps(Datos { piezas, iconos }));
+    }
+
+    /// Con el dock en la barra, las apps abiertas, en el orden en que se abrieron; si no,
+    /// ninguna.
+    fn a_la_barra(&self, piezas: &[Pieza]) {
+        let i = &self.inner;
+        let mut apps: Vec<(usize, crate::barra::dibujo::App)> = Vec::new();
+        if i.en_barra.get() {
+            let abiertas = i.abiertas.borrow();
+            let lugar = |d: &str| abiertas.iter().position(|a| a == d).unwrap_or(usize::MAX);
+            for p in piezas.iter().filter(|p| !p.filas.is_empty()) {
+                let primera = p.filas.iter().map(|f| lugar(&f.direccion)).min();
+                let ventanas = p
+                    .filas
+                    .iter()
+                    .map(|f| crate::barra::dibujo::Ventana {
+                        ws: f.ws,
+                        foco: f.foco,
+                    })
+                    .collect();
+                apps.push((
+                    primera.unwrap_or(usize::MAX),
+                    crate::barra::dibujo::App {
+                        clave: p.clave.clone(),
+                        nombre: p.nombre.clone(),
+                        imagen: Some(self.icono(p, LADO_BARRA)),
+                        ventanas,
+                    },
+                ));
+            }
+        }
+        apps.sort_by_key(|(k, _)| *k);
+        let apps = apps.into_iter().map(|(_, a)| a).collect();
+        let _ = i.barra.send(OrdenBarra::Apps(apps));
+    }
+
+    /// La bandeja de la barra, mientras el dock la tiene: vacía con el dock abajo; con el dock
+    /// en la barra, el ícono de color de la app de cada ítem (el mismo del dock), por
+    /// consistencia con las apps. Solo si cambió: cada envío rehace los textos de la barra.
+    fn bandeja_a_la_barra(&self, bandeja: &[DeBandeja]) {
+        let i = &self.inner;
+        if !i.bandeja.en_dock() {
+            i.bandeja_barra.replace(None);
+            return;
+        }
+        let iconos: Vec<crate::barra::dibujo::Icono> = if i.en_barra.get() {
+            bandeja
+                .iter()
+                .map(|b| {
+                    let p = Pieza {
+                        clave: b.app.clave.clone(),
+                        nombre: b.app.nombre.clone(),
+                        filas: Vec::new(),
+                        marcas: Vec::new(),
+                        foco: false,
+                        seccion: modelo::Seccion::Bandeja,
+                        bandeja: Some(b.item.clone()),
+                    };
+                    crate::barra::dibujo::Icono {
+                        clave: b.item.clone(),
+                        tooltip: i.bandeja.item(&b.item).map(|it| it.tooltip).unwrap_or_default(),
+                        imagen: Some(self.icono(&p, crate::barra::dibujo::LADO_BANDEJA)),
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let firma: Vec<(String, String, u64)> = iconos
+            .iter()
+            .map(|c| {
+                let id = c.imagen.as_ref().map_or(0, |m| m.data.id());
+                (c.clave.clone(), c.tooltip.clone(), id)
+            })
+            .collect();
+        if i.bandeja_barra.borrow().as_ref() == Some(&firma) {
+            return;
+        }
+        i.bandeja_barra.replace(Some(firma));
+        let _ = i.barra.send(OrdenBarra::Bandeja(iconos));
+    }
+
+    /// Un click en una app de la barra. `ws`: junto a qué workspace está, si van agrupadas; el
+    /// click va a sus ventanas de ahí.
+    pub fn click_barra(
+        &self,
+        clave: &str,
+        ws: Option<i64>,
+        boton: u32,
+        salida: String,
+        izquierda: i32,
+    ) {
+        let i = &self.inner;
+        // Con un menú abierto, cualquier click en una app lo cierra; en la suya, nada más.
+        let abierto = i.menu_barra.borrow_mut().take();
+        if let Some(c) = abierto {
+            i.centro.cerrar_menu();
+            if c == clave {
+                return;
+            }
+        }
+        let Some(p) = self.pieza(clave) else { return };
+        let filas: Vec<_> = p
+            .filas
+            .iter()
+            .filter(|f| ws.is_none_or(|w| f.ws == w))
+            .cloned()
+            .collect();
+        let menu = || {
+            let d = self.clone();
+            let cerrado = move || {
+                d.inner.menu_barra.borrow_mut().take();
+                let _ = d.inner.barra.send(OrdenBarra::MenuApp(None));
+            };
+            i.menu_barra.replace(Some(clave.to_owned()));
+            let _ = i.barra.send(OrdenBarra::MenuApp(Some(clave.to_owned())));
+            self.menu(
+                clave,
+                salida.clone(),
+                LugarMenu::BarraIzq { izquierda },
+                cerrado,
+            );
+        };
+        match boton {
+            1 => {
+                if let Some(d) = modelo::siguiente(&filas) {
+                    self.enfocar(d.to_owned());
+                }
+            }
+            // Con una ventana la cierra; con varias, el menú dice cuál.
+            2 if filas.len() == 1 => {
+                let (c, d) = (i.compositor.clone(), filas[0].direccion.clone());
+                glib::MainContext::default().spawn_local(async move { c.cerrar(&d).await });
+            }
+            2 | 3 => menu(),
+            _ => {}
+        }
     }
 
     /// Vuelve al orden de siempre: las más usadas primero.
@@ -361,7 +537,7 @@ impl Dock {
         app
     }
 
-    fn icono(&self, p: &Pieza) -> ImageData {
+    fn icono(&self, p: &Pieza, lado: u32) -> ImageData {
         let i = &self.inner;
         let item = p.bandeja.as_deref().and_then(|c| i.bandeja.item(c));
         let forzado = item
@@ -369,32 +545,32 @@ impl Dock {
             .and_then(|it| i.iconos_bandeja.borrow().get(&it.id).cloned());
         // Lo de la bandeja puede cambiar de ícono: va en la clave.
         let clave_cache = match (&forzado, &item) {
-            (Some(f), _) => format!("{}|{f}", p.clave),
+            (Some(f), _) => format!("{lado}|{}|{f}", p.clave),
             (None, Some(it)) if p.clave.starts_with(SIN_APP) => {
-                format!("{}|{}|{}", p.clave, it.icono, it.pixmap.is_some())
+                format!("{lado}|{}|{}|{}", p.clave, it.icono, it.pixmap.is_some())
             }
-            _ => p.clave.clone(),
+            _ => format!("{lado}|{}", p.clave),
         };
         if let Some(img) = i.iconos.borrow().get(&clave_cache) {
             return img.clone();
         }
         let escala = crate::pixeles::escala().max(1) as u32;
         let img = match (&forzado, &item) {
-            (Some(f), _) => icono_por_nombre(f, escala),
-            (None, Some(it)) if p.clave.starts_with(SIN_APP) => icono_de_item(it, escala),
+            (Some(f), _) => icono_por_nombre(f, lado, escala),
+            (None, Some(it)) if p.clave.starts_with(SIN_APP) => icono_de_item(it, lado, escala),
             _ => None,
         }
-        .unwrap_or_else(|| self.icono_de_app(&p.clave));
+        .unwrap_or_else(|| self.icono_de_app(&p.clave, lado));
         i.iconos.borrow_mut().insert(clave_cache, img.clone());
         img
     }
 
-    fn icono_de_app(&self, clave: &str) -> ImageData {
+    fn icono_de_app(&self, clave: &str, lado: u32) -> ImageData {
         let gicon = gio_unix::DesktopAppInfo::new(clave)
             .and_then(|d| d.icon())
             .unwrap_or_else(|| gio::ThemedIcon::new(&clave.to_lowercase()).upcast());
         let gicon = crate::icono::tiene_gicon(&gicon).then_some(gicon);
-        crate::icono::de_gicon(gicon.as_ref(), LADO_ICONO, crate::pixeles::escala() as u32)
+        crate::icono::de_gicon(gicon.as_ref(), lado, crate::pixeles::escala() as u32)
             .unwrap_or_else(|| crate::icono::de_pixeles(vec![0; 4], 1, 1))
     }
 
@@ -436,7 +612,13 @@ impl Dock {
                 centro,
                 abajo,
                 n,
-            } => self.menu(&clave, salida, LugarMenu::Dock { centro, abajo }, n),
+            } => {
+                let hilo = self.inner.hilo.clone();
+                let cerrado = move || {
+                    let _ = hilo.send(Orden::MenuCerrado(n));
+                };
+                self.menu(&clave, salida, LugarMenu::Dock { centro, abajo }, cerrado);
+            }
             Evento::Enfocar(d) => self.enfocar(d),
             Evento::Cerrar(d) => {
                 let c = self.inner.compositor.clone();
@@ -463,11 +645,7 @@ impl Dock {
 
     /// El menú del click derecho: las ventanas, lo que se puede hacer con la app y lo de su
     /// ícono de bandeja, en ese orden.
-    fn menu(&self, clave: &str, salida: String, lugar: LugarMenu, n: u32) {
-        let hilo = self.inner.hilo.clone();
-        let cerrado = move || {
-            let _ = hilo.send(Orden::MenuCerrado(n));
-        };
+    fn menu(&self, clave: &str, salida: String, lugar: LugarMenu, cerrado: impl Fn() + 'static) {
         let Some(p) = self.pieza(clave) else {
             return cerrado();
         };
@@ -625,33 +803,32 @@ fn app_de_proceso(pid: u32) -> Option<Conocida> {
         .and_then(|d| conocida(&d))
 }
 
-/// Un ícono por nombre del tema (o ruta), al tamaño de las celdas.
-fn icono_por_nombre(nombre: &str, escala: u32) -> Option<ImageData> {
-    let lado = LADO_ICONO * escala;
+/// Un ícono por nombre del tema (o ruta), de `lado` lógicos.
+fn icono_por_nombre(nombre: &str, lado: u32, escala: u32) -> Option<ImageData> {
     let ruta = if nombre.starts_with('/') {
         Some(std::path::PathBuf::from(nombre))
     } else {
-        crate::icono::buscar(nombre, LADO_ICONO, escala)
+        crate::icono::buscar(nombre, lado, escala)
     }?;
-    crate::icono::dibujar(&ruta, lado, None)
+    crate::icono::dibujar(&ruta, lado * escala, None)
 }
 
 /// El ícono que manda el ítem: por nombre (en el tema o en su carpeta) o en píxeles.
-fn icono_de_item(item: &Item, escala: u32) -> Option<ImageData> {
+fn icono_de_item(item: &Item, lado: u32, escala: u32) -> Option<ImageData> {
     let nombre = if item.atencion && !item.icono_atencion.is_empty() {
         &item.icono_atencion
     } else {
         &item.icono
     };
     if !nombre.is_empty() {
-        if let Some(img) = icono_por_nombre(nombre, escala) {
+        if let Some(img) = icono_por_nombre(nombre, lado, escala) {
             return Some(img);
         }
         for ext in ["svg", "png"] {
             let ruta = std::path::Path::new(&item.ruta_tema).join(format!("{nombre}.{ext}"));
             if !item.ruta_tema.is_empty()
                 && ruta.is_file()
-                && let Some(img) = crate::icono::dibujar(&ruta, LADO_ICONO * escala, None)
+                && let Some(img) = crate::icono::dibujar(&ruta, lado * escala, None)
             {
                 return Some(img);
             }
@@ -663,5 +840,5 @@ fn icono_de_item(item: &Item, escala: u32) -> Option<ImageData> {
         u32::try_from(*h).ok()?,
         rgba.clone(),
     )?;
-    Some(crate::icono::de_rgba(&i, LADO_ICONO * escala))
+    Some(crate::icono::de_rgba(&i, lado * escala))
 }

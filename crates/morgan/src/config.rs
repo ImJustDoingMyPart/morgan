@@ -741,6 +741,27 @@ pub struct Dock {
     /// íconos o ruta absoluta (el de la bandeja está pensado para 16 px).
     #[serde(rename = "tray_icons")]
     pub iconos_bandeja: BTreeMap<String, String>,
+    /// Integrado a la barra: las apps abiertas a la izquierda y la bandeja a la derecha, en
+    /// lugar del dock de abajo (con `mostrar`; apagado, no hay ninguno de los dos).
+    #[serde(rename = "bar")]
+    pub en_barra: bool,
+    /// En la barra, cada app junto al workspace donde tiene ventanas.
+    #[serde(rename = "bar_by_workspace")]
+    pub por_espacio: bool,
+    /// En la barra, la bandeja detrás de la flecha, que se abre al pasar el mouse.
+    #[serde(rename = "bar_tray_drawer")]
+    pub cajon: bool,
+}
+
+impl Dock {
+    /// El dock de abajo: prendido y no en la barra.
+    pub fn abajo(&self) -> bool {
+        self.mostrar && !self.en_barra
+    }
+
+    pub fn arriba(&self) -> bool {
+        self.mostrar && self.en_barra
+    }
 }
 
 impl Default for Dock {
@@ -750,6 +771,9 @@ impl Default for Dock {
             ocultar: false,
             usadas: 12,
             iconos_bandeja: BTreeMap::new(),
+            en_barra: false,
+            por_espacio: false,
+            cajon: false,
         }
     }
 }

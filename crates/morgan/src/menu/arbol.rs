@@ -182,12 +182,22 @@ impl Que {
     }
 }
 
+/// Dónde va el dock: abajo, integrado a la barra o en ninguna parte.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LugarDock {
+    Abajo,
+    Barra,
+    Apagado,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Cambio {
     Opacidad(f64),
     Idioma(String),
     Esquina(bool),
-    DockMostrar(bool),
+    DockLugar(LugarDock),
+    DockPorEspacio(bool),
+    DockCajon(bool),
     DockOcultar(bool),
     DockUsadas(usize),
     Bloqueo(CambioBloqueo),
@@ -341,7 +351,12 @@ impl Cambio {
             Cambio::Opacidad(v) => c.shell.opacidad = *v,
             Cambio::Idioma(v) => c.shell.idioma = v.clone(),
             Cambio::Esquina(v) => c.shell.esquina = *v,
-            Cambio::DockMostrar(v) => c.dock.mostrar = *v,
+            Cambio::DockLugar(l) => {
+                c.dock.mostrar = *l != LugarDock::Apagado;
+                c.dock.en_barra = *l == LugarDock::Barra;
+            }
+            Cambio::DockPorEspacio(v) => c.dock.por_espacio = *v,
+            Cambio::DockCajon(v) => c.dock.cajon = *v,
             Cambio::DockOcultar(v) => c.dock.ocultar = *v,
             Cambio::DockUsadas(v) => c.dock.usadas = *v,
             Cambio::Bloqueo(b) => b.aplicar(&mut c.bloqueo),
@@ -643,45 +658,7 @@ pub fn pagina_fija(cat: Categoria, c: &Config, apps_historial: &[String]) -> Opt
                     },
                 ),
             ],
-            vec![
-                ajuste(
-                    tr!("Mostrar el dock"),
-                    tr!("las apps más usadas y las abiertas, abajo; nunca sobre un juego"),
-                    Control::Casilla {
-                        activa: c.dock.mostrar,
-                        que: Que::Config(Cambio::DockMostrar(!c.dock.mostrar)),
-                    },
-                ),
-                ajuste(
-                    tr!("Apps fijas del dock"),
-                    &trf!(
-                        "las más usadas, abiertas o no; las otras abiertas van después · {}",
-                        c.dock.usadas
-                    ),
-                    Control::Lista(
-                        USADAS_DOCK
-                            .iter()
-                            .map(|&n| {
-                                opcion(&n.to_string(), "", Que::Config(Cambio::DockUsadas(n)))
-                                    .activa(n == c.dock.usadas)
-                            })
-                            .collect(),
-                    ),
-                ),
-                ajuste(
-                    tr!("Ocultar el dock"),
-                    tr!("aparece al llevar el mouse al borde de abajo y no les quita lugar a las ventanas"),
-                    Control::Casilla {
-                        activa: c.dock.ocultar,
-                        que: Que::Config(Cambio::DockOcultar(!c.dock.ocultar)),
-                    },
-                ),
-                ajuste(
-                    tr!("Restaurar el orden del dock"),
-                    tr!("las apps se ordenan arrastrándolas; esto vuelve a las más usadas primero"),
-                    Control::Confirmar(Que::RestaurarDock),
-                ),
-            ],
+            filas_dock(c),
             vec![
                 ajuste(
                     tr!("Clima"),
@@ -1209,6 +1186,105 @@ fn bloqueo(b: &Bloqueo) -> Vec<Fila> {
 const OPACIDADES: &[f64] = &[0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0];
 /// De a tres: la mitad de una fila de 12 para arriba y para abajo.
 const USADAS_DOCK: &[usize] = &[6, 9, 12, 15, 18];
+
+/// Shell › Dock: dónde va, y lo de ese lugar.
+fn filas_dock(c: &Config) -> Vec<Fila> {
+    let lugar = if !c.dock.mostrar {
+        LugarDock::Apagado
+    } else if c.dock.en_barra {
+        LugarDock::Barra
+    } else {
+        LugarDock::Abajo
+    };
+    let modalidades = [
+        (
+            LugarDock::Abajo,
+            tr!("Independiente"),
+            tr!("las apps más usadas y las abiertas, abajo; nunca sobre un juego"),
+        ),
+        (
+            LugarDock::Barra,
+            tr!("Integrado a la barra"),
+            tr!("las apps abiertas a la izquierda de la barra y la bandeja a la derecha"),
+        ),
+        (
+            LugarDock::Apagado,
+            tr!("Sin dock"),
+            tr!("la bandeja queda en la barra, detrás de la flecha"),
+        ),
+    ];
+    let mut v = vec![Fila::Galeria {
+        titulo: None,
+        opciones: modalidades
+            .iter()
+            .map(|(l, nombre, sub)| {
+                opcion(nombre, sub, Que::Config(Cambio::DockLugar(*l))).activa(*l == lugar)
+            })
+            .collect(),
+    }];
+    match lugar {
+        LugarDock::Abajo => v.extend([
+            ajuste(
+                tr!("Apps fijas del dock"),
+                &trf!(
+                    "las más usadas, abiertas o no; las otras abiertas van después · {}",
+                    c.dock.usadas
+                ),
+                Control::Lista(
+                    USADAS_DOCK
+                        .iter()
+                        .map(|&n| {
+                            opcion(&n.to_string(), "", Que::Config(Cambio::DockUsadas(n)))
+                                .activa(n == c.dock.usadas)
+                        })
+                        .collect(),
+                ),
+            ),
+            ajuste(
+                tr!("Ocultar el dock"),
+                tr!("aparece al llevar el mouse al borde de abajo y no les quita lugar a las ventanas"),
+                Control::Casilla {
+                    activa: c.dock.ocultar,
+                    que: Que::Config(Cambio::DockOcultar(!c.dock.ocultar)),
+                },
+            ),
+            ajuste(
+                tr!("Restaurar el orden del dock"),
+                tr!("las apps se ordenan arrastrándolas; esto vuelve a las más usadas primero"),
+                Control::Confirmar(Que::RestaurarDock),
+            ),
+        ]),
+        LugarDock::Barra => v.extend([
+            ajuste(
+                tr!("Agrupar por workspace"),
+                tr!("cada app junto al workspace donde tiene ventanas"),
+                Control::Casilla {
+                    activa: c.dock.por_espacio,
+                    que: Que::Config(Cambio::DockPorEspacio(!c.dock.por_espacio)),
+                },
+            ),
+            ajuste(
+                tr!("Bandeja"),
+                if c.dock.cajon {
+                    tr!("detrás de la flecha: se abre al pasar el mouse")
+                } else {
+                    tr!("siempre a la vista, junto a la campana")
+                },
+                Control::Lista(
+                    [(false, tr!("Fija")), (true, tr!("Desplegable"))]
+                        .iter()
+                        .map(|(cajon, nombre)| {
+                            opcion(nombre, "", Que::Config(Cambio::DockCajon(*cajon)))
+                                .activa(*cajon == c.dock.cajon)
+                        })
+                        .collect(),
+                ),
+            ),
+        ]),
+        LugarDock::Apagado => {}
+    }
+    v
+}
 const RETENCIONES: &[u32] = &[1, 3, 7, 14, 30, 90, 365];
 const MINUTOS_IDLE: &[u32] = &[0, 5, 10, 15, 20, 30, 45, 60];
 

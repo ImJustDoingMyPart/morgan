@@ -92,6 +92,16 @@ pub enum Orden {
     Bandeja(Vec<Icono>),
     /// El ícono de la bandeja con su menú abierto.
     Menu(Option<String>),
+    /// Las apps abiertas, con el dock en la barra (si no, ninguna).
+    Apps(Vec<dibujo::App>),
+    /// Con el dock en la barra: las apps junto a su workspace, y la bandeja sin flecha.
+    DockEnBarra {
+        activo: bool,
+        por_espacio: bool,
+        bandeja_fija: bool,
+    },
+    /// La app con su menú abierto.
+    MenuApp(Option<String>),
     Calendario(cal::Orden),
 }
 
@@ -110,6 +120,15 @@ pub enum Evento {
     Desplazar {
         clave: String,
         delta: i32,
+    },
+    /// Una app de la barra; `ws`, el workspace junto al que está, si van agrupadas;
+    /// `izquierda`: del borde izquierdo de la salida al del ícono.
+    App {
+        clave: String,
+        ws: Option<i64>,
+        boton: u32,
+        salida: String,
+        izquierda: i32,
     },
     CalendarioCerrado,
     /// El puntero llegó a la esquina de esta salida (su conector).
@@ -344,6 +363,19 @@ impl Hilo {
                 self.refrescar_globo();
             }
             Orden::Menu(m) => e.menu = m,
+            Orden::Apps(apps) => {
+                e.apps = apps;
+                self.refrescar_globo();
+            }
+            Orden::DockEnBarra {
+                activo,
+                por_espacio,
+                bandeja_fija,
+            } => {
+                (e.dock_en_barra, e.por_espacio, e.bandeja_fija) =
+                    (activo, por_espacio, bandeja_fija)
+            }
+            Orden::MenuApp(m) => e.menu_app = m,
             Orden::Calendario(o) => {
                 self.orden_calendario(o);
                 return;
@@ -440,6 +472,10 @@ impl Hilo {
                         .as_ref()
                         .is_some_and(|m| e.bandeja.get(i).is_some_and(|x| &x.clave == m)),
                     Que::Flecha => b.en_cajon,
+                    Que::App { app, .. } => e
+                        .menu_app
+                        .as_ref()
+                        .is_some_and(|m| e.apps.get(app).is_some_and(|a| &a.clave == m)),
                     _ => false,
                 };
                 let si = abierto || (b.encima == Some(p.que) && !p.que.quieto());
@@ -852,7 +888,8 @@ impl Hilo {
         }
         self.cancelar_globo();
         let Some(q) = bajo else { return };
-        if self.estado.tooltip(q).is_none() || self.globo.is_some() {
+        let rot = self.barras[i].rotulos.as_ref();
+        if self.estado.tooltip(q, rot).is_none() || self.globo.is_some() {
             return;
         }
         let reciente = self.sin_globo.is_some_and(|t| t.elapsed() < ESPERA_GLOBO);
@@ -886,6 +923,22 @@ impl Hilo {
                 accion: AccionInterruptor::Alternar,
             }),
             (Que::Grabacion, 1) => Evento::Grabar,
+            (Que::App { app, ws }, 1..=3) => {
+                let b = &self.barras[i];
+                let Some(a) = self.estado.apps.get(app) else {
+                    return;
+                };
+                let izquierda = Self::lugar(b, &self.estado, Instant::now())
+                    .and_then(|l| l.pieza(q).map(|p| p.contenido.x0))
+                    .map_or(0, |x| x.round() as i32);
+                Evento::App {
+                    clave: a.clave.clone(),
+                    ws: (ws != 0).then_some(ws),
+                    boton,
+                    salida: b.nombre.clone(),
+                    izquierda,
+                }
+            }
             (Que::Icono(n), 1..=3) => {
                 let b = &self.barras[i];
                 let Some(icono) = self.estado.bandeja.get(n) else {
@@ -925,14 +978,17 @@ impl Hilo {
         let Some(g) = &self.globo else { return };
         let (wl, q) = g.de.clone();
         self.globo = None;
-        if self.estado.tooltip(q).is_some() {
+        let rot = self
+            .barra(&wl)
+            .and_then(|i| self.barras[i].rotulos.as_ref());
+        if self.estado.tooltip(q, rot).is_some() {
             self.abrir_globo(wl, q);
         }
     }
 
     fn abrir_globo(&mut self, wl: wl_surface::WlSurface, q: Que) {
         let Some(i) = self.barra(&wl) else { return };
-        let Some(texto) = self.estado.tooltip(q) else {
+        let Some(texto) = self.estado.tooltip(q, self.barras[i].rotulos.as_ref()) else {
             return;
         };
         let Some(xdg) = &self.xdg else { return };

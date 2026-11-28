@@ -67,14 +67,14 @@ impl Contexto {
         ctx
     }
 
-    /// Son pocos y cambian poco: se rehacen todos. Con el dock prendido, los muestra él.
+    /// Son pocos y cambian poco: se rehacen todos. Con el dock prendido, los manda él (vacía
+    /// con el dock abajo; con los íconos de color de las apps, con el dock en la barra).
     pub fn enviar(&self) {
+        if self.bandeja.en_dock() {
+            return;
+        }
         let escala = crate::pixeles::escala().max(1) as u32;
-        let items = if self.bandeja.en_dock() {
-            Vec::new()
-        } else {
-            self.bandeja.items()
-        };
+        let items = self.bandeja.items();
         let iconos = items
             .into_iter()
             .map(|item| Icono {

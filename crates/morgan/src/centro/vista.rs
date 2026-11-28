@@ -250,6 +250,8 @@ pub struct Menu {
 pub enum LugarMenu {
     /// Debajo de un ícono de la barra: la distancia del borde derecho del ícono al de la salida.
     Barra { derecha: i32 },
+    /// Debajo de una app de la barra: la distancia del borde izquierdo de la salida al del ícono.
+    BarraIzq { izquierda: i32 },
     /// Encima de una celda del dock: su centro, desde la izquierda de la salida, y la distancia
     /// del borde de abajo de la salida al de abajo del menú.
     Dock { centro: i32, abajo: i32 },

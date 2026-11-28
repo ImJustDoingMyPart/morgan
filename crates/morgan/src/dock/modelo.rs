@@ -106,6 +106,8 @@ pub struct DeBandeja {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fila {
     pub direccion: String,
+    /// El id del workspace; `espacio` es su etiqueta.
+    pub ws: i64,
     pub espacio: String,
     pub titulo: String,
     pub foco: bool,
@@ -175,6 +177,7 @@ pub fn armar(
                 .iter()
                 .map(|a| Fila {
                     direccion: a.direccion.clone(),
+                    ws: a.ws,
                     espacio: etiqueta_de(a.ws),
                     titulo: a.titulo.clone(),
                     foco: es_foco(a),
@@ -751,6 +754,7 @@ mod tests {
     fn un_click_pasa_a_la_siguiente_y_da_la_vuelta() {
         let fila = |d: &str, foco| Fila {
             direccion: d.into(),
+            ws: 1,
             espacio: "I".into(),
             titulo: String::new(),
             foco,

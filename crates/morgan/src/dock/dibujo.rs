@@ -326,6 +326,7 @@ mod tests {
                 .iter()
                 .map(|e| Fila {
                     direccion: "0x1".to_owned(),
+                    ws: 1,
                     espacio: (*e).to_owned(),
                     titulo: "Wiki".to_owned(),
                     foco: false,

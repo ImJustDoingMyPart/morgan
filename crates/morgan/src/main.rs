@@ -234,6 +234,7 @@ fn main() -> ExitCode {
             &config.dock,
             bandeja.clone(),
             &centro,
+            hilo_barra.clone(),
         );
         let servicios = Rc::new(Servicios {
             osd,
@@ -261,7 +262,7 @@ fn main() -> ExitCode {
                     calendario: calendario.clone(),
                     centro: centro.clone(),
                     ventanas: ventanas.clone(),
-                    dock,
+                    dock: dock.clone(),
                 },
             ),
             audio,
@@ -322,6 +323,7 @@ fn main() -> ExitCode {
                 tema: tema.clone(),
                 calendario: servicios.calendario.clone(),
                 centro: servicios.centro.clone(),
+                dock,
                 bandeja,
                 privacidad,
                 iconos_bandeja,
